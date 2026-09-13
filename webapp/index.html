@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f1721">
+    <title>🎰 Casino</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="balance-pill">
+            <span>🪙</span>
+            <span id="headerBalance">0</span>
+        </div>
+        <div class="user-pill" id="headerUsername">игрок</div>
+    </div>
+
+    <div class="screen active" id="screen-home">
+        <div class="hero">
+            <h1>🎰 Casino</h1>
+            <p>Играй · Выигрывай · Выводи</p>
+        </div>
+
+        <div class="balance-card">
+            <div class="balance-label">Баланс</div>
+            <div class="balance-big"><span id="homeBalance">0</span> 🪙</div>
+            <div class="balance-stats">
+                <div class="stat"><div class="stat-value" id="statGames">0</div><div class="stat-label">Игр</div></div>
+                <div class="stat"><div class="stat-value" id="statWagered">0</div><div class="stat-label">Поставлено</div></div>
+                <div class="stat"><div class="stat-value" id="statWon">0</div><div class="stat-label">Выиграно</div></div>
+            </div>
+        </div>
+
+        <div class="section-title">🎮 Игры</div>
+        <div class="games-grid">
+            <button class="game-card" onclick="openGame('slots')">
+                <div class="game-icon">🎰</div>
+                <div class="game-name">Слоты</div>
+                <div class="game-desc">до ×10</div>
+            </button>
+            <button class="game-card" onclick="openGame('mines')">
+                <div class="game-icon">💣</div>
+                <div class="game-name">Сапёр</div>
+                <div class="game-desc">×2.5 за поле</div>
+            </button>
+            <button class="game-card" onclick="openGame('rocket')">
+                <div class="game-icon">🚀</div>
+                <div class="game-name">Ракетка</div>
+                <div class="game-desc">Растущий множитель</div>
+            </button>
+            <button class="game-card" onclick="openGame('dice')">
+                <div class="game-icon">🎲</div>
+                <div class="game-name">Кости</div>
+                <div class="game-desc">×5 на точное</div>
+            </button>
+            <button class="game-card" onclick="openGame('rr')">
+                <div class="game-icon">🔫</div>
+                <div class="game-name">Русская рулетка</div>
+                <div class="game-desc">до ×7</div>
+            </button>
+        </div>
+
+        <div class="section-title">📊 Ещё</div>
+        <div class="quick-actions">
+            <button class="quick-btn" onclick="showScreen('pay')"><span>⭐</span> Пополнить</button>
+            <button class="quick-btn" onclick="showScreen('withdraw')"><span>💸</span> Вывод</button>
+            <button class="quick-btn" onclick="showScreen('top')"><span>🏆</span> Топ игроков</button>
+            <button class="quick-btn" onclick="showScreen('ach')"><span>🏅</span> Достижения</button>
+            <button class="quick-btn" onclick="showScreen('ref')"><span>👥</span> Рефералы</button>
+            <button class="quick-btn" onclick="claimDaily()"><span>🎁</span> Ежедневный бонус</button>
+            <button class="quick-btn" onclick="showScreen('promo')"><span>🎟</span> Промокод</button>
+            <button class="quick-btn hidden" id="adminBtn" onclick="showScreen('admin')">
+                <span>👑</span> Админка
+            </button>
+        </div>
+    </div>
+
+    <div class="screen" id="screen-game">
+        <div class="game-header">
+            <button class="back-btn" onclick="closeGame()">←</button>
+            <div class="game-title" id="gameTitle">Игра</div>
+            <div class="game-balance"><span id="gameBalance">0</span> 🪙</div>
+        </div>
+
+        <div class="game-content hidden" id="content-slots">
+            <div class="slots-display">
+                <div class="slot-reel" id="slot0">❓</div>
+                <div class="slot-reel" id="slot1">❓</div>
+                <div class="slot-reel" id="slot2">❓</div>
+            </div>
+            <div class="game-result" id="slotsResult">Выберите ставку</div>
+            <div class="bets-grid" id="slotsBets"></div>
+        </div>
+
+        <div class="game-content hidden" id="content-mines">
+            <div class="bets-grid" id="minesBets"></div>
+            <div class="mines-info hidden" id="minesInfo">
+                <div>Открыто: <b id="minesOpened">0</b></div>
+                <div>Забрать: <b id="minesPrize">0</b> 🪙</div>
+            </div>
+            <div class="mines-grid" id="minesGrid"></div>
+            <button class="cashout-btn hidden" id="minesCashout" onclick="minesCashout()">💰 Забрать</button>
+        </div>
+
+        <div class="game-content hidden" id="content-rocket">
+            <div class="rocket-history" id="rocketHistory"></div>
+            <div class="bets-grid" id="rocketBets"></div>
+            <div class="rocket-display hidden" id="rocketDisplay">
+                <div class="rocket-field" id="rocketField">
+                    <canvas class="rocket-canvas" id="rocketCanvas"></canvas>
+                    <div class="rocket-emoji" id="rocketEmoji">🚀</div>
+                    <div class="rocket-flame" id="rocketFlame">🔥</div>
+                </div>
+                <div class="rocket-mult" id="rocketMult">×1.00</div>
+                <div class="rocket-prize" id="rocketPrize">0 🪙</div>
+                <button class="cashout-btn" onclick="rocketCashout()">💰 Забрать</button>
+            </div>
+        </div>
+
+        <div class="game-content hidden" id="content-dice">
+            <div class="bets-grid" id="diceBets"></div>
+            <div class="dice-display hidden" id="diceDisplay">
+                <div class="dice-face" id="diceFace">🎲</div>
+                <div class="dice-result" id="diceResult"></div>
+                <div class="dice-choices" id="diceChoices">
+                    <button onclick="rollDice('low')">⬇️ 1-3 (×2)</button>
+                    <button onclick="rollDice('high')">⬆️ 4-6 (×2)</button>
+                    <button onclick="rollDice('exact')">🎯 Точно (×5)</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-content hidden" id="content-rr">
+            <div class="bets-grid" id="rrBets"></div>
+            <div class="rr-display hidden" id="rrDisplay">
+                <div class="rr-revolver" id="rrRevolver">🔫</div>
+                <div class="rr-mult" id="rrMult">×1.00</div>
+                <div class="rr-prize" id="rrPrize">0 🪙</div>
+                <div class="rr-actions">
+                    <button class="rr-spin" onclick="rrSpin()">🔫 Крутить</button>
+                    <button class="rr-cash" onclick="rrCashout()">💰 Забрать</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="screen" id="screen-pay">
+        <div class="game-header">
+            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <div class="game-title">⭐ Пополнение</div>
+            <div></div>
+        </div>
+        <div class="withdraw-info">
+            <div>Курс: <b>1 ⭐ = 100 🪙</b></div>
+            <div id="discountInfo"></div>
+        </div>
+        <div class="withdraw-grid" id="payGrid"></div>
+    </div>
+
+    <div class="screen" id="screen-withdraw">
+        <div class="game-header">
+            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <div class="game-title">💸 Вывод</div>
+            <div></div>
+        </div>
+        <div class="withdraw-info">
+            <div>Баланс: <b><span id="withdrawBalance">0</span> 🪙</b></div>
+            <div>Курс: <b>1 ⭐ = 100 🪙</b></div>
+            <div>Минимум: <b>15 ⭐</b></div>
+        </div>
+        <div class="withdraw-grid" id="withdrawGrid"></div>
+    </div>
+
+    <div class="screen" id="screen-top">
+        <div class="game-header">
+            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <div class="game-title">🏆 Топ игроков</div>
+            <div></div>
+        </div>
+        <div class="top-list" id="topList"></div>
+    </div>
+
+    <div class="screen" id="screen-ach">
+        <div class="game-header">
+            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <div class="game-title">🏅 Достижения</div>
+            <div></div>
+        </div>
+        <div class="ach-list" id="achList"></div>
+    </div>
+
+    <div class="screen" id="screen-ref">
+        <div class="game-header">
+            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <div class="game-title">👥 Рефералы</div>
+            <div></div>
+        </div>
+        <div class="ref-content">
+            <div class="ref-card">
+                <div class="ref-title">Приглашайте друзей</div>
+                <div class="ref-desc">За пополнение друга на 100+ ⭐ — скидка 10%</div>
+                <div class="ref-link" id="refLink"></div>
+                <button class="copy-btn" onclick="copyRef()">📋 Скопировать</button>
+            </div>
+            <div class="ref-stats">
+                <div class="stat"><div class="stat-value" id="refInvited">0</div><div class="stat-label">Приглашено</div></div>
+                <div class="stat"><div class="stat-value" id="refBonuses">0</div><div class="stat-label">Бонусов</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="screen" id="screen-promo">
+        <div class="game-header">
+            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <div class="game-title">🎟 Промокод</div>
+            <div></div>
+        </div>
+        <div class="promo-content">
+            <input type="text" id="promoInput" placeholder="Введите код" maxlength="20" autocapitalize="characters">
+            <button class="copy-btn" onclick="activatePromo()">✅ Активировать</button>
+        </div>
+    </div>
+
+    <div class="screen" id="screen-admin">
+        <div class="game-header">
+            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <div class="game-title">👑 Админка</div>
+            <div></div>
+        </div>
+
+        <div class="admin-tabs">
+            <button class="admin-tab active" data-tab="stats" onclick="switchAdminTab('stats')">📊</button>
+            <button class="admin-tab" data-tab="wd" onclick="switchAdminTab('wd')">📜</button>
+            <button class="admin-tab" data-tab="give" onclick="switchAdminTab('give')">💸</button>
+            <button class="admin-tab" data-tab="promo" onclick="switchAdminTab('promo')">🏷</button>
+            <button class="admin-tab" data-tab="logs" onclick="switchAdminTab('logs')">📋</button>
+            <button class="admin-tab" data-tab="broadcast" onclick="switchAdminTab('broadcast')">📢</button>
+        </div>
+
+        <div class="admin-content" id="admin-stats">
+            <div class="admin-card">
+                <div class="admin-row"><span>👥 Пользователей</span><b id="admUsers">0</b></div>
+                <div class="admin-row"><span>🪙 Монет в системе</span><b id="admCoins">0</b></div>
+                <div class="admin-row"><span>💸 Выводов</span><b id="admWd">0</b></div>
+                <div class="admin-row"><span>⭐ Выведено звёзд</span><b id="admStars">0</b></div>
+            </div>
+            <div class="admin-card">
+                <div class="admin-card-title">🏆 Топ игроков</div>
+                <div id="admTop"></div>
+            </div>
+        </div>
+
+        <div class="admin-content hidden" id="admin-wd">
+            <div id="admWdList"></div>
+        </div>
+
+        <div class="admin-content hidden" id="admin-give">
+            <div class="admin-card">
+                <div class="admin-card-title">💸 Выдать монеты</div>
+                <input type="text" id="giveTarget" class="admin-input" placeholder="ID или @username">
+                <input type="number" id="giveAmount" class="admin-input" placeholder="Сумма (можно -)">
+                <button class="copy-btn" onclick="adminGive()">✅ Выдать</button>
+            </div>
+            <div class="admin-card">
+                <div class="admin-card-title">🎯 Установить баланс</div>
+                <input type="text" id="setbalTarget" class="admin-input" placeholder="ID или @username">
+                <input type="number" id="setbalAmount" class="admin-input" placeholder="Новый баланс">
+                <button class="copy-btn" onclick="adminSetbal()">✅ Установить</button>
+            </div>
+        </div>
+
+        <div class="admin-content hidden" id="admin-promo">
+            <div class="admin-card">
+                <div class="admin-card-title">➕ Создать промокод</div>
+                <input type="text" id="promoCode" class="admin-input" placeholder="Код (3+ символов)">
+                <select id="promoKind" class="admin-input">
+                    <option value="coins">🪙 Монеты</option>
+                    <option value="discount">💸 Скидка %</option>
+                </select>
+                <input type="number" id="promoValue" class="admin-input" placeholder="Значение">
+                <input type="number" id="promoMaxUses" class="admin-input" placeholder="Лимит (0 = ∞)" value="0">
+                <button class="copy-btn" onclick="adminCreatePromo()">✅ Создать</button>
+            </div>
+            <div class="admin-card">
+                <div class="admin-card-title">📋 Список</div>
+                <div id="admPromoList"></div>
+            </div>
+        </div>
+
+        <div class="admin-content hidden" id="admin-logs">
+            <div id="admLogs"></div>
+        </div>
+
+        <div class="admin-content hidden" id="admin-broadcast">
+            <div class="admin-card">
+                <div class="admin-card-title">📢 Рассылка (HTML)</div>
+                <textarea id="broadcastText" class="admin-input" rows="5" placeholder="Текст сообщения"></textarea>
+                <button class="copy-btn" onclick="adminBroadcast()">📢 Отправить всем</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="screen" id="screen-result">
+        <div class="result-screen">
+            <div class="result-icon" id="resultIcon">🎉</div>
+            <div class="result-title" id="resultTitle">Выигрыш!</div>
+            <div class="result-amount" id="resultAmount">+1.000 🪙</div>
+            <div class="result-details" id="resultDetails"></div>
+            <div class="result-buttons">
+                <button class="result-btn primary" onclick="playAgain()">🔁 Ещё раз</button>
+                <button class="result-btn secondary" onclick="showScreen('home')">🏠 На главную</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <script src="app.js"></script>
+</body>
+</html>
