@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = "8602932446:AAEtYr2rsT8jFSVjYErG9Q84duJ3dVfSyCo"
 
 # ⚠️ ЗАМЕНИ НА СВОЙ URL от cloudflared/ngrok
-WEBAPP_URL = "https://immunity-overcrowd-props.ngrok-free.dev"
+WEBAPP_URL = "bot-1789335277-8932-slotbots.bothost.tech"
 
 RATE = 100
 STAR_PACKS = {s: s * RATE for s in [10, 30, 50, 100, 250, 500]}
