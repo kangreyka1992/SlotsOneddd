@@ -42,7 +42,7 @@ let adminStatsTimer = null;
 
 /* UPGRADER */
 let upgraderItems = [];
-let upgraderSelected = new Set();
+let upgraderSelectedPk = null;
 let upgraderTargetIdx = -1;
 let upgraderTargets = [];
 let upgraderBusy = false;
@@ -243,7 +243,6 @@ function showScreen(name) {
         b.classList.toggle('active', b.dataset.nav === name);
     });
 
-    // сбрасываем авто-таймер админки при уходе с экрана
     if (name !== 'admin' && adminStatsTimer) {
         clearInterval(adminStatsTimer);
         adminStatsTimer = null;
@@ -1185,7 +1184,7 @@ async function plinkoPlay(bet) {
     }, 800);
 }
 
-/* ═══ PENALTI (без usedZones) ═══ */
+/* ═══ PENALTI ═══ */
 function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
 }
@@ -1383,7 +1382,7 @@ async function penaltiCashout() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ═══ МОНЕТКА (кнопки блокируются) ═══ */
+/* ═══ МОНЕТКА ═══ */
 function initCoin() {
     renderCoinHistory();
     renderBets('coinBets', coinStart);
@@ -1410,7 +1409,6 @@ function coinStart(bet) {
     document.getElementById('coinResult').textContent = 'Выберите сторону';
     document.getElementById('coinFace').textContent = '🪙';
 
-    // разблокируем кнопки при старте
     const choices = document.querySelector('.coin-choices');
     if (choices) choices.classList.remove('disabled');
 }
@@ -1418,7 +1416,6 @@ function coinStart(bet) {
 async function flipCoin(side) {
     haptic();
 
-    // блокируем кнопки
     const choices = document.querySelector('.coin-choices');
     if (choices) choices.classList.add('disabled');
 
@@ -2072,7 +2069,7 @@ async function sellAllItems() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ═══ UPGRADER ═══ */
+/* ═══ UPGRADER (в стиле ggstand) ═══ */
 async function loadUpgrader() {
     try {
         const [inv, tg] = await Promise.all([
@@ -2081,120 +2078,200 @@ async function loadUpgrader() {
         ]);
         upgraderItems = inv.items || [];
         upgraderTargets = tg.targets || [];
-        upgraderSelected.clear();
-        upgraderTargetIdx = -1;
-        renderUpgraderItems();
-        renderUpgraderTargets();
-        renderUpgraderTargetView();
+        upgraderSelectedPk = null;
+        upgraderTargetIdx = upgraderTargets.length > 1 ? 1 : 0;
+        renderUpgraderInv();
+        renderUpgraderMyItem();
+        renderUpgraderTarget();
         updateUpgraderChance();
     } catch (e) { toast(e.message, 'error'); }
 }
 
-function renderUpgraderItems() {
-    const el = document.getElementById('upgItems');
+function renderUpgraderInv() {
+    const el = document.getElementById('upgInvList');
     if (!el) return;
     if (!upgraderItems.length) {
-        el.innerHTML = '<div style="font-size:11px;color:#8b95a5;padding:8px;">Инвентарь пуст</div>';
-        document.getElementById('upgTotal').textContent = '0 🪙';
+        el.innerHTML = '<div class="upg-inv-empty">Инвентарь пуст</div>';
         return;
     }
     el.innerHTML = upgraderItems.map(i => `
-        <div class="upg-item ${upgraderSelected.has(i.id) ? 'selected' : ''}" onclick="toggleUpgraderItem(${i.id})">
-            <span class="upg-item-emoji">${i.emoji}</span>
-            <span class="upg-item-name">${i.name}</span>
-            <span class="upg-item-price">${fmt(i.value)}</span>
+        <div class="upg-inv-item ${upgraderSelectedPk === i.id ? 'selected' : ''}" onclick="selectUpgraderItem(${i.id})">
+            <div class="upg-inv-item-emoji">${i.emoji}</div>
+            <div class="upg-inv-item-name">${i.name}</div>
+            <div class="upg-inv-item-price">${fmt(i.value)}</div>
         </div>
     `).join('');
-    updateUpgraderTotal();
 }
 
-function toggleUpgraderItem(pk) {
+function selectUpgraderItem(pk) {
     haptic();
-    if (upgraderSelected.has(pk)) upgraderSelected.delete(pk);
-    else upgraderSelected.add(pk);
-    renderUpgraderItems();
-    updateUpgraderChance();
-}
-
-function updateUpgraderTotal() {
-    let total = 0;
-    for (const pk of upgraderSelected) {
-        const it = upgraderItems.find(x => x.id === pk);
-        if (it) total += it.value;
+    if (upgraderSelectedPk === pk) {
+        upgraderSelectedPk = null;
+    } else {
+        upgraderSelectedPk = pk;
     }
-    document.getElementById('upgTotal').textContent = fmt(total) + ' 🪙';
-}
-
-function renderUpgraderTargets() {
-    const el = document.getElementById('upgTargets');
-    if (!el) return;
-    el.innerHTML = upgraderTargets.map((t, i) => `
-        <button class="upg-target-btn ${i === upgraderTargetIdx ? 'selected' : ''}" onclick="selectUpgraderTarget(${i})">
-            <div class="upg-target-emoji">${t.emoji}</div>
-            <div class="upg-target-name">${t.name}</div>
-            <div class="upg-target-price">${fmt(t.price_coins)}</div>
-        </button>
-    `).join('');
-}
-
-function selectUpgraderTarget(idx) {
-    haptic();
-    upgraderTargetIdx = idx;
-    renderUpgraderTargets();
-    renderUpgraderTargetView();
+    renderUpgraderInv();
+    renderUpgraderMyItem();
     updateUpgraderChance();
 }
 
-function renderUpgraderTargetView() {
-    const el = document.getElementById('upgTarget');
-    const priceEl = document.getElementById('upgTargetPrice');
-    if (upgraderTargetIdx < 0) {
-        el.innerHTML = '<div class="upg-target-empty">Выбери цель ↓</div>';
-        priceEl.textContent = '—';
+function renderUpgraderMyItem() {
+    const el = document.getElementById('upgMyItem');
+    if (!el) return;
+    if (!upgraderSelectedPk) {
+        el.innerHTML = '<div class="upg-side-empty">Выбери предмет<br>снизу ↓</div>';
+        return;
+    }
+    const it = upgraderItems.find(x => x.id === upgraderSelectedPk);
+    if (!it) {
+        el.innerHTML = '<div class="upg-side-empty">Выбери предмет<br>снизу ↓</div>';
+        return;
+    }
+    el.innerHTML = `
+        <div class="upg-side-emoji">${it.emoji}</div>
+        <div class="upg-side-name">${it.name}</div>
+        <div class="upg-side-price">${fmt(it.value)}</div>
+    `;
+}
+
+function renderUpgraderTarget() {
+    const el = document.getElementById('upgTargetCard');
+    if (!el) return;
+    if (upgraderTargetIdx < 0 || !upgraderTargets.length) {
+        el.innerHTML = `
+            <button class="upg-nav upg-nav-prev" onclick="upgraderNav(-1)">‹</button>
+            <div class="upg-side-empty">Нет целей</div>
+            <button class="upg-nav upg-nav-next" onclick="upgraderNav(1)">›</button>
+        `;
         return;
     }
     const t = upgraderTargets[upgraderTargetIdx];
     el.innerHTML = `
-        <div>
-            <div class="upg-target-emoji">${t.emoji}</div>
-            <div class="upg-target-name">${t.name}</div>
-            <div class="upg-target-rarity">${t.rarity}</div>
-        </div>
+        <button class="upg-nav upg-nav-prev" onclick="upgraderNav(-1)">‹</button>
+        <div class="upg-side-emoji">${t.emoji}</div>
+        <div class="upg-side-name">${t.name}</div>
+        <div class="upg-side-price">${fmt(t.price_coins)}</div>
+        <button class="upg-nav upg-nav-next" onclick="upgraderNav(1)">›</button>
     `;
-    priceEl.textContent = fmt(t.price_coins) + ' 🪙';
+}
+
+function upgraderNav(dir) {
+    if (!upgraderTargets.length) return;
+    haptic();
+    upgraderTargetIdx = (upgraderTargetIdx + dir + upgraderTargets.length) % upgraderTargets.length;
+    renderUpgraderTarget();
+    updateUpgraderChance();
+}
+
+function upgraderRandomTarget() {
+    if (!upgraderTargets.length) return;
+    haptic();
+    let newIdx = upgraderTargetIdx;
+    while (newIdx === upgraderTargetIdx && upgraderTargets.length > 1) {
+        newIdx = Math.floor(Math.random() * upgraderTargets.length);
+    }
+    upgraderTargetIdx = newIdx;
+    renderUpgraderTarget();
+    updateUpgraderChance();
 }
 
 function updateUpgraderChance() {
-    const el = document.getElementById('upgChance');
-    if (!el) return;
-    if (upgraderTargetIdx < 0 || upgraderSelected.size === 0) {
-        el.textContent = 'Шанс: —';
-        el.className = 'upg-chance';
+    const fill = document.getElementById('upgCircleFill');
+    const percentEl = document.getElementById('upgPercent');
+    if (!fill || !percentEl) return;
+
+    const CIRC = 534;
+
+    if (upgraderSelectedPk === null || upgraderTargetIdx < 0) {
+        percentEl.textContent = '0%';
+        fill.style.strokeDashoffset = CIRC;
+        fill.classList.remove('green', 'yellow', 'red');
         return;
     }
-    let total = 0;
-    for (const pk of upgraderSelected) {
-        const it = upgraderItems.find(x => x.id === pk);
-        if (it) total += it.value;
-    }
+
+    const it = upgraderItems.find(x => x.id === upgraderSelectedPk);
     const target = upgraderTargets[upgraderTargetIdx];
-    const chance = Math.min(0.95, Math.max(0.01, total / target.price_coins));
-    const percent = (chance * 100).toFixed(1);
-    el.textContent = `Шанс: ${percent}%`;
-    el.className = 'upg-chance ' + (chance < 0.2 ? 'low' : chance < 0.5 ? 'mid' : '');
+    if (!it || !target) {
+        percentEl.textContent = '0%';
+        fill.style.strokeDashoffset = CIRC;
+        fill.classList.remove('green', 'yellow', 'red');
+        return;
+    }
+
+    const chance = Math.min(0.95, Math.max(0.01, it.value / target.price_coins));
+    const percent = chance * 100;
+
+    percentEl.textContent = percent.toFixed(2) + '%';
+
+    fill.classList.remove('green', 'yellow', 'red');
+    if (percent < 30) fill.classList.add('red');
+    else if (percent < 65) fill.classList.add('yellow');
+    else fill.classList.add('green');
+
+    const offset = CIRC - CIRC * chance;
+    fill.style.strokeDashoffset = offset;
+}
+
+function upgraderQuickMult(mult) {
+    haptic();
+    if (upgraderSelectedPk === null) {
+        toast('Выбери предмет', 'error');
+        return;
+    }
+    const it = upgraderItems.find(x => x.id === upgraderSelectedPk);
+    if (!it) return;
+    const desiredValue = it.value * mult;
+    let bestIdx = 0;
+    let bestDiff = Infinity;
+    upgraderTargets.forEach((t, i) => {
+        const diff = Math.abs(t.price_coins - desiredValue);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            bestIdx = i;
+        }
+    });
+    upgraderTargetIdx = bestIdx;
+    renderUpgraderTarget();
+    updateUpgraderChance();
+}
+
+function upgraderQuickChance(percent) {
+    haptic();
+    if (upgraderSelectedPk === null) {
+        toast('Выбери предмет', 'error');
+        return;
+    }
+    const it = upgraderItems.find(x => x.id === upgraderSelectedPk);
+    if (!it) return;
+    const desiredValue = it.value / (percent / 100);
+    let bestIdx = 0;
+    let bestDiff = Infinity;
+    upgraderTargets.forEach((t, i) => {
+        const diff = Math.abs(t.price_coins - desiredValue);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            bestIdx = i;
+        }
+    });
+    upgraderTargetIdx = bestIdx;
+    renderUpgraderTarget();
+    updateUpgraderChance();
 }
 
 async function upgraderPlay() {
     if (upgraderBusy) return;
+    if (upgraderSelectedPk === null) { toast('Выбери предмет', 'error'); return; }
     if (upgraderTargetIdx < 0) { toast('Выбери цель', 'error'); return; }
-    if (upgraderSelected.size === 0) { toast('Выбери хотя бы один предмет', 'error'); return; }
+
+    const it = upgraderItems.find(x => x.id === upgraderSelectedPk);
+    if (!it) { toast('Предмет не найден', 'error'); return; }
 
     upgraderBusy = true;
     haptic('medium');
 
     const overlay = document.createElement('div');
     overlay.className = 'upg-overlay';
-    overlay.innerHTML = `<div class="upg-roll rolling">?</div>`;
+    overlay.innerHTML = `<div class="upg-roll rolling">0%</div>`;
     document.body.appendChild(overlay);
 
     const rollEl = overlay.querySelector('.upg-roll');
@@ -2205,7 +2282,7 @@ async function upgraderPlay() {
 
     try {
         const d = await api('/api/upgrader/play', {
-            item_pks: Array.from(upgraderSelected),
+            item_pks: [upgraderSelectedPk],
             target_idx: upgraderTargetIdx,
         });
         await new Promise(r => setTimeout(r, 1800));
@@ -2225,7 +2302,7 @@ async function upgraderPlay() {
             overlay.innerHTML = `
                 <div class="upg-result-icon">💀</div>
                 <div class="upg-result-text lose">НЕ ПОВЕЗЛО</div>
-                <div class="upg-result-name">Предметы потеряны</div>
+                <div class="upg-result-name">Предмет потерян</div>
                 <div class="upg-result-price">−${fmt(d.total_value)} 🪙</div>
             `;
         }
