@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0f1721">
+    <meta name="theme-color" content="#0a0e14">
     <title>🎰 Casino</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="style.css">
@@ -14,18 +14,79 @@
             <span>🪙</span>
             <span id="headerBalance">0</span>
         </div>
-        <div class="user-pill" id="headerUsername">игрок</div>
+        <button class="profile-btn" onclick="showScreen('profile')">
+            <span id="headerAvatar">👤</span>
+        </button>
     </div>
 
     <div class="screen active" id="screen-home">
         <div class="hero">
             <h1>🎰 Casino</h1>
-            <p>Играй · Выигрывай · Выводи</p>
+            <p>Выбери свою игру</p>
+        </div>
+
+        <div class="games-grid">
+            <button class="game-card slots" onclick="openGame('slots')">
+                <div class="game-icon">🎰</div>
+                <div class="game-name">Слоты</div>
+                <div class="game-desc">до ×10</div>
+                <div class="card-glow"></div>
+            </button>
+            <button class="game-card mines" onclick="openGame('mines')">
+                <div class="game-icon">⛏</div>
+                <div class="game-name">Gold Mine</div>
+                <div class="game-desc">копать или продать</div>
+                <div class="card-glow"></div>
+            </button>
+            <button class="game-card rocket" onclick="openGame('rocket')">
+                <div class="game-icon">🚀</div>
+                <div class="game-name">Ракетка</div>
+                <div class="game-desc">×∞ множитель</div>
+                <div class="card-glow"></div>
+            </button>
+            <button class="game-card dice" onclick="openGame('dice')">
+                <div class="game-icon">🎲</div>
+                <div class="game-name">Кости</div>
+                <div class="game-desc">до ×5.7</div>
+                <div class="card-glow"></div>
+            </button>
+            <button class="game-card rr" onclick="openGame('rr')">
+                <div class="game-icon">🔫</div>
+                <div class="game-name">Русская рулетка</div>
+                <div class="game-desc">до ×7</div>
+                <div class="card-glow"></div>
+            </button>
+            <button class="game-card plinko" onclick="openGame('plinko')">
+                <div class="game-icon">🎯</div>
+                <div class="game-name">Plinko</div>
+                <div class="game-desc">до ×100</div>
+                <div class="card-glow"></div>
+            </button>
+            <button class="game-card penalti" onclick="openGame('penalti')">
+                <div class="game-icon">⚽</div>
+                <div class="game-name">Penalti</div>
+                <div class="game-desc">забивай и забирай</div>
+                <div class="card-glow"></div>
+            </button>
+            <button class="game-card coin" onclick="openGame('coin')">
+                <div class="game-icon">🪙</div>
+                <div class="game-name">Монетка</div>
+                <div class="game-desc">×1.95 за 50/50</div>
+                <div class="card-glow"></div>
+            </button>
+        </div>
+    </div>
+
+    <div class="screen" id="screen-profile">
+        <div class="game-header">
+            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <div class="game-title">👤 Профиль</div>
+            <div></div>
         </div>
 
         <div class="balance-card">
-            <div class="balance-label">Баланс</div>
-            <div class="balance-big"><span id="homeBalance">0</span> 🪙</div>
+            <div class="balance-label">Ваш баланс</div>
+            <div class="balance-big"><span id="profileBalance">0</span> 🪙</div>
             <div class="balance-stats">
                 <div class="stat"><div class="stat-value" id="statGames">0</div><div class="stat-label">Игр</div></div>
                 <div class="stat"><div class="stat-value" id="statWagered">0</div><div class="stat-label">Поставлено</div></div>
@@ -33,46 +94,29 @@
             </div>
         </div>
 
-        <div class="section-title">🎮 Игры</div>
-        <div class="games-grid">
-            <button class="game-card" onclick="openGame('slots')">
-                <div class="game-icon">🎰</div>
-                <div class="game-name">Слоты</div>
-                <div class="game-desc">до ×10</div>
-            </button>
-            <button class="game-card" onclick="openGame('mines')">
-                <div class="game-icon">💣</div>
-                <div class="game-name">Сапёр</div>
-                <div class="game-desc">×2.5 за поле</div>
-            </button>
-            <button class="game-card" onclick="openGame('rocket')">
-                <div class="game-icon">🚀</div>
-                <div class="game-name">Ракетка</div>
-                <div class="game-desc">Растущий множитель</div>
-            </button>
-            <button class="game-card" onclick="openGame('dice')">
-                <div class="game-icon">🎲</div>
-                <div class="game-name">Кости</div>
-                <div class="game-desc">×5 на точное</div>
-            </button>
-            <button class="game-card" onclick="openGame('rr')">
-                <div class="game-icon">🔫</div>
-                <div class="game-name">Русская рулетка</div>
-                <div class="game-desc">до ×7</div>
-            </button>
-        </div>
-
-        <div class="section-title">📊 Ещё</div>
+        <div class="section-title">💰 Финансы</div>
         <div class="quick-actions">
             <button class="quick-btn" onclick="showScreen('pay')"><span>⭐</span> Пополнить</button>
             <button class="quick-btn" onclick="showScreen('withdraw')"><span>💸</span> Вывод</button>
-            <button class="quick-btn" onclick="showScreen('top')"><span>🏆</span> Топ игроков</button>
-            <button class="quick-btn" onclick="showScreen('ach')"><span>🏅</span> Достижения</button>
-            <button class="quick-btn" onclick="showScreen('ref')"><span>👥</span> Рефералы</button>
+        </div>
+
+        <div class="section-title">🎁 Бонусы и награды</div>
+        <div class="quick-actions">
             <button class="quick-btn" onclick="claimDaily()"><span>🎁</span> Ежедневный бонус</button>
             <button class="quick-btn" onclick="showScreen('promo')"><span>🎟</span> Промокод</button>
+            <button class="quick-btn" onclick="showScreen('ach')"><span>🏅</span> Достижения</button>
+            <button class="quick-btn" onclick="showScreen('ref')"><span>👥</span> Рефералы</button>
+        </div>
+
+        <div class="section-title">📊 Другое</div>
+        <div class="quick-actions">
+            <button class="quick-btn" onclick="showScreen('top')"><span>🏆</span> Топ игроков</button>
+            <button class="quick-btn" onclick="showScreen('help')"><span>📖</span> Инструкция</button>
+        </div>
+
+        <div class="quick-actions" style="margin-top: 20px;">
             <button class="quick-btn hidden" id="adminBtn" onclick="showScreen('admin')">
-                <span>👑</span> Админка
+                <span>👑</span> Админ-панель
             </button>
         </div>
     </div>
@@ -95,13 +139,13 @@
         </div>
 
         <div class="game-content hidden" id="content-mines">
-            <div class="bets-grid" id="minesBets"></div>
             <div class="mines-info hidden" id="minesInfo">
-                <div>Открыто: <b id="minesOpened">0</b></div>
-                <div>Забрать: <b id="minesPrize">0</b> 🪙</div>
+                <div>Золото: <b id="minesOpened">0</b></div>
+                <div>Продать: <b id="minesPrize">0</b> 🪙</div>
             </div>
             <div class="mines-grid" id="minesGrid"></div>
-            <button class="cashout-btn hidden" id="minesCashout" onclick="minesCashout()">💰 Забрать</button>
+            <button class="cashout-btn hidden" id="minesCashout" onclick="minesCashout()">💎 ПРОДАТЬ</button>
+            <div class="bets-grid" id="minesBets"></div>
         </div>
 
         <div class="game-content hidden" id="content-rocket">
@@ -115,7 +159,7 @@
                 </div>
                 <div class="rocket-mult" id="rocketMult">×1.00</div>
                 <div class="rocket-prize" id="rocketPrize">0 🪙</div>
-                <button class="cashout-btn" onclick="rocketCashout()">💰 Забрать</button>
+                <button class="cashout-btn" onclick="rocketCashout()">💰 ЗАБРАТЬ</button>
             </div>
         </div>
 
@@ -125,9 +169,18 @@
                 <div class="dice-face" id="diceFace">🎲</div>
                 <div class="dice-result" id="diceResult"></div>
                 <div class="dice-choices" id="diceChoices">
-                    <button onclick="rollDice('low')">⬇️ 1-3 (×2)</button>
-                    <button onclick="rollDice('high')">⬆️ 4-6 (×2)</button>
-                    <button onclick="rollDice('exact')">🎯 Точно (×5)</button>
+                    <button class="dice-choice-btn" onclick="rollDice('range_3_6')">
+                        <span class="dc-title">3 – 6</span>
+                        <span class="dc-mult">×1.95</span>
+                    </button>
+                    <button class="dice-choice-btn" onclick="rollDice('range_4_6')">
+                        <span class="dc-title">4 – 6</span>
+                        <span class="dc-mult">×2.9</span>
+                    </button>
+                    <button class="dice-choice-btn" onclick="rollDice('range_6_6')">
+                        <span class="dc-title">Только 6</span>
+                        <span class="dc-mult">×5.7</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -139,8 +192,61 @@
                 <div class="rr-mult" id="rrMult">×1.00</div>
                 <div class="rr-prize" id="rrPrize">0 🪙</div>
                 <div class="rr-actions">
-                    <button class="rr-spin" onclick="rrSpin()">🔫 Крутить</button>
-                    <button class="rr-cash" onclick="rrCashout()">💰 Забрать</button>
+                    <button class="rr-spin" onclick="rrSpin()">🔫 КРУТИТЬ</button>
+                    <button class="rr-cash" onclick="rrCashout()">💰 ЗАБРАТЬ</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-content hidden" id="content-plinko">
+            <div class="plinko-risk">
+                <button class="plinko-risk-btn active" data-risk="low" onclick="setPlinkoRisk('low')">Низкий ×10</button>
+                <button class="plinko-risk-btn" data-risk="medium" onclick="setPlinkoRisk('medium')">Средний ×25</button>
+                <button class="plinko-risk-btn" data-risk="high" onclick="setPlinkoRisk('high')">Высокий ×100</button>
+            </div>
+            <div class="plinko-field" id="plinkoField">
+                <div class="plinko-board" id="plinkoBoard"></div>
+                <div class="plinko-ball" id="plinkoBall">🟡</div>
+            </div>
+            <div class="plinko-slots" id="plinkoSlots"></div>
+            <div class="bets-grid" id="plinkoBets"></div>
+        </div>
+
+        <div class="game-content hidden" id="content-penalti">
+            <div class="bets-grid" id="penaltiBets"></div>
+            <div class="penalti-display hidden" id="penaltiDisplay">
+                <div class="penalti-goals">
+                    <span class="goal-dot" id="goal0">⚪</span>
+                    <span class="goal-dot" id="goal1">⚪</span>
+                    <span class="goal-dot" id="goal2">⚪</span>
+                    <span class="goal-dot" id="goal3">⚪</span>
+                    <span class="goal-dot" id="goal4">⚪</span>
+                </div>
+                <div class="penalti-ball">⚽</div>
+                <div class="penalti-mult" id="penaltiMult">×1.00</div>
+                <div class="penalti-prize" id="penaltiPrize">0 🪙</div>
+                <div class="rr-actions">
+                    <button class="rr-spin" onclick="penaltiKick()">⚽ БИТЬ</button>
+                    <button class="rr-cash" onclick="penaltiCashout()">💰 ЗАБРАТЬ</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-content hidden" id="content-coin">
+            <div class="coin-history" id="coinHistory"></div>
+            <div class="bets-grid" id="coinBets"></div>
+            <div class="coin-display hidden" id="coinDisplay">
+                <div class="coin-face" id="coinFace">🪙</div>
+                <div class="coin-result" id="coinResult">Выберите сторону</div>
+                <div class="coin-choices">
+                    <button class="coin-btn heads" onclick="flipCoin('heads')">
+                        <span>👑 Орёл</span>
+                        <span class="coin-mult">×1.95</span>
+                    </button>
+                    <button class="coin-btn tails" onclick="flipCoin('tails')">
+                        <span>🔢 Решка</span>
+                        <span class="coin-mult">×1.95</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -148,7 +254,7 @@
 
     <div class="screen" id="screen-pay">
         <div class="game-header">
-            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <button class="back-btn" onclick="showScreen('profile')">←</button>
             <div class="game-title">⭐ Пополнение</div>
             <div></div>
         </div>
@@ -161,7 +267,7 @@
 
     <div class="screen" id="screen-withdraw">
         <div class="game-header">
-            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <button class="back-btn" onclick="showScreen('profile')">←</button>
             <div class="game-title">💸 Вывод</div>
             <div></div>
         </div>
@@ -175,7 +281,7 @@
 
     <div class="screen" id="screen-top">
         <div class="game-header">
-            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <button class="back-btn" onclick="showScreen('profile')">←</button>
             <div class="game-title">🏆 Топ игроков</div>
             <div></div>
         </div>
@@ -184,7 +290,7 @@
 
     <div class="screen" id="screen-ach">
         <div class="game-header">
-            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <button class="back-btn" onclick="showScreen('profile')">←</button>
             <div class="game-title">🏅 Достижения</div>
             <div></div>
         </div>
@@ -193,7 +299,7 @@
 
     <div class="screen" id="screen-ref">
         <div class="game-header">
-            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <button class="back-btn" onclick="showScreen('profile')">←</button>
             <div class="game-title">👥 Рефералы</div>
             <div></div>
         </div>
@@ -213,7 +319,7 @@
 
     <div class="screen" id="screen-promo">
         <div class="game-header">
-            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <button class="back-btn" onclick="showScreen('profile')">←</button>
             <div class="game-title">🎟 Промокод</div>
             <div></div>
         </div>
@@ -223,13 +329,34 @@
         </div>
     </div>
 
+    <div class="screen" id="screen-help">
+        <div class="game-header">
+            <button class="back-btn" onclick="showScreen('profile')">←</button>
+            <div class="game-title">📖 Инструкция</div>
+            <div></div>
+        </div>
+        <div class="admin-card" style="margin-top: 10px;">
+            <div style="font-size: 13px; line-height: 1.7; color: var(--text-dim);">
+                <p><b style="color:var(--gold)">🎰 Слоты</b> — 2 совпадения ×2, 3 → ×3–×10, 🤑 ×10</p>
+                <p><b style="color:var(--gold)">⛏ Gold Mine</b> — копай золото, продай или взорвёшься</p>
+                <p><b style="color:var(--gold)">🚀 Ракетка</b> — множитель растёт, успей забрать</p>
+                <p><b style="color:var(--gold)">🎲 Кости</b> — выбери риск: от ×1.95 до ×5.7</p>
+                <p><b style="color:var(--gold)">🔫 Рулетка</b> — 7 патронов, максимум ×7</p>
+                <p><b style="color:var(--gold)">🎯 Plinko</b> — шарик падает, множитель зависит от лунки</p>
+                <p><b style="color:var(--gold)">⚽ Penalti</b> — забивай голы, но вратарь может поймать</p>
+                <p><b style="color:var(--gold)">🪙 Монетка</b> — 50/50, ×1.95 на любую сторону</p>
+                <p style="margin-top:12px;"><b style="color:var(--accent-2)">⭐ Пополнение:</b> 1 ⭐ = 100 🪙</p>
+                <p><b style="color:var(--accent-2)">💸 Вывод:</b> минимум 15 ⭐, заходить 3 дня из 7</p>
+            </div>
+        </div>
+    </div>
+
     <div class="screen" id="screen-admin">
         <div class="game-header">
-            <button class="back-btn" onclick="showScreen('home')">←</button>
+            <button class="back-btn" onclick="showScreen('profile')">←</button>
             <div class="game-title">👑 Админка</div>
             <div></div>
         </div>
-
         <div class="admin-tabs">
             <button class="admin-tab active" data-tab="stats" onclick="switchAdminTab('stats')">📊</button>
             <button class="admin-tab" data-tab="wd" onclick="switchAdminTab('wd')">📜</button>
@@ -238,7 +365,6 @@
             <button class="admin-tab" data-tab="logs" onclick="switchAdminTab('logs')">📋</button>
             <button class="admin-tab" data-tab="broadcast" onclick="switchAdminTab('broadcast')">📢</button>
         </div>
-
         <div class="admin-content" id="admin-stats">
             <div class="admin-card">
                 <div class="admin-row"><span>👥 Пользователей</span><b id="admUsers">0</b></div>
@@ -251,11 +377,7 @@
                 <div id="admTop"></div>
             </div>
         </div>
-
-        <div class="admin-content hidden" id="admin-wd">
-            <div id="admWdList"></div>
-        </div>
-
+        <div class="admin-content hidden" id="admin-wd"><div id="admWdList"></div></div>
         <div class="admin-content hidden" id="admin-give">
             <div class="admin-card">
                 <div class="admin-card-title">💸 Выдать монеты</div>
@@ -270,7 +392,6 @@
                 <button class="copy-btn" onclick="adminSetbal()">✅ Установить</button>
             </div>
         </div>
-
         <div class="admin-content hidden" id="admin-promo">
             <div class="admin-card">
                 <div class="admin-card-title">➕ Создать промокод</div>
@@ -288,11 +409,7 @@
                 <div id="admPromoList"></div>
             </div>
         </div>
-
-        <div class="admin-content hidden" id="admin-logs">
-            <div id="admLogs"></div>
-        </div>
-
+        <div class="admin-content hidden" id="admin-logs"><div id="admLogs"></div></div>
         <div class="admin-content hidden" id="admin-broadcast">
             <div class="admin-card">
                 <div class="admin-card-title">📢 Рассылка (HTML)</div>
@@ -309,8 +426,8 @@
             <div class="result-amount" id="resultAmount">+1.000 🪙</div>
             <div class="result-details" id="resultDetails"></div>
             <div class="result-buttons">
-                <button class="result-btn primary" onclick="playAgain()">🔁 Ещё раз</button>
-                <button class="result-btn secondary" onclick="showScreen('home')">🏠 На главную</button>
+                <button class="result-btn primary" onclick="playAgain()">🔁 ЕЩЁ РАЗ</button>
+                <button class="result-btn secondary" onclick="showScreen('home')">🏠 НА ГЛАВНУЮ</button>
             </div>
         </div>
     </div>
