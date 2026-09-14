@@ -480,7 +480,7 @@ async def api_mines_cancel(request: Request):
     return {"balance": await get_balance(uid)}
 
 
-# ═══════════ CRASH (замедленный) ═══════════
+# ═══════════ CRASH ═══════════
 
 crash_games: dict[int, dict] = {}
 
@@ -805,12 +805,44 @@ async def api_plinko(request: Request):
     return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
-# ═══════════ PENALTI (вратарь всегда в центре) ═══════════
+# ═══════════ PENALTI (полноценные ворота, вратарь прыгает сам) ═══════════
 
 penalti_games: dict = {}
 PENALTI_TIMEOUT = 300
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
-PENALTI_SAVE_CHANCE = [0.05, 0.25, 0.50, 0.70, 0.88]
+
+# Веса зон, куда вратарь прыгает.
+# 0 1 2
+# 3 4 5
+# 6 7 8
+PENALTI_KEEPER_WEIGHTS = [
+    1, 2, 1,
+    3, 5, 3,
+    3, 4, 3,
+]
+
+# Насколько «умнее» вратарь на каждом шаге (0..4)
+PENALTI_SMARTNESS = [0.0, 0.15, 0.30, 0.50, 0.70]
+
+
+def _keeper_pick_zone(step: int) -> int:
+    smart = PENALTI_SMARTNESS[min(step, len(PENALTI_SMARTNESS) - 1)]
+    weights = []
+    for i, w in enumerate(PENALTI_KEEPER_WEIGHTS):
+        if w >= 4:
+            weights.append(w * (1 + smart * 2))
+        elif w <= 1:
+            weights.append(w * (1 - smart * 0.7))
+        else:
+            weights.append(w)
+    total = sum(weights)
+    r = random.random() * total
+    cum = 0
+    for i, w in enumerate(weights):
+        cum += w
+        if r <= cum:
+            return i
+    return 4
 
 
 def cleanup_penalti():
@@ -874,17 +906,20 @@ async def api_penalti_kick(request: Request):
     if step >= 5:
         raise HTTPException(400, "already_max")
 
-    save_chance = PENALTI_SAVE_CHANCE[step]
-    is_save = random.random() < save_chance
+    keeper_zone = _keeper_pick_zone(step)
+    is_save = (keeper_zone == zone)
 
     if is_save:
         bet = game["bet"]
         del penalti_games[uid]
         await log_game(uid, bet, 0)
         return {
-            "goal": False, "save": True,
+            "goal": False,
+            "save": True,
             "zone": zone,
-            "step": step, "bet": bet,
+            "keeper_zone": keeper_zone,
+            "step": step,
+            "bet": bet,
             "balance": await get_balance(uid),
         }
 
@@ -904,18 +939,26 @@ async def api_penalti_kick(request: Request):
         if prize >= 100000:
             await unlock_achievement(uid, "big_win")
         return {
-            "goal": True, "save": False,
+            "goal": True,
+            "save": False,
             "zone": zone,
-            "step": step, "maxed": True,
-            "mult": mult, "prize": prize,
+            "keeper_zone": keeper_zone,
+            "step": step,
+            "maxed": True,
+            "mult": mult,
+            "prize": prize,
             "balance": await get_balance(uid),
         }
 
     return {
-        "goal": True, "save": False,
+        "goal": True,
+        "save": False,
         "zone": zone,
-        "step": step, "maxed": False,
-        "mult": mult, "prize": prize,
+        "keeper_zone": keeper_zone,
+        "step": step,
+        "maxed": False,
+        "mult": mult,
+        "prize": prize,
         "balance": await get_balance(uid),
     }
 
