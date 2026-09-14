@@ -64,76 +64,35 @@ async def cmd_start(message: types.Message):
         except (ValueError, IndexError):
             pass
 
-    uid = message.from_user.id
-    balance = await get_balance(uid)
-    stats = await get_user_full_stats(uid)
-
-    games = stats[3] if stats else 0
-    wagered = stats[1] if stats else 0
-    won = stats[2] if stats else 0
-
-    allowed, days = await can_withdraw(uid)
-    if allowed:
-        withdraw_status = "✅ Доступен"
-    else:
-        left = 3 - days
-        withdraw_status = f"🔒 Ещё {left} дн. (активность {days}/3)"
-
-    if WEBAPP_URL and WEBAPP_URL.startswith("http"):
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text="🎰 ОТКРЫТЬ КАЗИНО",
-                web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"),
-            )],
-        ])
-    else:
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Mini App не настроен", callback_data="noop")],
-        ])
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="🎰  ИГРАТЬ  🎰",
+            web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"),
+        )],
+    ])
 
     text = (
         "╔══════════════════════════╗\n"
-        "      🎰 <b>CASINO</b> 🎰\n"
-        "╚══════════════════════════╝\n\n"
-
-        f"👤 <b>{message.from_user.first_name or 'Игрок'}</b>, добро пожаловать!\n\n"
-
+        "║   🎰  <b>ДОБРО ПОЖАЛОВАТЬ</b>  🎰   ║\n"
+        "║        <b>В КАЗИНО</b>              ║\n"
+        "╚══════════════════════════╝\n"
+        "\n"
+        "✨ <b>Добро пожаловать в мир азарта!</b>\n"
+        "\n"
+        "🪙 Здесь тебя ждут:\n"
+        "🎰 Слоты  ·  📈 Crash  ·  ⛏ Mines\n"
+        "🎯 Plinko  ·  🎲 Кости  ·  ⚔️ Дуэли\n"
+        "и ещё много азартных игр\n"
+        "\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💼 <b>ВАШ ПРОФИЛЬ</b>\n"
+        "🎁 <b>Бонус новичка</b> — забери прямо сейчас\n"
+        "👥 <b>Рефералы</b> — получай 10% скидку\n"
+        "💸 <b>Вывод</b> — от 15 ⭐ на кошелёк\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🪙 Баланс: <b>{fmt(balance)}</b>\n"
-        f"🎮 Игр сыграно: <b>{fmt(games)}</b>\n"
-        f"💸 Поставлено: <b>{fmt(wagered)}</b>\n"
-        f"🏆 Выиграно: <b>{fmt(won)}</b>\n"
-        f"💳 Вывод: <b>{withdraw_status}</b>\n\n"
-
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🎮 <b>ДОСТУПНЫЕ ИГРЫ</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🎰 Слоты — выигрыш до ×10\n"
-        "⛏ Gold Mine — копай или продай\n"
-        "🚀 Ракетка — растущий множитель\n"
-        "🎲 Кости — до ×5.7 на риск\n"
-        "🔫 Русская рулетка — до ×7\n"
-        "🎯 Plinko — до ×100\n"
-        "⚽ Penalti — забивай и забирай\n"
-        "🪙 Монетка — 50/50 на ×1.95\n\n"
-
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💎 <b>ВОЗМОЖНОСТИ</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "⭐ Пополнение от 10 звёзд\n"
-        "💸 Вывод от 15 звёзд\n"
-        "🎁 Ежедневный бонус\n"
-        "🎟 Промокоды\n"
-        "👥 Реферальная программа −10%\n"
-        "🏅 Достижения и награды\n\n"
-
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💱 Курс: <b>1 ⭐ = {RATE} 🪙</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
-        "👇 <b>Нажми кнопку ниже, чтобы играть</b>"
+        "\n"
+        "👇 <b>Нажми кнопку ниже, чтобы играть</b>\n"
+        "\n"
+        "🔥 <i>Удачи и крупных выигрышей!</i> 🔥"
     )
 
     await message.answer(text, parse_mode="HTML", reply_markup=kb)
@@ -154,7 +113,7 @@ async def cmd_webapp(message: types.Message):
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
-            text="🎰 ОТКРЫТЬ КАЗИНО",
+            text="🎰  ИГРАТЬ  🎰",
             web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"),
         )],
     ])
