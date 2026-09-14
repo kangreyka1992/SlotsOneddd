@@ -1023,7 +1023,6 @@ async def get_admin_logs(limit: int = 30):
 # ═══════════ ПОСЕЩЕНИЯ ДЛЯ ВЫВОДА ═══════════
 
 async def log_visit(user_id: int):
-    """Записывает уникальную дату посещения (YYYY-MM-DD)."""
     today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -1034,7 +1033,6 @@ async def log_visit(user_id: int):
 
 
 async def count_recent_visits(user_id: int, days: int = 7) -> int:
-    """Сколько уникальных дней заходил за последние N дней."""
     since = (datetime.datetime.utcnow() - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -1047,6 +1045,5 @@ async def count_recent_visits(user_id: int, days: int = 7) -> int:
 
 
 async def can_withdraw(user_id: int) -> tuple:
-    """Возвращает (можно_вывести, сколько_дней_из_3_есть)."""
     days = await count_recent_visits(user_id, days=7)
     return days >= 3, days
