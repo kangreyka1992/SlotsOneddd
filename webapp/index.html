@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="style.css?v=60">
 </head>
 <body>
 <div id="app">
@@ -88,7 +88,7 @@
     <section class="screen" id="screen-upgrader">
       <div class="upg-top">
         <div class="upg-side-card" id="upgMyItem">
-          <div class="upg-side-empty">Выбери предмет</div>
+          <div class="upg-side-empty">Выбери предметы</div>
         </div>
 
         <div class="upg-circle-wrap">
@@ -125,7 +125,10 @@
         ⚡ Прокачать
       </button>
 
-      <h4 class="admin-subtitle" style="margin-top: 16px;">Твой инвентарь</h4>
+      <h4 class="admin-subtitle" style="margin-top: 16px;">
+        Твой инвентарь
+        <span id="upgSelectedCount" style="color: var(--gold); font-size: 11px;"></span>
+      </h4>
       <div class="upg-inv-list" id="upgInvList"></div>
     </section>
 
@@ -184,11 +187,12 @@
     <section class="screen" id="screen-admin">
       <h3 class="section-title">⚙️ Админ-панель</h3>
 
-      <div class="admin-tabs">
+      <div class="admin-tabs" style="grid-template-columns: repeat(3, 1fr);">
         <button class="admin-tab active" data-tab="stats" onclick="switchAdminTab('stats')">📊 Стата</button>
         <button class="admin-tab" data-tab="wd" onclick="switchAdminTab('wd')">💸 Выводы</button>
         <button class="admin-tab" data-tab="money" onclick="switchAdminTab('money')">💰 Деньги</button>
         <button class="admin-tab" data-tab="promo" onclick="switchAdminTab('promo')">🎟 Промо</button>
+        <button class="admin-tab" data-tab="inv" onclick="switchAdminTab('inv')">🎒 Инвентарь</button>
         <button class="admin-tab" data-tab="logs" onclick="switchAdminTab('logs')">📜 Логи</button>
       </div>
 
@@ -248,6 +252,16 @@
         </div>
         <h4 class="admin-subtitle">Список промокодов</h4>
         <div id="admPromoList"></div>
+      </div>
+
+      <div class="admin-content hidden" id="admin-inv">
+        <div class="admin-card">
+          <div class="admin-subtitle">🎒 Инвентарь игрока</div>
+          <input class="input" id="invTarget" placeholder="ID или @username">
+          <button class="btn-primary" onclick="loadUserInventory()">Показать</button>
+        </div>
+        <h4 class="admin-subtitle">Предметы</h4>
+        <div id="admInvList"></div>
       </div>
 
       <div class="admin-content hidden" id="admin-logs">
@@ -513,6 +527,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=40"></script>
+<script src="app.js?v=60"></script>
 </body>
 </html>
