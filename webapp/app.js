@@ -33,6 +33,7 @@ let gameHistory = [];
 let minesMinesCount = 5;
 let slots2Lines = 5;
 let duelPolling = null;
+let gameLocked = false;
 
 /* ═══ SOUND ═══ */
 let audioCtx = null;
@@ -118,6 +119,21 @@ async function api(url, body = {}) {
     return res.json();
 }
 
+// Обёртка для игровых запросов — блокирует UI на время игры
+async function gameApi(url, body = {}) {
+    if (gameLocked) {
+        throw new Error('⏳ Дождись окончания игры');
+    }
+    gameLocked = true;
+    try {
+        const res = await api(url, body);
+        return res;
+    } catch (e) {
+        gameLocked = false;
+        throw e;
+    }
+}
+
 function addHistory(game, bet, win) {
     gameHistory.unshift({ game, bet, win, ts: Date.now() });
     gameHistory = gameHistory.slice(0, 20);
@@ -169,6 +185,7 @@ function confettiJackpot() {
 
 /* ═══ RESULT SCREEN ═══ */
 function showResult({ icon, title, titleClass, amount, details, game, bet }) {
+    gameLocked = false;   // разблокируем UI
     document.getElementById('resultIcon').textContent = icon;
     const titleEl = document.getElementById('resultTitle');
     titleEl.textContent = title;
@@ -197,6 +214,12 @@ function playAgain() {
 
 /* ═══ UI ═══ */
 function showScreen(name) {
+    // Блокируем навигацию, если идёт игра
+    if (gameLocked && name !== 'game' && name !== 'result') {
+        toast('⏳ Дождись окончания игры', 'error');
+        return;
+    }
+
     const screen = document.getElementById('screen-' + name);
     if (!screen) return;
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -328,6 +351,10 @@ async function loadProfile() {
 
 /* ═══ GAMES ═══ */
 function openGame(game) {
+    if (gameLocked) {
+        toast('⏳ Дождись окончания игры', 'error');
+        return;
+    }
     haptic();
     const content = document.getElementById('content-' + game);
     if (!content) { console.error('Game not found: ' + game); return; }
@@ -405,10 +432,15 @@ function openGame(game) {
 }
 
 function closeGame() {
+    if (gameLocked) {
+        toast('⏳ Дождись окончания игры', 'error');
+        return;
+    }
     haptic();
     if (crashInterval) clearInterval(crashInterval);
     if (duelPolling) clearInterval(duelPolling);
     stopCrashCanvas();
+    gameLocked = false;
     showScreen('home');
 }
 
@@ -421,8 +453,11 @@ function renderBets(containerId, onPick, multiplier = 1) {
         const btn = document.createElement('button');
         btn.className = 'bet-btn';
         btn.textContent = fmt(b) + ' 🪙' + (multiplier > 1 ? ` (${fmt(cost)})` : '');
-        if (cost > profile.balance) btn.disabled = true;
-        btn.onclick = () => { SFX.click(); haptic(); onPick(b); };
+        if (cost > profile.balance || gameLocked) btn.disabled = true;
+        btn.onclick = () => {
+            if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
+            SFX.click(); haptic(); onPick(b);
+        };
         el.appendChild(btn);
     });
     const all = document.createElement('button');
@@ -431,8 +466,11 @@ function renderBets(containerId, onPick, multiplier = 1) {
     all.textContent = multiplier > 1
         ? `💯 Макс (${fmt(maxBet)} × ${multiplier})`
         : '💯 Весь баланс';
-    if (maxBet <= 0) all.disabled = true;
-    all.onclick = () => { SFX.click(); haptic('medium'); onPick(maxBet); };
+    if (maxBet <= 0 || gameLocked) all.disabled = true;
+    all.onclick = () => {
+        if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
+        SFX.click(); haptic('medium'); onPick(maxBet);
+    };
     el.appendChild(all);
 }
 
@@ -444,6 +482,7 @@ function renderSlots2Lines() {
 }
 
 function setSlotsLines(n) {
+    if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
     slots2Lines = n;
     renderSlots2Lines();
     renderBets('slots2Bets', spinSlots2, slots2Lines);
@@ -483,7 +522,7 @@ async function spinSlots2(bet) {
     }, 80);
 
     try {
-        const d = await api('/api/slots2/spin', { bet, lines: slots2Lines });
+        const d = await gameApi('/api/slots2/spin', { bet, lines: slots2Lines });
         await new Promise(r => setTimeout(r, 800));
         clearInterval(spinInt);
         document.querySelectorAll('#slots2Field .slot2-cell').forEach(c => c.classList.remove('spinning'));
@@ -515,6 +554,7 @@ async function spinSlots2(bet) {
         clearInterval(spinInt);
         document.querySelectorAll('#slots2Field .slot2-cell').forEach(c => c.classList.remove('spinning'));
         toast(e.message, 'error');
+        gameLocked = false;
         renderBets('slots2Bets', spinSlots2, slots2Lines);
     }
 }
@@ -531,6 +571,7 @@ function renderMinesOptions() {
         btn.className = 'mines-setting-btn' + (m === minesMinesCount ? ' active' : '');
         btn.textContent = m;
         btn.onclick = () => {
+            if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
             minesMinesCount = m;
             renderMinesOptions();
             haptic();
@@ -541,7 +582,7 @@ function renderMinesOptions() {
 
 async function minesStart(bet) {
     try {
-        const d = await api('/api/mines/start', { bet, mines: minesMinesCount });
+        const d = await gameApi('/api/mines/start', { bet, mines: minesMinesCount });
         minesState = { field: d.field, bet, opened: new Set(), minesCount: d.mines_count };
         lastBet = bet;
         document.getElementById('minesSettings').classList.add('hidden');
@@ -551,7 +592,8 @@ async function minesStart(bet) {
         updateBalance(d.balance);
         renderMinesGrid(d.field);
         loadProfile();
-    } catch (e) { toast(e.message, 'error'); }
+        gameLocked = false;   // разблокируем — теперь можно кликать по клеткам
+    } catch (e) { toast(e.message, 'error'); gameLocked = false; }
 }
 
 function renderMinesGrid(field) {
@@ -662,7 +704,7 @@ async function crashStart(bet) {
     try {
         const autoEl = document.getElementById('crashAuto');
         const auto = autoEl ? parseFloat(autoEl.value) || 0 : 0;
-        const d = await api('/api/crash/start', { bet, auto_cashout: auto });
+        const d = await gameApi('/api/crash/start', { bet, auto_cashout: auto });
         updateBalance(d.balance);
         lastBet = bet;
         document.getElementById('crashBets').classList.add('hidden');
@@ -676,10 +718,11 @@ async function crashStart(bet) {
             autoInline.textContent = auto > 1 ? `Авто-кэшаут: ×${auto.toFixed(2)}` : '';
         }
 
+        gameLocked = false;   // разблокируем — можно жать «Забрать»
         startCrashCanvas();
         pollCrash();
         loadProfile();
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) { toast(e.message, 'error'); gameLocked = false; }
 }
 
 function startCrashCanvas() {
@@ -867,6 +910,7 @@ async function crashCashout() {
         }, 500);
     } catch (e) {
         toast(e.message, 'error');
+        gameLocked = false;
     }
 }
 
@@ -899,7 +943,7 @@ async function rollDice(mode) {
     face.classList.remove('spinning');
 
     try {
-        const d = await api('/api/dice/roll', { bet: diceBet, choice: mode });
+        const d = await gameApi('/api/dice/roll', { bet: diceBet, choice: mode });
         const resultEmoji = ['', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'][d.roll];
         face.textContent = resultEmoji;
         updateBalance(d.balance);
@@ -921,13 +965,14 @@ async function rollDice(mode) {
         face.classList.remove('spinning');
         document.getElementById('diceChoices').classList.remove('disabled');
         toast(e.message, 'error');
+        gameLocked = false;
     }
 }
 
 /* ═══ РУССКАЯ РУЛЕТКА ═══ */
 async function rrStart(bet) {
     try {
-        const d = await api('/api/rr/start', { bet });
+        const d = await gameApi('/api/rr/start', { bet });
         rrState = { bet, step: 0 };
         lastBet = bet;
         updateBalance(d.balance);
@@ -937,7 +982,8 @@ async function rrStart(bet) {
         document.getElementById('rrMult').textContent = '×1.00';
         document.getElementById('rrPrize').textContent = '0 🪙';
         loadProfile();
-    } catch (e) { toast(e.message, 'error'); }
+        gameLocked = false;   // разблокируем — можно жать «Крутить»
+    } catch (e) { toast(e.message, 'error'); gameLocked = false; }
 }
 
 async function rrSpin() {
@@ -1010,6 +1056,7 @@ const PLINKO_MULTIPLIERS = {
 };
 
 function setPlinkoRisk(risk) {
+    if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
     haptic();
     plinkoRisk = risk;
     document.querySelectorAll('.plinko-risk-btn').forEach(b => {
@@ -1056,7 +1103,7 @@ function renderPlinkoSlots() {
 
 async function plinkoPlay(bet) {
     lastBet = bet;
-    const d = await api('/api/plinko/play', { bet, risk: plinkoRisk });
+    const d = await gameApi('/api/plinko/play', { bet, risk: plinkoRisk });
     if (!d) return;
 
     updateBalance(d.balance);
@@ -1075,15 +1122,20 @@ async function plinkoPlay(bet) {
     const slots = PLINKO_MULTIPLIERS[plinkoRisk].length;
     const finalXPercent = (slotIdx + 0.5) / slots * 100;
 
-    const steps = 8;
+    const steps = 12;
     for (let i = 1; i <= steps; i++) {
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 80));
         playTone(600 + i * 60, 0.05, 'square', 0.03);
         const top = (fieldHeight / steps) * i;
-        const randX = 50 + (Math.random() - 0.5) * 30 + (finalXPercent - 50) * (i / steps);
+        // Убираем шум на последних шагах, чтобы шарик точно попал в слот
+        const noise = i < steps - 2 ? (Math.random() - 0.5) * 20 : 0;
+        const randX = 50 + noise + (finalXPercent - 50) * (i / steps);
         ball.style.top = top + 'px';
         ball.style.left = randX + '%';
     }
+
+    // Фиксируем шарик ровно в слоте
+    ball.style.left = finalXPercent + '%';
 
     await new Promise(r => setTimeout(r, 200));
 
@@ -1093,17 +1145,20 @@ async function plinkoPlay(bet) {
         setTimeout(() => slotEl.classList.remove('hit'), 2000);
     }
 
+    // Берём множитель из ПОДСВЕЧЕННОГО слота — гарантирует совпадение
+    const shownMult = PLINKO_MULTIPLIERS[plinkoRisk][slotIdx];
+
     setTimeout(() => {
         ball.style.display = 'none';
         if (d.win > bet) {
             showResult({ icon: '🎯', title: 'Победа!', titleClass: 'win',
-                amount: `+${fmt(d.win)} 🪙`, details: `Множитель: ×${d.mult}`,
+                amount: `+${fmt(d.win)} 🪙`, details: `Множитель: ×${shownMult}`,
                 game: 'plinko', bet });
         } else {
             showResult({ icon: '🎯', title: d.win === bet ? 'Возврат' : 'Проигрыш',
                 titleClass: d.win === bet ? 'win' : 'lose',
                 amount: d.win === bet ? `±0 🪙` : `−${fmt(bet - d.win)} 🪙`,
-                details: `Множитель: ×${d.mult}`,
+                details: `Множитель: ×${shownMult}`,
                 game: 'plinko', bet });
         }
     }, 800);
@@ -1116,7 +1171,7 @@ function initPenalti() {
 
 async function penaltiStart(bet) {
     try {
-        const d = await api('/api/penalti/start', { bet });
+        const d = await gameApi('/api/penalti/start', { bet });
         penaltiState = { bet, step: 0 };
         lastBet = bet;
         updateBalance(d.balance);
@@ -1131,7 +1186,8 @@ async function penaltiStart(bet) {
             g.className = 'goal-dot';
         }
         loadProfile();
-    } catch (e) { toast(e.message, 'error'); }
+        gameLocked = false;   // разблокируем — можно бить
+    } catch (e) { toast(e.message, 'error'); gameLocked = false; }
 }
 
 async function penaltiKick() {
@@ -1233,7 +1289,7 @@ async function flipCoin(side) {
     await new Promise(r => setTimeout(r, 600));
 
     try {
-        const d = await api('/api/coin/flip', { bet: coinBet, side });
+        const d = await gameApi('/api/coin/flip', { bet: coinBet, side });
         face.classList.remove('flipping');
 
         face.textContent = d.result === 'heads' ? '👑' : '🔢';
@@ -1263,6 +1319,7 @@ async function flipCoin(side) {
     } catch (e) {
         face.classList.remove('flipping');
         toast(e.message, 'error');
+        gameLocked = false;
     }
 }
 
@@ -1270,19 +1327,21 @@ async function flipCoin(side) {
 async function duelJoin(bet) {
     haptic();
     try {
-        const d = await api('/api/duel/join', { bet });
+        const d = await gameApi('/api/duel/join', { bet });
         const status = document.getElementById('duelStatus');
         if (d.status === 'waiting') {
             status.textContent = '⏳ Ищем соперника...';
             status.className = 'duel-status waiting';
             document.querySelectorAll('#duelBets button').forEach(b => b.disabled = true);
             startDuelPolling();
+            gameLocked = false;   // разблокируем — но ставки disabled
         } else if (d.status === 'matched') {
             updateBalance(d.balance);
             loadProfile();
             addHistory('duel', bet, d.you_win ? d.prize : 0);
             status.textContent = d.you_win ? '🏆 Победа!' : '😢 Поражение';
             status.className = 'duel-status';
+            gameLocked = false;
             setTimeout(() => {
                 showResult({
                     icon: d.you_win ? '🏆' : '😢',
@@ -1294,7 +1353,7 @@ async function duelJoin(bet) {
                 });
             }, 800);
         }
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) { toast(e.message, 'error'); gameLocked = false; }
 }
 
 function startDuelPolling() {
@@ -1690,7 +1749,7 @@ function bootstrap() {
     document.querySelector('.screens').addEventListener('touchend', e => {
         const diff = e.changedTouches[0].clientY - touchStart;
         const screen = document.querySelector('.screen.active');
-        if (diff > 120 && screen && screen.scrollTop === 0) {
+        if (diff > 120 && screen && screen.scrollTop === 0 && !gameLocked) {
             loadProfile();
             toast('🔄 Обновлено');
         }
