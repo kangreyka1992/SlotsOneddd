@@ -997,6 +997,7 @@ async def api_penalti_reset(request: Request):
     return {"balance": await get_balance(uid)}
 
 
+
 # ═══════════ МОНЕТКА ═══════════
 
 @app.post("/api/coin/flip")
@@ -1300,6 +1301,32 @@ def _roll_case(case_id: str):
     return item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult
 
 
+def _build_track(case_id: str, price_coins: int, win_item: dict):
+    """Строит ленту для прокрута: 50 предметов, на 45-й позиции — выигрыш."""
+    TRACK_LEN = 50
+    WIN_POS = 45
+    track = []
+    for i in range(TRACK_LEN):
+        if i == WIN_POS:
+            track.append({**win_item, "is_win": True})
+            continue
+        rar = _pick_random_rarity()
+        rar_id, rar_emoji, rar_name, _, rar_mult = rar
+        items = ITEMS_BY_RARITY[rar_id]
+        _iid, iemoji, iname = random.choice(items)
+        fake_price = int(price_coins * rar_mult)
+        track.append({
+            "emoji": iemoji,
+            "name": iname,
+            "rarity": rar_id,
+            "rarity_name": rar_name,
+            "rarity_emoji": rar_emoji,
+            "value": fake_price,
+            "is_win": False,
+        })
+    return track, WIN_POS
+
+
 @app.post("/api/cases/list")
 async def api_cases_list(request: Request):
     data = await request.json()
@@ -1350,41 +1377,19 @@ async def api_cases_spin(request: Request):
     if rarity_id == "mythic":
         await unlock_achievement(uid, "jackpot")
 
-    TRACK_LEN = 50
-    WIN_POS = 45
-
-    track = []
-    for i in range(TRACK_LEN):
-        if i == WIN_POS:
-            track.append({
-                "emoji": emoji,
-                "name": name,
-                "rarity": rarity_id,
-                "rarity_name": rarity_name,
-                "rarity_emoji": rarity_emoji,
-                "value": value,
-                "is_win": True,
-            })
-            continue
-
-        rar = _pick_random_rarity()
-        rar_id, rar_emoji, rar_name, _, rar_mult = rar
-        items = ITEMS_BY_RARITY[rar_id]
-        iid, iemoji, iname = random.choice(items)
-        fake_price = int(price_coins * rar_mult)
-        track.append({
-            "emoji": iemoji,
-            "name": iname,
-            "rarity": rar_id,
-            "rarity_name": rar_name,
-            "rarity_emoji": rar_emoji,
-            "value": fake_price,
-            "is_win": False,
-        })
+    win_item = {
+        "emoji": emoji,
+        "name": name,
+        "rarity": rarity_id,
+        "rarity_name": rarity_name,
+        "rarity_emoji": rarity_emoji,
+        "value": value,
+    }
+    track, win_pos = _build_track(case_id, price_coins, win_item)
 
     return {
         "track": track,
-        "win_pos": WIN_POS,
+        "win_pos": win_pos,
         "result": {
             "case_id": case_id,
             "item_id": item_id,
@@ -1396,6 +1401,74 @@ async def api_cases_spin(request: Request):
             "value": value,
             "kind": kind,
         },
+        "balance": await get_balance(uid),
+    }
+
+
+@app.post("/api/cases/spin_multi")
+async def api_cases_spin_multi(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    case_id = data.get("case_id", "")
+    count = int(data.get("count", 1))
+
+    if count not in (2, 3, 5, 10):
+        raise HTTPException(400, "count: 2/3/5/10")
+
+    case = next((c for c in CASES if c[0] == case_id), None)
+    if not case:
+        raise HTTPException(400, "Кейс не найден")
+
+    price_coins = case[3] * RATE
+    total_cost = price_coins * count
+    balance = await get_balance(uid)
+    if balance < total_cost:
+        raise HTTPException(400, f"Нужно {total_cost} 🪙")
+
+    await add_balance(uid, -total_cost)
+
+    results = []
+    for _ in range(count):
+        item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+        value = int(price_coins * value_mult)
+        kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
+
+        await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
+
+        results.append({
+            "item_id": item_id,
+            "rarity": rarity_id,
+            "rarity_name": rarity_name,
+            "rarity_emoji": rarity_emoji,
+            "emoji": emoji,
+            "name": name,
+            "value": value,
+            "kind": kind,
+        })
+
+    await log_game(uid, total_cost, 0)
+    await log_house_flow(wagered=total_cost, paid=0)
+    await unlock_achievement(uid, "first_bet")
+
+    best = max(results, key=lambda r: r["value"])
+    win_item = {
+        "emoji": best["emoji"],
+        "name": best["name"],
+        "rarity": best["rarity"],
+        "rarity_name": best["rarity_name"],
+        "rarity_emoji": best["rarity_emoji"],
+        "value": best["value"],
+    }
+    track, win_pos = _build_track(case_id, price_coins, win_item)
+
+    return {
+        "track": track,
+        "win_pos": win_pos,
+        "results": results,
+        "best": best,
+        "count": count,
+        "total_cost": total_cost,
         "balance": await get_balance(uid),
     }
 
@@ -1420,20 +1493,12 @@ async def api_cases_open(request: Request):
 
     item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
     value = int(price_coins * value_mult)
-
     kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
 
     await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
-
     await log_game(uid, price_coins, 0)
     await log_house_flow(wagered=price_coins, paid=0)
     await unlock_achievement(uid, "first_bet")
-    if rarity_id in ("epic", "legendary", "mythic"):
-        await unlock_achievement(uid, "big_win")
-    if rarity_id == "mythic":
-        await unlock_achievement(uid, "jackpot")
-
-    new_balance = await get_balance(uid)
 
     return {
         "case_id": case_id,
@@ -1445,7 +1510,7 @@ async def api_cases_open(request: Request):
         "name": name,
         "value": value,
         "kind": kind,
-        "balance": new_balance,
+        "balance": await get_balance(uid),
     }
 
 
@@ -1459,15 +1524,9 @@ async def api_cases_inventory(request: Request):
     return {
         "items": [
             {
-                "id": i[0],
-                "item_id": i[1],
-                "case_id": i[2],
-                "rarity": i[3],
-                "emoji": i[4],
-                "name": i[5],
-                "value": i[6],
-                "kind": i[7],
-                "created_at": i[8],
+                "id": i[0], "item_id": i[1], "case_id": i[2],
+                "rarity": i[3], "emoji": i[4], "name": i[5],
+                "value": i[6], "kind": i[7], "created_at": i[8],
             }
             for i in items
         ],
@@ -1492,12 +1551,7 @@ async def api_cases_sell(request: Request):
 
     value = item[6]
     new_balance = await add_balance(uid, value)
-
-    return {
-        "ok": True,
-        "sold_value": value,
-        "balance": new_balance,
-    }
+    return {"ok": True, "sold_value": value, "balance": new_balance}
 
 
 @app.post("/api/cases/sell_all")
@@ -1517,17 +1571,8 @@ async def api_cases_sell_all(request: Request):
             total += value
             count += 1
 
-    if total > 0:
-        new_balance = await add_balance(uid, total)
-    else:
-        new_balance = await get_balance(uid)
-
-    return {
-        "ok": True,
-        "count": count,
-        "total": total,
-        "balance": new_balance,
-    }
+    new_balance = await add_balance(uid, total) if total > 0 else await get_balance(uid)
+    return {"ok": True, "count": count, "total": total, "balance": new_balance}
 
 
 # ═══════════ БЕСПЛАТНЫЙ КЕЙС ═══════════
@@ -1548,7 +1593,6 @@ def _roll_free_case():
         if r <= cum:
             chosen = rar
             break
-
     rarity_id, rarity_emoji, rarity_name, _, value_mult = chosen
     items = ITEMS_BY_RARITY[rarity_id]
     item_id, emoji, name = random.choice(items)
@@ -1566,7 +1610,6 @@ async def api_cases_free_status(request: Request):
 
     can_claim = True
     seconds_left = 0
-
     if last:
         try:
             last_dt = datetime.datetime.fromisoformat(last)
@@ -1577,11 +1620,7 @@ async def api_cases_free_status(request: Request):
         except (ValueError, TypeError):
             pass
 
-    return {
-        "can_claim": can_claim,
-        "seconds_left": seconds_left,
-        "streak": streak,
-    }
+    return {"can_claim": can_claim, "seconds_left": seconds_left, "streak": streak}
 
 
 @app.post("/api/cases/free/open")
@@ -1616,7 +1655,6 @@ async def api_cases_free_open(request: Request):
     streak_mult = 1.0 + min(new_streak - 1, 6) * (1.0 / 6.0)
 
     item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_free_case()
-
     base_value = int(FREE_CASE_BASE_PRICE * value_mult * streak_mult)
     kind = "nft" if rarity_id == "epic" else "gift"
 
