@@ -448,7 +448,7 @@ function closeGame() {
     showScreen('home');
 }
 
-function renderBets(containerId, onPick, multiplier = 1) {
+function renderBets(containerId, onPick, multiplier = 1, maxBetLimit = 0) {
     const el = document.getElementById(containerId);
     if (!el) return;
     el.innerHTML = '';
@@ -458,24 +458,34 @@ function renderBets(containerId, onPick, multiplier = 1) {
         btn.className = 'bet-btn';
         btn.textContent = fmt(b) + ' 🪙' + (multiplier > 1 ? ` (${fmt(cost)})` : '');
         if (cost > profile.balance || gameLocked) btn.disabled = true;
+        if (maxBetLimit > 0 && cost > maxBetLimit) btn.disabled = true;
         btn.onclick = () => {
             if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
             SFX.click(); haptic(); onPick(b);
         };
         el.appendChild(btn);
     });
-    const all = document.createElement('button');
-    all.className = 'bet-btn allin';
-    const maxBet = Math.floor(profile.balance / multiplier);
-    all.textContent = multiplier > 1
-        ? `💯 Макс (${fmt(maxBet)} × ${multiplier})`
-        : '💯 Весь баланс';
-    if (maxBet <= 0 || gameLocked) all.disabled = true;
-    all.onclick = () => {
-        if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
-        SFX.click(); haptic('medium'); onPick(maxBet);
-    };
-    el.appendChild(all);
+
+    if (maxBetLimit === 0) {
+        const all = document.createElement('button');
+        all.className = 'bet-btn allin';
+        const maxBet = Math.floor(profile.balance / multiplier);
+        all.textContent = multiplier > 1
+            ? `💯 Макс (${fmt(maxBet)} × ${multiplier})`
+            : '💯 Весь баланс';
+        if (maxBet <= 0 || gameLocked) all.disabled = true;
+        all.onclick = () => {
+            if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
+            SFX.click(); haptic('medium'); onPick(maxBet);
+        };
+        el.appendChild(all);
+    } else {
+        const hint = document.createElement('div');
+        hint.className = 'bet-limit-hint';
+        hint.textContent = `⚠️ Максимум: ${fmt(maxBetLimit)} 🪙 (10% от баланса)`;
+        hint.style.gridColumn = 'span 3';
+        el.appendChild(hint);
+    }
 }
 
 /* ═══ СЛОТЫ 5×3 ═══ */
@@ -1166,7 +1176,8 @@ async function plinkoPlay(bet) {
 
 /* ═══ PENALTI ═══ */
 function initPenalti() {
-    renderBets('penaltiBets', penaltiStart);
+    const maxBet = Math.max(100, Math.floor(profile.balance * 0.1));
+    renderBets('penaltiBets', penaltiStart, 1, maxBet);
 }
 
 async function penaltiStart(bet) {
@@ -1717,7 +1728,13 @@ async function claimDaily() {
         confettiBurst('#ffc107');
         SFX.win();
         haptic('success');
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+        if (e.message.includes('пополнения')) {
+            toast('💳 Бонус доступен после пополнения на 10+ ⭐', 'error');
+        } else {
+            toast(e.message, 'error');
+        }
+    }
 }
 
 /* ═══ АДМИНКА ═══ */
