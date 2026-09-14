@@ -212,6 +212,7 @@ function showScreen(name) {
     if (name === 'withdraw') loadWithdrawStatus();
     if (name === 'pay') renderPay();
     if (name === 'profile') { loadProfile(); renderHistory(); }
+    if (name === 'admin') switchAdminTab('stats');
 }
 
 function updateBalance(b) {
@@ -317,6 +318,10 @@ async function loadProfile() {
         const lt = document.getElementById('levelText');
         if (lf) lf.style.width = progress + '%';
         if (lt) lt.textContent = `Уровень ${level} · ${games} игр`;
+
+        // Показать кнопку админки
+        const adminBtn = document.getElementById('adminBtn');
+        if (adminBtn && d.is_admin) adminBtn.classList.remove('hidden');
     } catch (e) {
         console.error('Profile load error:', e);
     }
@@ -1425,7 +1430,7 @@ async function loadTop() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ═══ ДОСТИЖЕНИЯ (заглушка) ═══ */
+/* ═══ ДОСТИЖЕНИЯ ═══ */
 async function loadAch() {
     try {
         const d = await api('/api/achievements');
@@ -1472,6 +1477,188 @@ async function claimDaily() {
         confettiBurst('#ffc107');
         SFX.win();
         haptic('success');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ═══ АДМИН-ПАНЕЛЬ ═══ */
+function switchAdminTab(tab) {
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.admin-content').forEach(c => c.classList.add('hidden'));
+    const activeTab = document.querySelector(`.admin-tab[data-tab="${tab}"]`);
+    if (activeTab) activeTab.classList.add('active');
+    const content = document.getElementById('admin-' + tab);
+    if (content) content.classList.remove('hidden');
+    haptic();
+
+    if (tab === 'stats') loadAdminStats();
+    if (tab === 'wd') loadAdminWd();
+    if (tab === 'promo') loadAdminPromos();
+    if (tab === 'logs') loadAdminLogs();
+}
+
+async function loadAdminStats() {
+    try {
+        const d = await api('/api/admin/stats');
+        document.getElementById('admUsers').textContent = fmt(d.users);
+        document.getElementById('admCoins').textContent = fmt(d.coins);
+        document.getElementById('admWd').textContent = fmt(d.withdrawals);
+        document.getElementById('admStars').textContent = fmt(d.withdraw_stars);
+
+        const top = document.getElementById('admTop');
+        top.innerHTML = '';
+        d.top.forEach((u, i) => {
+            const row = document.createElement('div');
+            row.className = 'admin-row';
+            row.innerHTML = `<span>${i+1}. @${u.username}</span><b>${fmt(u.balance)} 🪙</b>`;
+            top.appendChild(row);
+        });
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadAdminWd() {
+    try {
+        const d = await api('/api/admin/withdrawals');
+        const el = document.getElementById('admWdList');
+        el.innerHTML = '';
+        if (!d.withdrawals.length) {
+            el.innerHTML = '<div class="admin-row">Заявок нет</div>';
+            return;
+        }
+        d.withdrawals.forEach(w => {
+            const item = document.createElement('div');
+            item.className = 'wd-item ' + w.status;
+            const icon = { done: '✅', pending: '⏳', failed: '❌' }[w.status] || '❔';
+            item.innerHTML = `
+                <div class="wd-header">
+                    <span>${icon} #${w.id} @${w.username}</span>
+                    <b>${w.stars} ⭐</b>
+                </div>
+                <div class="wd-info">
+                    Списано: ${fmt(w.coins)} 🪙 · ${w.created_at ? w.created_at.slice(0, 16) : ''}
+                </div>
+                ${w.status === 'pending' ? `
+                    <div class="wd-actions">
+                        <button class="wd-btn done" onclick="setWdStatus(${w.id}, 'done')">✅ Выплачено</button>
+                        <button class="wd-btn fail" onclick="setWdStatus(${w.id}, 'failed')">❌ Отклонить</button>
+                    </div>
+                ` : ''}
+            `;
+            el.appendChild(item);
+        });
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function setWdStatus(id, status) {
+    haptic();
+    try {
+        await api('/api/admin/withdraw/status', { id, status });
+        toast('✅ Обновлено', 'success');
+        loadAdminWd();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function adminGive() {
+    haptic();
+    const target = document.getElementById('giveTarget').value.trim();
+    const amount = parseInt(document.getElementById('giveAmount').value);
+    if (!target || !amount) { toast('Заполните поля', 'error'); return; }
+    try {
+        const d = await api('/api/admin/give', { target, amount });
+        toast(`✅ +${fmt(amount)} 🪙 → баланс ${fmt(d.balance)}`, 'success');
+        document.getElementById('giveTarget').value = '';
+        document.getElementById('giveAmount').value = '';
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function adminSetbal() {
+    haptic();
+    const target = document.getElementById('setbalTarget').value.trim();
+    const amount = parseInt(document.getElementById('setbalAmount').value);
+    if (!target || isNaN(amount)) { toast('Заполните поля', 'error'); return; }
+    try {
+        await api('/api/admin/setbal', { target, amount });
+        toast(`✅ Баланс установлен: ${fmt(amount)} 🪙`, 'success');
+        document.getElementById('setbalTarget').value = '';
+        document.getElementById('setbalAmount').value = '';
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadAdminPromos() {
+    try {
+        const d = await api('/api/admin/promos');
+        const el = document.getElementById('admPromoList');
+        el.innerHTML = '';
+        if (!d.promos.length) {
+            el.innerHTML = '<div class="admin-row">Промокодов нет</div>';
+            return;
+        }
+        d.promos.forEach(p => {
+            const item = document.createElement('div');
+            item.className = 'promo-item';
+            const icon = p.kind === 'coins' ? '🪙' : '💸';
+            const limit = p.max_uses === 0 ? '∞' : p.max_uses;
+            item.innerHTML = `
+                <div>${icon} <b>${p.code}</b><br>${p.value} (${p.used}/${limit})</div>
+                <button class="del" onclick="adminDeletePromo('${p.code}')">🗑</button>
+            `;
+            el.appendChild(item);
+        });
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function adminCreatePromo() {
+    haptic();
+    const code = document.getElementById('promoCode').value.trim();
+    const kind = document.getElementById('promoKind').value;
+    const value = parseInt(document.getElementById('promoValue').value);
+    const max_uses = parseInt(document.getElementById('promoMaxUses').value) || 0;
+    if (!code || !value) { toast('Заполните поля', 'error'); return; }
+    try {
+        await api('/api/admin/promo/create', { code, kind, value, max_uses });
+        toast('✅ Промокод создан', 'success');
+        document.getElementById('promoCode').value = '';
+        document.getElementById('promoValue').value = '';
+        loadAdminPromos();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function adminDeletePromo(code) {
+    haptic();
+    if (!confirm(`Удалить промокод ${code}?`)) return;
+    try {
+        await api('/api/admin/promo/delete', { code });
+        toast('🗑 Удалён', 'success');
+        loadAdminPromos();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadAdminLogs() {
+    try {
+        const d = await api('/api/admin/logs');
+        const el = document.getElementById('admLogs');
+        el.innerHTML = '';
+        if (!d.logs.length) {
+            el.innerHTML = '<div class="admin-row">Логов нет</div>';
+            return;
+        }
+        d.logs.forEach(l => {
+            const item = document.createElement('div');
+            item.className = 'log-item';
+            item.innerHTML = `[${(l.created_at || '').slice(0, 16)}] <b>${l.action}</b> → ${l.target_id || '—'} ${l.details || ''}`;
+            el.appendChild(item);
+        });
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function adminBroadcast() {
+    haptic();
+    const text = document.getElementById('broadcastText').value.trim();
+    if (!text) { toast('Введите текст', 'error'); return; }
+    if (!confirm('Отправить всем пользователям?')) return;
+    try {
+        const d = await api('/api/admin/broadcast', { text });
+        toast(`✅ Отправлено: ${d.sent}, ошибок: ${d.failed}`, 'success');
+        document.getElementById('broadcastText').value = '';
     } catch (e) { toast(e.message, 'error'); }
 }
 
