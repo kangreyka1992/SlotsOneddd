@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=25">
+<link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 <div id="app">
@@ -83,6 +83,35 @@
       <div class="inventory-stats" id="inventoryStats"></div>
       <button class="btn-primary" onclick="sellAllItems()" style="margin-bottom: 12px;">💸 Продать всё</button>
       <div class="inventory-list" id="inventoryList"></div>
+    </section>
+
+    <section class="screen" id="screen-upgrader">
+      <h3 class="section-title">⚡ Апгрейдер</h3>
+
+      <div class="upg-panel">
+        <div class="upg-side upg-left">
+          <div class="upg-side-label">Твои предметы</div>
+          <div class="upg-items" id="upgItems"></div>
+          <div class="upg-total" id="upgTotal">0 🪙</div>
+        </div>
+
+        <div class="upg-arrow">→</div>
+
+        <div class="upg-side upg-right">
+          <div class="upg-side-label">Цель</div>
+          <div class="upg-target" id="upgTarget">
+            <div class="upg-target-empty">Выбери цель ↓</div>
+          </div>
+          <div class="upg-target-price" id="upgTargetPrice">—</div>
+        </div>
+      </div>
+
+      <div class="upg-chance" id="upgChance">Шанс: —</div>
+
+      <button class="btn-primary upg-go" onclick="upgraderPlay()" id="upgGoBtn">⚡ Апгрейд</button>
+
+      <h4 class="admin-subtitle">Выбери цель</h4>
+      <div class="upg-targets" id="upgTargets"></div>
     </section>
 
     <section class="screen" id="screen-profile">
@@ -428,18 +457,18 @@
     <button class="nav-btn" data-nav="inventory" onclick="showScreen('inventory')">
       <span class="nav-icon">🎒</span><span class="nav-lbl">Инвентарь</span>
     </button>
+    <button class="nav-btn" data-nav="upgrader" onclick="showScreen('upgrader')">
+      <span class="nav-icon">⚡</span><span class="nav-lbl">Апгрейд</span>
+    </button>
     <button class="nav-btn" data-nav="withdraw" onclick="showScreen('withdraw')">
       <span class="nav-icon">💸</span><span class="nav-lbl">Вывод</span>
-    </button>
-    <button class="nav-btn" data-nav="profile" onclick="showScreen('profile')">
-      <span class="nav-icon">👤</span><span class="nav-lbl">Профиль</span>
     </button>
   </nav>
 
   <div class="toast" id="toast"></div>
 </div>
 
-<!-- ═══ CASE INFO (просмотр содержимого) ═══ -->
+<!-- ═══ CASE INFO ═══ -->
 <div id="caseInfo" class="case-info hidden">
   <div class="ci-header">
     <div class="ci-title" id="ciTitle">Кейс</div>
@@ -471,6 +500,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>
