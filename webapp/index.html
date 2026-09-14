@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>🎰 Casino</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 <div id="app">
@@ -46,6 +47,10 @@
           <div class="qa-text">Промо</div>
         </button>
       </div>
+      <button class="qa-btn hidden" id="adminBtn" onclick="showScreen('admin')" style="margin-top: 12px; width: 100%; flex-direction: row; justify-content: center; gap: 8px;">
+        <div class="qa-icon">⚙️</div>
+        <div class="qa-text" style="font-size: 13px;">Админ-панель</div>
+      </button>
       <h3 class="section-title">🔥 Все игры</h3>
       <div class="games-grid" id="gamesGrid"></div>
     </section>
@@ -105,6 +110,74 @@
       <div class="promo-box">
         <input id="promoInput" class="input" placeholder="Введите код" autocapitalize="characters">
         <button class="btn-primary" onclick="activatePromo()">Активировать</button>
+      </div>
+    </section>
+
+    <!-- ADMIN -->
+    <section class="screen" id="screen-admin">
+      <h3 class="section-title">⚙️ Админ-панель</h3>
+
+      <div class="admin-tabs">
+        <button class="admin-tab active" data-tab="stats" onclick="switchAdminTab('stats')">📊 Стата</button>
+        <button class="admin-tab" data-tab="wd" onclick="switchAdminTab('wd')">💸 Выводы</button>
+        <button class="admin-tab" data-tab="money" onclick="switchAdminTab('money')">💰 Деньги</button>
+        <button class="admin-tab" data-tab="promo" onclick="switchAdminTab('promo')">🎟 Промо</button>
+        <button class="admin-tab" data-tab="logs" onclick="switchAdminTab('logs')">📜 Логи</button>
+      </div>
+
+      <div class="admin-content" id="admin-stats">
+        <div class="admin-stats-grid">
+          <div class="admin-stat-card"><div class="admin-stat-val" id="admUsers">0</div><div class="admin-stat-lbl">Юзеров</div></div>
+          <div class="admin-stat-card"><div class="admin-stat-val" id="admCoins">0</div><div class="admin-stat-lbl">Монет</div></div>
+          <div class="admin-stat-card"><div class="admin-stat-val" id="admWd">0</div><div class="admin-stat-lbl">Выводов</div></div>
+          <div class="admin-stat-card"><div class="admin-stat-val" id="admStars">0</div><div class="admin-stat-lbl">⭐ Выведено</div></div>
+        </div>
+        <h4 class="admin-subtitle">🏆 Топ по балансу</h4>
+        <div id="admTop"></div>
+      </div>
+
+      <div class="admin-content hidden" id="admin-wd">
+        <div id="admWdList"></div>
+      </div>
+
+      <div class="admin-content hidden" id="admin-money">
+        <div class="admin-card">
+          <div class="admin-subtitle">🎁 Выдать монеты</div>
+          <input class="input" id="giveTarget" placeholder="ID или @username">
+          <input class="input" id="giveAmount" type="number" placeholder="Сумма (+ / −)">
+          <button class="btn-primary" onclick="adminGive()">Выдать</button>
+        </div>
+        <div class="admin-card">
+          <div class="admin-subtitle">📝 Установить баланс</div>
+          <input class="input" id="setbalTarget" placeholder="ID или @username">
+          <input class="input" id="setbalAmount" type="number" placeholder="Новый баланс">
+          <button class="btn-primary" onclick="adminSetbal()">Установить</button>
+        </div>
+        <div class="admin-card">
+          <div class="admin-subtitle">📢 Рассылка</div>
+          <textarea class="input" id="broadcastText" placeholder="Текст (HTML поддерживается)" rows="3"></textarea>
+          <button class="btn-primary" onclick="adminBroadcast()">Отправить всем</button>
+        </div>
+      </div>
+
+      <div class="admin-content hidden" id="admin-promo">
+        <div class="admin-card">
+          <div class="admin-subtitle">➕ Создать промокод</div>
+          <input class="input" id="promoCode" placeholder="КОД" autocapitalize="characters">
+          <select class="input" id="promoKind">
+            <option value="coins">🪙 Монеты</option>
+            <option value="discount">💸 Скидка %</option>
+          </select>
+          <input class="input" id="promoValue" type="number" placeholder="Значение">
+          <input class="input" id="promoMaxUses" type="number" placeholder="Макс. использований (0 = ∞)">
+          <button class="btn-primary" onclick="adminCreatePromo()">Создать</button>
+        </div>
+        <h4 class="admin-subtitle">Список промокодов</h4>
+        <div id="admPromoList"></div>
+      </div>
+
+      <div class="admin-content hidden" id="admin-logs">
+        <div id="admLogs"></div>
       </div>
     </section>
 
@@ -296,6 +369,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>
