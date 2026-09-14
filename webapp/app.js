@@ -34,6 +34,8 @@ let minesMinesCount = 5;
 let slots2Lines = 5;
 let duelPolling = null;
 let gameLocked = false;
+let freeCaseTimer = null;
+let casesCache = [];
 
 /* ═══ SOUND ═══ */
 let audioCtx = null;
@@ -151,7 +153,7 @@ function renderHistory() {
     const names = {
         slots: '🎰 Слоты', slots2: '🎰 Слоты 5×3', mines: '⛏ Mines', crash: '📈 Crash',
         dice: '🎲 Кости', rr: '🔫 Рулетка', plinko: '🎯 Plinko',
-        penalti: '⚽ Penalti', coin: '🪙 Монетка', duel: '⚔️ Дуэль'
+        penalti: '⚽ Penalti', coin: '🪙 Монетка', duel: '⚔️ Дуэль', case: '📦 Кейс'
     };
     el.innerHTML = gameHistory.map(h => {
         const diff = h.win - h.bet;
@@ -236,6 +238,8 @@ function showScreen(name) {
     if (name === 'pay') renderPay();
     if (name === 'profile') { loadProfile(); renderHistory(); }
     if (name === 'admin') switchAdminTab('stats');
+    if (name === 'cases') { loadCases(); loadFreeCaseStatus(); }
+    if (name === 'inventory') loadInventory();
 }
 
 function updateBalance(b) {
@@ -295,7 +299,7 @@ function renderGamesGrid() {
 
 /* ═══ LIVE FEED ═══ */
 const FEED_NAMES = ['Игрок', 'Lucky', 'Ace', 'King', 'Pro', 'Master', 'Winner', 'Star'];
-const FEED_GAMES = ['Слоты', 'Plinko', 'Crash', 'Mines', 'Кости', 'Penalti'];
+const FEED_GAMES = ['Слоты', 'Plinko', 'Crash', 'Mines', 'Кости', 'Penalti', 'Кейсы'];
 
 function pushFeed() {
     const el = document.getElementById('liveFeed');
@@ -1165,7 +1169,7 @@ async function plinkoPlay(bet) {
     }, 800);
 }
 
-/* ═══ PENALTI (полноценные ворота) ═══ */
+/* ═══ PENALTI ═══ */
 function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
 }
@@ -1618,7 +1622,8 @@ function renderWithdraw() {
         el.appendChild(btn);
     });
 
-    const max = Math.floor(profile.balance / 100);
+    // 125 🪙 = 1 ⭐ (совпадает с бэком)
+    const max = Math.floor(profile.balance / 125);
     if (max >= 15) {
         const all = document.createElement('button');
         all.className = 'withdraw-btn';
@@ -1720,6 +1725,250 @@ async function claimDaily() {
     }
 }
 
+/* ═══ CASES ═══ */
+async function loadCases() {
+    try {
+        const d = await api('/api/cases/list');
+        casesCache = d.cases;
+
+        const el = document.getElementById('casesGrid');
+        const homeEl = document.getElementById('homeCasesGrid');
+
+        const cardHtml = (c) => `
+            <button class="case-card" onclick="openCaseById('${c.id}')">
+                <div class="case-emoji">${c.emoji}</div>
+                <div class="case-name">${c.name}</div>
+                <div class="case-price">${c.price_stars} ⭐ · ${fmt(c.price_coins)} 🪙</div>
+                <div class="case-desc">${c.desc}</div>
+            </button>
+        `;
+
+        if (el) el.innerHTML = d.cases.map(cardHtml).join('');
+        if (homeEl) homeEl.innerHTML = d.cases.slice(0, 6).map(cardHtml).join('');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function openCaseById(id) {
+    const c = casesCache.find(x => x.id === id);
+    if (!c) { toast('Кейс не найден', 'error'); return; }
+    openCase(c);
+}
+
+async function openCase(c) {
+    haptic('medium');
+    if (profile.balance < c.price_coins) {
+        toast(`Нужно ${fmt(c.price_coins)} 🪙`, 'error');
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'case-opening';
+    overlay.innerHTML = `<div class="spin">${c.emoji}</div><div style="color:#8b95a5;font-size:13px;">Открываем...</div>`;
+    document.body.appendChild(overlay);
+
+    await new Promise(r => setTimeout(r, 900));
+
+    try {
+        const d = await api('/api/cases/open', { case_id: c.id });
+        SFX.cashout();
+        haptic('success');
+        updateBalance(d.balance);
+        loadProfile();
+        addHistory('case', c.price_coins, d.value);
+
+        const rarityColors = {
+            common: '#8b95a5', uncommon: '#00d68f', rare: '#4a9eff',
+            epic: '#7c5cff', legendary: '#ffc107', mythic: '#ff4757',
+        };
+        const color = rarityColors[d.rarity] || '#fff';
+        const kindLabel = d.kind === 'nft' ? '🎨 NFT-подарок' : '🎁 Подарок';
+
+        overlay.innerHTML = `
+            <div class="case-result">
+                <div class="case-result-emoji" style="color:${color}">${d.emoji}</div>
+                <div class="case-result-rarity" style="color:${color}">${d.rarity_emoji} ${d.rarity_name}</div>
+                <div class="case-result-name">${d.name}</div>
+                <div class="case-result-kind">${kindLabel}</div>
+                <div class="case-result-value">💰 ${fmt(d.value)} 🪙</div>
+            </div>
+        `;
+
+        if (d.rarity === 'mythic' || d.rarity === 'legendary') confettiJackpot();
+        else if (d.rarity === 'epic') confettiBurst(color);
+
+        setTimeout(() => { overlay.remove(); }, 2800);
+    } catch (e) {
+        overlay.remove();
+        toast(e.message, 'error');
+    }
+}
+
+async function loadInventory() {
+    try {
+        const d = await api('/api/cases/inventory');
+        const statsEl = document.getElementById('inventoryStats');
+        const listEl = document.getElementById('inventoryList');
+
+        if (statsEl) {
+            statsEl.innerHTML = `
+                <div class="inv-stat">
+                    <div class="inv-stat-val">${d.stats.count}</div>
+                    <div class="inv-stat-lbl">Предметов</div>
+                </div>
+                <div class="inv-stat">
+                    <div class="inv-stat-val">${fmt(d.stats.total_value)}</div>
+                    <div class="inv-stat-lbl">Общая ценность 🪙</div>
+                </div>
+            `;
+        }
+
+        if (!listEl) return;
+        if (!d.items.length) {
+            listEl.innerHTML = '<div class="history-item"><span class="h-game">Инвентарь пуст</span></div>';
+            return;
+        }
+
+        const rarityColors = {
+            common: '#8b95a5', uncommon: '#00d68f', rare: '#4a9eff',
+            epic: '#7c5cff', legendary: '#ffc107', mythic: '#ff4757',
+        };
+
+        listEl.innerHTML = d.items.map(i => `
+            <div class="inventory-item" data-rarity="${i.rarity}">
+                <div class="inv-emoji">${i.emoji}</div>
+                <div class="inv-info">
+                    <div class="inv-name">${i.name} ${i.kind === 'nft' ? '🎨' : ''}</div>
+                    <div class="inv-rarity" style="color:${rarityColors[i.rarity]}">${i.rarity}</div>
+                </div>
+                <button class="inv-sell-btn" onclick="sellItem(${i.id})">+${fmt(i.value)}</button>
+            </div>
+        `).join('');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function sellItem(pk) {
+    haptic();
+    try {
+        const d = await api('/api/cases/sell', { item_pk: pk });
+        toast(`✅ Продано за ${fmt(d.sold_value)} 🪙`, 'success');
+        SFX.cashout();
+        updateBalance(d.balance);
+        loadInventory();
+        loadProfile();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function sellAllItems() {
+    haptic('medium');
+    try {
+        const d = await api('/api/cases/sell_all');
+        if (d.count === 0) {
+            toast('Нечего продавать', 'error');
+            return;
+        }
+        toast(`✅ Продано ${d.count} предметов за ${fmt(d.total)} 🪙`, 'success');
+        SFX.cashout();
+        confettiBurst('#00d68f');
+        updateBalance(d.balance);
+        loadInventory();
+        loadProfile();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ═══ БЕСПЛАТНЫЙ КЕЙС ═══ */
+async function loadFreeCaseStatus() {
+    try {
+        const d = await api('/api/cases/free/status');
+        const buttons = [
+            { btn: 'freeCaseBtn', sub: 'freeCaseSub', streak: 'freeCaseStreak' },
+            { btn: 'freeCaseBtn2', sub: 'freeCaseSub2', streak: 'freeCaseStreak2' },
+        ];
+        buttons.forEach(({ btn, sub, streak }) => {
+            const b = document.getElementById(btn);
+            const s = document.getElementById(sub);
+            const st = document.getElementById(streak);
+            if (!b || !s) return;
+            if (d.can_claim) {
+                b.disabled = false;
+                s.textContent = 'Доступен сейчас — забери!';
+            } else {
+                b.disabled = true;
+                s.textContent = 'Доступен через ' + formatCooldown(d.seconds_left);
+            }
+            if (st) {
+                if (d.streak > 0) {
+                    st.classList.remove('hidden');
+                    st.textContent = '🔥 ' + d.streak;
+                } else {
+                    st.classList.add('hidden');
+                }
+            }
+        });
+
+        if (freeCaseTimer) clearInterval(freeCaseTimer);
+        if (!d.can_claim) {
+            freeCaseTimer = setInterval(loadFreeCaseStatus, 1000);
+        }
+    } catch (e) {
+        console.error('free case status error', e);
+    }
+}
+
+function formatCooldown(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+async function openFreeCase() {
+    haptic('medium');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'case-opening';
+    overlay.innerHTML = `<div class="spin">🎁</div><div style="color:#8b95a5;font-size:13px;">Открываем...</div>`;
+    document.body.appendChild(overlay);
+
+    await new Promise(r => setTimeout(r, 900));
+
+    try {
+        const d = await api('/api/cases/free/open');
+        SFX.cashout();
+        haptic('success');
+
+        const rarityColors = {
+            common: '#8b95a5', uncommon: '#00d68f', rare: '#4a9eff',
+            epic: '#7c5cff', legendary: '#ffc107', mythic: '#ff4757',
+        };
+        const color = rarityColors[d.rarity] || '#fff';
+        const kindLabel = d.kind === 'nft' ? '🎨 NFT-подарок' : '🎁 Подарок';
+
+        overlay.innerHTML = `
+            <div class="case-result">
+                <div class="case-result-emoji" style="color:${color}">${d.emoji}</div>
+                <div class="case-result-rarity" style="color:${color}">${d.rarity_emoji} ${d.rarity_name}</div>
+                <div class="case-result-name">${d.name}</div>
+                <div class="case-result-kind">${kindLabel}</div>
+                <div class="case-result-value">💰 ${fmt(d.value)} 🪙</div>
+                ${d.streak_mult > 1 ? `<div class="case-result-kind" style="background:rgba(255,193,7,0.2);color:#ffc107;">🔥 Серия ×${d.streak_mult}</div>` : ''}
+            </div>
+        `;
+
+        if (d.rarity === 'epic') confettiBurst(color);
+
+        setTimeout(() => {
+            overlay.remove();
+            loadFreeCaseStatus();
+            loadInventory();
+        }, 2600);
+    } catch (e) {
+        overlay.remove();
+        toast(e.message, 'error');
+        loadFreeCaseStatus();
+    }
+}
+
 /* ═══ АДМИНКА ═══ */
 function switchAdminTab(tab) {
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
@@ -1743,6 +1992,16 @@ async function loadAdminStats() {
         document.getElementById('admCoins').textContent = fmt(d.coins);
         document.getElementById('admWd').textContent = fmt(d.withdrawals);
         document.getElementById('admStars').textContent = fmt(d.withdraw_stars);
+
+        const h = d.house || {};
+        const setText = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+        setText('admWagered', fmt(h.wagered || 0));
+        setText('admPaid', fmt(h.paid || 0));
+        setText('admProfit', fmt(h.profit || 0));
+        setText('admRtp', (h.rtp || 0) + '%');
 
         const top = document.getElementById('admTop');
         top.innerHTML = '';
@@ -1908,6 +2167,8 @@ function bootstrap() {
     renderGamesGrid();
     renderHistory();
     loadProfile();
+    loadCases();
+    loadFreeCaseStatus();
     pushFeed();
     setInterval(pushFeed, 5000);
 
@@ -1923,6 +2184,7 @@ function bootstrap() {
         const screen = document.querySelector('.screen.active');
         if (diff > 120 && screen && screen.scrollTop === 0 && !gameLocked) {
             loadProfile();
+            loadFreeCaseStatus();
             toast('🔄 Обновлено');
         }
     }, { passive: true });
