@@ -1165,17 +1165,39 @@ async function plinkoPlay(bet) {
     }, 800);
 }
 
-/* ═══ PENALTI (вратарь всегда в центре) ═══ */
+/* ═══ PENALTI (полноценные ворота) ═══ */
 function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
 }
 
-function getZoneCoordsFixed(zone) {
-    const col = zone % 3;
-    const row = Math.floor(zone / 3);
-    const lefts = [22, 50, 78];
-    const tops  = [22, 50, 78];
-    return { left: lefts[col], top: tops[row] };
+const PENALTI_ZONE_POS = [
+    { left: 16.6, top: 16.6 },
+    { left: 50.0, top: 16.6 },
+    { left: 83.3, top: 16.6 },
+    { left: 16.6, top: 50.0 },
+    { left: 50.0, top: 50.0 },
+    { left: 83.3, top: 50.0 },
+    { left: 16.6, top: 83.3 },
+    { left: 50.0, top: 83.3 },
+    { left: 83.3, top: 83.3 },
+];
+
+function zonePercent(zone) {
+    return PENALTI_ZONE_POS[zone] || PENALTI_ZONE_POS[4];
+}
+
+function zoneToScene(zone) {
+    const goal = document.getElementById('goalFrame');
+    const scene = document.getElementById('penaltiScene');
+    const z = zonePercent(zone);
+    const gRect = goal.getBoundingClientRect();
+    const sRect = scene.getBoundingClientRect();
+    const leftPx = (gRect.left - sRect.left) + (gRect.width * z.left / 100);
+    const topPx  = (gRect.top  - sRect.top)  + (gRect.height * z.top  / 100);
+    return {
+        left: (leftPx / sRect.width) * 100,
+        top:  (topPx  / sRect.height) * 100,
+    };
 }
 
 async function penaltiStart(bet) {
@@ -1206,18 +1228,20 @@ function resetPenaltiField() {
     });
 
     const keeper = document.getElementById('keeper');
-    keeper.style.left = '50%';
-    keeper.style.top = '50%';
+    const center = zoneToScene(4);
+    keeper.style.left = center.left + '%';
+    keeper.style.top  = center.top  + '%';
+    keeper.classList.remove('diving');
     keeper.classList.add('idle');
 
     const ball = document.getElementById('ballAnim');
     ball.style.opacity = '0';
     ball.style.left = '50%';
-    ball.style.bottom = '0';
+    ball.style.bottom = '6%';
     ball.style.top = 'auto';
     ball.style.transition = 'none';
     void ball.offsetWidth;
-    ball.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+    ball.style.transition = 'left 0.45s cubic-bezier(0.3, 0, 0.7, 1), top 0.45s cubic-bezier(0.3, 0, 0.7, 1), bottom 0.45s cubic-bezier(0.3, 0, 0.7, 1), opacity 0.2s';
 }
 
 async function penaltiKick(zone) {
@@ -1230,35 +1254,37 @@ async function penaltiKick(zone) {
     document.getElementById('penaltiHint').className = 'penalti-hint';
 
     const ball = document.getElementById('ballAnim');
-    const target = getZoneCoordsFixed(zone);
+    const target = zoneToScene(zone);
     ball.style.opacity = '1';
     ball.style.left = '50%';
-    ball.style.bottom = '0';
+    ball.style.bottom = '6%';
     ball.style.top = 'auto';
 
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 40));
     ball.style.top = target.top + '%';
     ball.style.bottom = 'auto';
     ball.style.left = target.left + '%';
 
     try {
         const d = await gameApi('/api/penalti/kick', { zone });
-        await new Promise(r => setTimeout(r, 500));
-
-        updateBalance(d.balance);
 
         const keeper = document.getElementById('keeper');
         keeper.classList.remove('idle');
-        keeper.style.left = target.left + '%';
-        keeper.style.top = target.top + '%';
+        keeper.classList.add('diving');
+        const keeperPos = zoneToScene(d.keeper_zone);
+        keeper.style.left = keeperPos.left + '%';
+        keeper.style.top  = keeperPos.top  + '%';
 
+        await new Promise(r => setTimeout(r, 450));
+
+        updateBalance(d.balance);
         const zoneEl = document.querySelector(`.goal-zone[data-zone="${zone}"]`);
 
         if (d.save) {
             if (zoneEl) zoneEl.classList.add('missed');
             document.getElementById('penaltiHint').textContent = '🧤 Вратарь отбил!';
             document.getElementById('penaltiHint').className = 'penalti-hint fail';
-            document.getElementById('penaltiField').classList.add('save-flash');
+            document.getElementById('penaltiScene').classList.add('save-flash');
             SFX.lose();
             haptic('heavy');
             penaltiState = null;
@@ -1266,7 +1292,7 @@ async function penaltiKick(zone) {
             addHistory('penalti', lastBet, 0);
 
             setTimeout(() => {
-                document.getElementById('penaltiField').classList.remove('save-flash');
+                document.getElementById('penaltiScene').classList.remove('save-flash');
                 showResult({ icon: '🧤', title: 'ВРАТАРЬ ОТБИЛ!', titleClass: 'lose',
                     amount: `−${fmt(lastBet)} 🪙`,
                     details: `Голов забито: ${d.step}`,
@@ -1276,7 +1302,7 @@ async function penaltiKick(zone) {
         }
 
         if (zoneEl) zoneEl.classList.add('scored');
-        document.getElementById('penaltiField').classList.add('goal-flash');
+        document.getElementById('penaltiScene').classList.add('goal-flash');
         SFX.win();
         haptic('success');
 
@@ -1289,7 +1315,7 @@ async function penaltiKick(zone) {
             loadProfile();
             addHistory('penalti', lastBet, d.prize);
             setTimeout(() => {
-                document.getElementById('penaltiField').classList.remove('goal-flash');
+                document.getElementById('penaltiScene').classList.remove('goal-flash');
                 showResult({ icon: '🏆', title: 'МАКСИМУМ!', titleClass: 'win',
                     amount: `+${fmt(d.prize)} 🪙`,
                     details: `5 голов · Множитель ×${d.mult}`,
@@ -1304,9 +1330,8 @@ async function penaltiKick(zone) {
         penaltiState.step = d.step;
 
         setTimeout(() => {
-            document.getElementById('penaltiField').classList.remove('goal-flash');
+            document.getElementById('penaltiScene').classList.remove('goal-flash');
             resetPenaltiField();
-            ball.style.opacity = '0';
             gameLocked = false;
         }, 1200);
 
