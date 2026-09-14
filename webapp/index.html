@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <div id="app">
@@ -279,23 +279,38 @@
             <div class="penalti-stats">
               <span>Голов: <b id="penaltiGoals">0</b>/5</span>
               <span>Множитель: <b id="penaltiMult">×1.00</b></span>
-              <span>Приз: <b id="penaltiPrize">0 🪙</b></span>
+              <span>Приз: <b id="penaltiPrize">0</b> 🪙</span>
             </div>
 
-            <div class="penalti-field" id="penaltiField">
-              <div class="goal-frame" id="goalFrame">
-                <button class="goal-zone" data-zone="0" onclick="penaltiKick(0)"></button>
-                <button class="goal-zone" data-zone="1" onclick="penaltiKick(1)"></button>
-                <button class="goal-zone" data-zone="2" onclick="penaltiKick(2)"></button>
-                <button class="goal-zone" data-zone="3" onclick="penaltiKick(3)"></button>
-                <button class="goal-zone" data-zone="4" onclick="penaltiKick(4)"></button>
-                <button class="goal-zone" data-zone="5" onclick="penaltiKick(5)"></button>
-                <button class="goal-zone" data-zone="6" onclick="penaltiKick(6)"></button>
-                <button class="goal-zone" data-zone="7" onclick="penaltiKick(7)"></button>
-                <button class="goal-zone" data-zone="8" onclick="penaltiKick(8)"></button>
-                <div class="keeper" id="keeper">🧤</div>
-                <div class="ball-anim" id="ballAnim">⚽</div>
+            <div class="penalti-scene" id="penaltiScene">
+              <div class="penalti-sky"></div>
+              <div class="penalti-crowd"></div>
+
+              <div class="goal" id="goalFrame">
+                <div class="goal-net"></div>
+                <div class="goal-post goal-post-left"></div>
+                <div class="goal-post goal-post-right"></div>
+                <div class="goal-crossbar"></div>
+
+                <div class="goal-grid" id="goalGrid">
+                  <button class="goal-zone" data-zone="0" onclick="penaltiKick(0)"></button>
+                  <button class="goal-zone" data-zone="1" onclick="penaltiKick(1)"></button>
+                  <button class="goal-zone" data-zone="2" onclick="penaltiKick(2)"></button>
+                  <button class="goal-zone" data-zone="3" onclick="penaltiKick(3)"></button>
+                  <button class="goal-zone" data-zone="4" onclick="penaltiKick(4)"></button>
+                  <button class="goal-zone" data-zone="5" onclick="penaltiKick(5)"></button>
+                  <button class="goal-zone" data-zone="6" onclick="penaltiKick(6)"></button>
+                  <button class="goal-zone" data-zone="7" onclick="penaltiKick(7)"></button>
+                  <button class="goal-zone" data-zone="8" onclick="penaltiKick(8)"></button>
+                </div>
+
+                <div class="keeper" id="keeper">
+                  <div class="keeper-body">🧤</div>
+                </div>
               </div>
+
+              <div class="penalti-ball" id="ballAnim">⚽</div>
+              <div class="penalti-grass"></div>
             </div>
 
             <div class="penalti-hint" id="penaltiHint">👇 Выбери, куда бить</div>
@@ -387,6 +402,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
