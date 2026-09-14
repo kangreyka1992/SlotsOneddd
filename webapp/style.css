@@ -495,6 +495,74 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   font-family: var(--font-num);
 }
 .input:focus { border-color: var(--gold); }
+textarea.input { resize: vertical; font-family: var(--font-ui); letter-spacing: 0; text-align: left; }
+select.input { text-align: left; letter-spacing: 0; }
+
+/* ═══════════ ADMIN ═══════════ */
+.admin-tabs {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 16px;
+}
+.admin-tab {
+  padding: 10px 4px; background: var(--bg-elevated); border-radius: 10px;
+  font-size: 11px; font-weight: 700; color: var(--text-muted); transition: all 0.15s;
+}
+.admin-tab.active { background: var(--gold); color: #000; box-shadow: var(--shadow-glow-gold); }
+
+.admin-content { display: flex; flex-direction: column; gap: 12px; }
+.admin-subtitle { font-size: 13px; font-weight: 700; margin: 12px 0 8px; color: var(--text-main); }
+
+.admin-card {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 16px; background: var(--bg-card); border-radius: var(--radius);
+}
+
+.admin-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.admin-stat-card {
+  padding: 16px; background: var(--bg-card); border-radius: var(--radius); text-align: center;
+}
+.admin-stat-val { font-size: 20px; font-weight: 800; font-family: var(--font-num); color: var(--gold); }
+.admin-stat-lbl { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+.admin-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; background: var(--bg-card); border-radius: var(--radius-sm);
+  font-size: 13px; margin-bottom: 6px;
+}
+.admin-row b { color: var(--gold); font-family: var(--font-num); }
+
+.wd-item {
+  padding: 12px 14px; background: var(--bg-card); border-radius: var(--radius);
+  margin-bottom: 8px; border-left: 3px solid var(--gold);
+}
+.wd-item.done { border-left-color: var(--green); }
+.wd-item.failed { border-left-color: var(--red); }
+.wd-item.pending { border-left-color: var(--gold); }
+.wd-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+.wd-info { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+.wd-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.wd-btn {
+  padding: 8px; border-radius: 8px; font-size: 11px; font-weight: 700;
+}
+.wd-btn.done { background: rgba(0,214,143,0.15); color: var(--green); }
+.wd-btn.fail { background: rgba(255,71,87,0.15); color: var(--red); }
+
+.promo-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; background: var(--bg-card); border-radius: var(--radius-sm);
+  font-size: 12px; margin-bottom: 6px;
+}
+.promo-item b { color: var(--gold); font-family: var(--font-num); }
+.promo-item .del {
+  padding: 6px 10px; background: rgba(255,71,87,0.15);
+  border-radius: 8px; color: var(--red); font-size: 14px;
+}
+
+.log-item {
+  padding: 8px 12px; background: var(--bg-card); border-radius: 8px;
+  font-size: 11px; color: var(--text-muted); margin-bottom: 4px;
+  font-family: var(--font-num);
+}
+.log-item b { color: var(--gold); }
 
 /* ═══════════ BOTTOM NAV ═══════════ */
 .bottom-nav {
