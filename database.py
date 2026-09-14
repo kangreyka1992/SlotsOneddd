@@ -604,6 +604,24 @@ async def get_user_item(item_id: int, user_id: int):
             return await cur.fetchone()
 
 
+async def get_user_item_by_id(item_pk: int, user_id: int):
+    """Алиас get_user_item — оставлен для совместимости с апгрейдером."""
+    return await get_user_item(item_pk, user_id)
+
+
+async def mark_items_sold(item_pks: list, user_id: int):
+    """Помечает несколько предметов как проданные (для апгрейдера)."""
+    if not item_pks:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        placeholders = ",".join("?" for _ in item_pks)
+        await db.execute(
+            f"UPDATE user_items SET sold = 1 WHERE user_id = ? AND id IN ({placeholders}) AND sold = 0",
+            [user_id, *item_pks],
+        )
+        await db.commit()
+
+
 async def sell_user_item(item_id: int, user_id: int) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
