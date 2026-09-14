@@ -801,14 +801,19 @@ async def api_plinko(request: Request):
 # ═══════════ PENALTI (интерактивный) ═══════════
 
 penalti_games: dict = {}
-
-# Зоны:
-#   0 1 2
-#   3 4 5
-#   6 7 8
-
+PENALTI_TIMEOUT = 300
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
 PENALTI_SAVE_CHANCE = [0.11, 0.15, 0.20, 0.25, 0.33]
+
+
+def cleanup_penalti():
+    now = time.time()
+    for uid in list(penalti_games.keys()):
+        game = penalti_games.get(uid)
+        if not game:
+            continue
+        if now - game.get("started", now) > PENALTI_TIMEOUT:
+            del penalti_games[uid]
 
 
 @app.post("/api/penalti/start")
@@ -817,6 +822,13 @@ async def api_penalti_start(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
     bet = int(data.get("bet", 0))
+
+    cleanup_penalti()
+
+    existing = penalti_games.get(uid)
+    if existing and existing.get("step", 0) == 0:
+        await add_balance(uid, existing["bet"])
+        del penalti_games[uid]
 
     if uid in penalti_games:
         raise HTTPException(400, "already_playing")
@@ -828,7 +840,7 @@ async def api_penalti_start(request: Request):
         raise HTTPException(400, "not_enough_coins")
 
     await add_balance(uid, -bet)
-    penalti_games[uid] = {"bet": bet, "step": 0, "history": []}
+    penalti_games[uid] = {"bet": bet, "step": 0, "history": [], "started": time.time()}
     return {"balance": await get_balance(uid), "bet": bet}
 
 
@@ -851,10 +863,8 @@ async def api_penalti_kick(request: Request):
         raise HTTPException(400, "already_max")
 
     keeper_zone = random.randint(0, 8)
-
     save_chance = PENALTI_SAVE_CHANCE[step]
     is_save = (zone == keeper_zone) and (random.random() < save_chance * 9)
-
     if not is_save and random.random() < max(0, save_chance - 1/9):
         is_save = True
         keeper_zone = zone
@@ -864,13 +874,8 @@ async def api_penalti_kick(request: Request):
         del penalti_games[uid]
         await log_game(uid, bet, 0)
         return {
-            "goal": False,
-            "save": True,
-            "zone": zone,
-            "keeper_zone": keeper_zone,
-            "step": step,
-            "bet": bet,
-            "balance": await get_balance(uid),
+            "goal": False, "save": True, "zone": zone, "keeper_zone": keeper_zone,
+            "step": step, "bet": bet, "balance": await get_balance(uid),
         }
 
     step += 1
@@ -920,6 +925,17 @@ async def api_penalti_cashout(request: Request):
     return {"prize": prize, "mult": mult, "balance": await get_balance(uid)}
 
 
+@app.post("/api/penalti/reset")
+async def api_penalti_reset(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    game = penalti_games.pop(uid, None)
+    if game:
+        await add_balance(uid, game["bet"])
+    return {"balance": await get_balance(uid)}
+
+
 # ═══════════ МОНЕТКА ═══════════
 
 @app.post("/api/coin/flip")
@@ -962,6 +978,22 @@ async def api_coin_flip(request: Request):
 
 duel_queue: list[dict] = []
 duel_active: dict[str, dict] = {}
+DUEL_QUEUE_TIMEOUT = 120
+DUEL_ACTIVE_TIMEOUT = 300
+
+
+def cleanup_duel():
+    now = time.time()
+    for i in range(len(duel_queue) - 1, -1, -1):
+        q = duel_queue[i]
+        if now - q.get("joined", now) > DUEL_QUEUE_TIMEOUT:
+            duel_queue.pop(i)
+    for did in list(duel_active.keys()):
+        g = duel_active.get(did)
+        if not g:
+            continue
+        if now - g.get("created", now) > DUEL_ACTIVE_TIMEOUT:
+            del duel_active[did]
 
 
 @app.post("/api/duel/join")
@@ -971,16 +1003,21 @@ async def api_duel_join(request: Request):
     uid = user["id"]
     bet = int(data.get("bet", 0))
 
+    cleanup_duel()
+
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
 
-    for q in duel_queue:
-        if q["uid"] == uid:
-            raise HTTPException(400, "already_in_queue")
+    for i in range(len(duel_queue) - 1, -1, -1):
+        if duel_queue[i]["uid"] == uid:
+            duel_queue.pop(i)
 
-    for did, g in duel_active.items():
+    for did, g in list(duel_active.items()):
         if uid in (g["p1"], g["p2"]):
-            raise HTTPException(400, "already_in_duel")
+            if uid in g.get("claimed", set()):
+                del duel_active[did]
+            else:
+                raise HTTPException(400, "already_in_duel")
 
     balance = await get_balance(uid)
     if balance < bet:
@@ -1004,13 +1041,9 @@ async def api_duel_join(request: Request):
 
     duel_id = f"duel_{int(time.time())}_{random.randint(1000,9999)}"
     duel_active[duel_id] = {
-        "p1": uid,
-        "p2": opponent["uid"],
-        "bet": bet,
-        "winner": winner,
-        "prize": prize,
-        "created": time.time(),
-        "claimed": set(),
+        "p1": uid, "p2": opponent["uid"], "bet": bet,
+        "winner": winner, "prize": prize,
+        "created": time.time(), "claimed": set(),
     }
 
     await add_balance(winner, prize)
@@ -1026,28 +1059,20 @@ async def api_duel_join(request: Request):
     for player_uid, is_winner in [(uid, winner == uid), (opponent["uid"], winner == opponent["uid"])]:
         try:
             if is_winner:
-                await bot.send_message(
-                    player_uid,
+                await bot.send_message(player_uid,
                     f"🏆 <b>Победа в дуэли!</b>\n\nСтавка: <b>{bet}</b> 🪙\nВыигрыш: <b>+{prize}</b> 🪙",
-                    parse_mode="HTML",
-                )
+                    parse_mode="HTML")
             else:
-                await bot.send_message(
-                    player_uid,
+                await bot.send_message(player_uid,
                     f"😢 <b>Поражение в дуэли</b>\n\nСтавка: <b>{bet}</b> 🪙 сгорела",
-                    parse_mode="HTML",
-                )
+                    parse_mode="HTML")
         except Exception:
             pass
 
     return {
-        "status": "matched",
-        "duel_id": duel_id,
-        "winner": winner,
-        "you_win": winner == uid,
-        "prize": prize,
-        "opponent_id": opponent["uid"],
-        "balance": await get_balance(uid),
+        "status": "matched", "duel_id": duel_id, "winner": winner,
+        "you_win": winner == uid, "prize": prize,
+        "opponent_id": opponent["uid"], "balance": await get_balance(uid),
     }
 
 
@@ -1057,12 +1082,13 @@ async def api_duel_status(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
 
+    cleanup_duel()
+
     for did, g in list(duel_active.items()):
         if uid in (g["p1"], g["p2"]) and uid not in g["claimed"]:
             g["claimed"].add(uid)
             return {
-                "status": "matched",
-                "duel_id": did,
+                "status": "matched", "duel_id": did,
                 "you_win": g["winner"] == uid,
                 "prize": g["prize"] if g["winner"] == uid else 0,
                 "bet": g["bet"],
@@ -1082,11 +1108,23 @@ async def api_duel_leave(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
-    for i, q in enumerate(duel_queue):
-        if q["uid"] == uid:
+    for i in range(len(duel_queue) - 1, -1, -1):
+        if duel_queue[i]["uid"] == uid:
             duel_queue.pop(i)
             return {"status": "left"}
     return {"status": "not_in_queue"}
+
+
+@app.post("/api/duel/cancel")
+async def api_duel_cancel(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    cleanup_duel()
+    for i in range(len(duel_queue) - 1, -1, -1):
+        if duel_queue[i]["uid"] == uid:
+            duel_queue.pop(i)
+    return {"status": "ok"}
 
 
 # ═══════════ ВЫВОД ═══════════
