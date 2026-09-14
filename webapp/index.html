@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <div id="app">
@@ -181,7 +181,6 @@
       </div>
       <div class="game-body">
 
-        <!-- SLOTS 5×3 -->
         <div class="game-content hidden" id="content-slots2">
           <div class="slots2-lines" id="slots2Lines">
             <button class="lines-btn" data-lines="1" onclick="setSlotsLines(1)">1</button>
@@ -194,7 +193,6 @@
           <div class="bets" id="slots2Bets"></div>
         </div>
 
-        <!-- MINES 2.0 -->
         <div class="game-content hidden" id="content-mines">
           <div class="mines-settings" id="minesSettings">
             <div class="mines-setting-label">Количество мин:</div>
@@ -209,7 +207,6 @@
           <button class="btn-cashout hidden" id="minesCashout" onclick="minesCashout()">💰 Забрать</button>
         </div>
 
-        <!-- CRASH -->
         <div class="game-content hidden" id="content-crash">
           <div class="crash-history" id="crashHistory"></div>
 
@@ -234,7 +231,6 @@
           <div class="bets" id="crashBets"></div>
         </div>
 
-        <!-- DICE -->
         <div class="game-content hidden" id="content-dice">
           <div class="dice-display hidden" id="diceDisplay">
             <div class="dice-face" id="diceFace">🎲</div>
@@ -249,7 +245,6 @@
           <div class="bets" id="diceBets"></div>
         </div>
 
-        <!-- RR -->
         <div class="game-content hidden" id="content-rr">
           <div class="rr-display hidden" id="rrDisplay">
             <div class="rr-revolver" id="rrRevolver">🔫</div>
@@ -265,7 +260,6 @@
           <div class="bets" id="rrBets"></div>
         </div>
 
-        <!-- PLINKO -->
         <div class="game-content hidden" id="content-plinko">
           <div class="plinko-risk">
             <button class="plinko-risk-btn active" data-risk="low" onclick="setPlinkoRisk('low')">🟢 Низкий</button>
@@ -280,7 +274,6 @@
           <div class="bets" id="plinkoBets"></div>
         </div>
 
-        <!-- PENALTI -->
         <div class="game-content hidden" id="content-penalti">
           <div class="penalti-display hidden" id="penaltiDisplay">
             <div class="penalti-stats">
@@ -314,7 +307,6 @@
           <div class="bets" id="penaltiBets"></div>
         </div>
 
-        <!-- COIN -->
         <div class="game-content hidden" id="content-coin">
           <div class="coin-display hidden" id="coinDisplay">
             <div class="coin-face" id="coinFace">🪙</div>
@@ -328,7 +320,6 @@
           <div class="bets" id="coinBets"></div>
         </div>
 
-        <!-- DUEL -->
         <div class="game-content hidden" id="content-duel">
           <div class="duel-display" id="duelDisplay">
             <div class="duel-icon">⚔️</div>
@@ -337,7 +328,6 @@
             <div class="duel-status" id="duelStatus">Выберите ставку</div>
           </div>
 
-          <!-- Экран сражения -->
           <div class="duel-battle hidden" id="duelBattle">
             <div class="battle-arena" id="battleArena">
               <div class="fighter fighter-left" id="fighterLeft">
@@ -397,6 +387,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
