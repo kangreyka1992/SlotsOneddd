@@ -803,7 +803,13 @@ async def api_plinko(request: Request):
 penalti_games: dict = {}
 PENALTI_TIMEOUT = 300
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
-PENALTI_SAVE_CHANCE = [0.11, 0.15, 0.20, 0.25, 0.33]
+
+# Новая логика сложности — после 2 голов шанс резко растёт
+PENALTI_SAVE_CHANCE = [0.15, 0.30, 0.55, 0.75, 0.90]
+
+# Множители шанса сейва от расстояния до вратаря
+# 1 — сосед, 2 — через одну, 3 — противоположный угол
+PENALTI_DIST_MULT = {1: 1.5, 2: 1.0, 3: 0.5}
 
 
 def cleanup_penalti():
@@ -840,8 +846,18 @@ async def api_penalti_start(request: Request):
         raise HTTPException(400, "not_enough_coins")
 
     await add_balance(uid, -bet)
-    penalti_games[uid] = {"bet": bet, "step": 0, "history": [], "started": time.time()}
-    return {"balance": await get_balance(uid), "bet": bet}
+    penalti_games[uid] = {
+        "bet": bet,
+        "step": 0,
+        "history": [],
+        "started": time.time(),
+        "keeper_zone": random.randint(0, 8),
+    }
+    return {
+        "balance": await get_balance(uid),
+        "bet": bet,
+        "keeper_zone": penalti_games[uid]["keeper_zone"],
+    }
 
 
 @app.post("/api/penalti/kick")
@@ -862,27 +878,64 @@ async def api_penalti_kick(request: Request):
     if step >= 5:
         raise HTTPException(400, "already_max")
 
-    keeper_zone = random.randint(0, 8)
-    save_chance = PENALTI_SAVE_CHANCE[step]
-    is_save = (zone == keeper_zone) and (random.random() < save_chance * 9)
-    if not is_save and random.random() < max(0, save_chance - 1/9):
-        is_save = True
-        keeper_zone = zone
+    keeper_zone = game.get("keeper_zone")
+    if keeper_zone is None:
+        keeper_zone = random.randint(0, 8)
+        game["keeper_zone"] = keeper_zone
+
+    if zone == keeper_zone:
+        raise HTTPException(400, "zone_blocked")
+
+    # Расстояние Чебышёва между зонами
+    def zone_distance(a, b):
+        ar, ac = divmod(a, 3)
+        br, bc = divmod(b, 3)
+        return max(abs(ar - br), abs(ac - bc))
+
+    dist = zone_distance(zone, keeper_zone)
+    dist_mult = PENALTI_DIST_MULT.get(dist, 1.0)
+
+    base_chance = PENALTI_SAVE_CHANCE[step]
+    save_chance = min(0.99, base_chance * dist_mult)
+
+    is_save = random.random() < save_chance
 
     if is_save:
         bet = game["bet"]
         del penalti_games[uid]
         await log_game(uid, bet, 0)
         return {
-            "goal": False, "save": True, "zone": zone, "keeper_zone": keeper_zone,
-            "step": step, "bet": bet, "balance": await get_balance(uid),
+            "goal": False,
+            "save": True,
+            "zone": zone,
+            "keeper_zone": keeper_zone,
+            "keeper_dive_zone": zone,
+            "step": step,
+            "bet": bet,
+            "balance": await get_balance(uid),
         }
+
+    # Гол! Вратарь прыгает в соседнюю с ударом зону для визуала
+    neighbors = []
+    zr, zc = divmod(zone, 3)
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            if dr == 0 and dc == 0:
+                continue
+            nr, nc = zr + dr, zc + dc
+            if 0 <= nr < 3 and 0 <= nc < 3:
+                neighbors.append(nr * 3 + nc)
+    dive_zone = random.choice(neighbors) if neighbors else zone
 
     step += 1
     game["step"] = step
     game["history"].append(zone)
     mult = PENALTI_MULTS[step - 1]
     prize = int(game["bet"] * mult)
+
+    # Новая зона вратаря для следующего удара
+    new_keeper_zone = random.randint(0, 8)
+    game["keeper_zone"] = new_keeper_zone
 
     if step >= 5:
         bet = game["bet"]
@@ -894,14 +947,22 @@ async def api_penalti_kick(request: Request):
         if prize >= 100000:
             await unlock_achievement(uid, "big_win")
         return {
-            "goal": True, "save": False, "zone": zone, "keeper_zone": keeper_zone,
-            "step": step, "maxed": True, "mult": mult, "prize": prize,
+            "goal": True, "save": False,
+            "zone": zone, "keeper_zone": keeper_zone,
+            "keeper_dive_zone": dive_zone,
+            "next_keeper_zone": None,
+            "step": step, "maxed": True,
+            "mult": mult, "prize": prize,
             "balance": await get_balance(uid),
         }
 
     return {
-        "goal": True, "save": False, "zone": zone, "keeper_zone": keeper_zone,
-        "step": step, "maxed": False, "mult": mult, "prize": prize,
+        "goal": True, "save": False,
+        "zone": zone, "keeper_zone": keeper_zone,
+        "keeper_dive_zone": dive_zone,
+        "next_keeper_zone": new_keeper_zone,
+        "step": step, "maxed": False,
+        "mult": mult, "prize": prize,
         "balance": await get_balance(uid),
     }
 
