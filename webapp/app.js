@@ -2069,7 +2069,7 @@ async function sellAllItems() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ═══ UPGRADER (в стиле ggstand) ═══ */
+/* ═══ UPGRADER ═══ */
 async function loadUpgrader() {
     try {
         const [inv, tg] = await Promise.all([
@@ -2176,16 +2176,18 @@ function upgraderRandomTarget() {
 }
 
 function updateUpgraderChance() {
-    const fill = document.getElementById('upgCircleFill');
+    const successEl = document.getElementById('upgCircleSuccess');
+    const failEl = document.getElementById('upgCircleFail');
     const percentEl = document.getElementById('upgPercent');
-    if (!fill || !percentEl) return;
+    if (!successEl || !failEl || !percentEl) return;
 
     const CIRC = 534;
 
     if (upgraderSelectedPk === null || upgraderTargetIdx < 0) {
         percentEl.textContent = '0%';
-        fill.style.strokeDashoffset = CIRC;
-        fill.classList.remove('green', 'yellow', 'red');
+        percentEl.className = 'upg-percent';
+        successEl.style.strokeDashoffset = CIRC;
+        failEl.style.strokeDashoffset = 0;
         return;
     }
 
@@ -2193,8 +2195,9 @@ function updateUpgraderChance() {
     const target = upgraderTargets[upgraderTargetIdx];
     if (!it || !target) {
         percentEl.textContent = '0%';
-        fill.style.strokeDashoffset = CIRC;
-        fill.classList.remove('green', 'yellow', 'red');
+        percentEl.className = 'upg-percent';
+        successEl.style.strokeDashoffset = CIRC;
+        failEl.style.strokeDashoffset = 0;
         return;
     }
 
@@ -2203,13 +2206,13 @@ function updateUpgraderChance() {
 
     percentEl.textContent = percent.toFixed(2) + '%';
 
-    fill.classList.remove('green', 'yellow', 'red');
-    if (percent < 30) fill.classList.add('red');
-    else if (percent < 65) fill.classList.add('yellow');
-    else fill.classList.add('green');
+    percentEl.classList.remove('green', 'yellow', 'red');
+    if (percent < 30) percentEl.classList.add('red');
+    else if (percent < 65) percentEl.classList.add('yellow');
+    else percentEl.classList.add('green');
 
-    const offset = CIRC - CIRC * chance;
-    fill.style.strokeDashoffset = offset;
+    successEl.style.strokeDashoffset = CIRC - CIRC * chance;
+    failEl.style.strokeDashoffset = -(CIRC * chance);
 }
 
 function upgraderQuickMult(mult) {
@@ -2269,60 +2272,120 @@ async function upgraderPlay() {
     upgraderBusy = true;
     haptic('medium');
 
-    const overlay = document.createElement('div');
-    overlay.className = 'upg-overlay';
-    overlay.innerHTML = `<div class="upg-roll rolling">0%</div>`;
-    document.body.appendChild(overlay);
+    const arrowEl = document.getElementById('upgArrowSpin');
+    const percentEl = document.getElementById('upgPercent');
+    const goBtn = document.getElementById('upgGoBtn');
 
-    const rollEl = overlay.querySelector('.upg-roll');
-    const rollInt = setInterval(() => {
-        rollEl.textContent = (Math.random() * 100).toFixed(1) + '%';
-        playTone(600 + Math.random() * 400, 0.02, 'square', 0.02);
-    }, 60);
+    if (goBtn) goBtn.disabled = true;
 
+    // 1) Запрашиваем результат у сервера
+    let d;
     try {
-        const d = await api('/api/upgrader/play', {
+        d = await api('/api/upgrader/play', {
             item_pks: [upgraderSelectedPk],
             target_idx: upgraderTargetIdx,
         });
-        await new Promise(r => setTimeout(r, 1800));
-        clearInterval(rollInt);
-
-        if (d.win) {
-            SFX.jackpot();
-            confettiJackpot();
-            overlay.innerHTML = `
-                <div class="upg-result-icon">${d.target.emoji}</div>
-                <div class="upg-result-text win">УСПЕХ!</div>
-                <div class="upg-result-name">${d.target.name}</div>
-                <div class="upg-result-price">+${fmt(d.target.price_coins)} 🪙</div>
-            `;
-        } else {
-            SFX.lose();
-            overlay.innerHTML = `
-                <div class="upg-result-icon">💀</div>
-                <div class="upg-result-text lose">НЕ ПОВЕЗЛО</div>
-                <div class="upg-result-name">Предмет потерян</div>
-                <div class="upg-result-price">−${fmt(d.total_value)} 🪙</div>
-            `;
-        }
-
-        haptic(d.win ? 'success' : 'error');
-        updateBalance(d.balance);
-        loadProfile();
-        addHistory('upgrader', d.total_value, d.win ? d.target.price_coins : 0);
-
-        setTimeout(() => {
-            overlay.remove();
-            upgraderBusy = false;
-            loadUpgrader();
-        }, 2500);
     } catch (e) {
-        clearInterval(rollInt);
+        toast(e.message, 'error');
+        upgraderBusy = false;
+        if (goBtn) goBtn.disabled = false;
+        return;
+    }
+
+    // 2) Определяем итоговый процент
+    const chance = Math.min(0.95, Math.max(0.01, d.total_value / d.target.price_coins));
+    const chancePercent = chance * 100;
+
+    let finalPercent;
+    if (d.win) {
+        finalPercent = Math.random() * chancePercent * 0.95;
+    } else {
+        finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
+    }
+
+    // 3) Анимируем стрелку
+    const baseTurns = 4 + Math.floor(Math.random() * 2);
+    const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
+
+    if (arrowEl) {
+        arrowEl.classList.remove('animate');
+        arrowEl.style.transform = 'rotate(0deg)';
+        void arrowEl.offsetWidth;
+        arrowEl.classList.add('animate');
+        arrowEl.style.transform = `rotate(${finalAngle}deg)`;
+    }
+
+    // 4) Крутим проценты пока стрелка летит
+    const startTime = performance.now();
+    const duration = 3000;
+    let rafId = null;
+
+    function updatePercentWhileSpinning() {
+        const t = (performance.now() - startTime) / duration;
+        if (t >= 1) return;
+        const randomPercent = Math.random() * 100;
+        percentEl.textContent = randomPercent.toFixed(2) + '%';
+        percentEl.classList.remove('green', 'yellow', 'red');
+        if (randomPercent < 30) percentEl.classList.add('red');
+        else if (randomPercent < 65) percentEl.classList.add('yellow');
+        else percentEl.classList.add('green');
+        rafId = requestAnimationFrame(updatePercentWhileSpinning);
+    }
+    rafId = requestAnimationFrame(updatePercentWhileSpinning);
+
+    // Звук тиков
+    const tickInt = setInterval(() => {
+        playTone(800 + Math.random() * 400, 0.02, 'square', 0.02);
+    }, 60);
+
+    // 5) Ждём завершения анимации
+    await new Promise(r => setTimeout(r, duration + 100));
+
+    if (rafId) cancelAnimationFrame(rafId);
+    clearInterval(tickInt);
+
+    // 6) Фиксируем итог
+    percentEl.textContent = finalPercent.toFixed(2) + '%';
+    percentEl.classList.remove('green', 'yellow', 'red');
+    if (d.win) percentEl.classList.add('green');
+    else percentEl.classList.add('red');
+
+    // 7) Оверлей с результатом
+    const overlay = document.createElement('div');
+    overlay.className = 'upg-overlay';
+    document.body.appendChild(overlay);
+
+    if (d.win) {
+        SFX.jackpot();
+        confettiJackpot();
+        overlay.innerHTML = `
+            <div class="upg-result-icon">${d.target.emoji}</div>
+            <div class="upg-result-text win">УСПЕХ!</div>
+            <div class="upg-result-name">${d.target.name}</div>
+            <div class="upg-result-price">+${fmt(d.target.price_coins)} 🪙</div>
+        `;
+    } else {
+        SFX.lose();
+        overlay.innerHTML = `
+            <div class="upg-result-icon">💀</div>
+            <div class="upg-result-text lose">НЕ ПОВЕЗЛО</div>
+            <div class="upg-result-name">Предмет потерян</div>
+            <div class="upg-result-price">−${fmt(d.total_value)} 🪙</div>
+        `;
+    }
+
+    haptic(d.win ? 'success' : 'error');
+    updateBalance(d.balance);
+    loadProfile();
+    addHistory('upgrader', d.total_value, d.win ? d.target.price_coins : 0);
+
+    // 8) Через 2.5 секунды — возврат
+    setTimeout(() => {
         overlay.remove();
         upgraderBusy = false;
-        toast(e.message, 'error');
-    }
+        if (goBtn) goBtn.disabled = false;
+        loadUpgrader();
+    }, 2500);
 }
 
 /* ═══ БЕСПЛАТНЫЙ КЕЙС ═══ */
