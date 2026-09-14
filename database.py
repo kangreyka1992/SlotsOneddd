@@ -108,6 +108,36 @@ async def init_db():
                 PRIMARY KEY (user_id, visit_date)
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                item_id TEXT NOT NULL,
+                case_id TEXT NOT NULL,
+                rarity TEXT NOT NULL,
+                emoji TEXT NOT NULL,
+                name TEXT NOT NULL,
+                value INTEGER NOT NULL,
+                kind TEXT NOT NULL DEFAULT 'gift',
+                sold INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS free_case (
+                user_id INTEGER PRIMARY KEY,
+                last_claim TIMESTAMP,
+                streak INTEGER DEFAULT 0
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS house_flow (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                wagered INTEGER NOT NULL DEFAULT 0,
+                paid INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         await db.commit()
 
 
@@ -552,3 +582,126 @@ async def count_recent_visits(user_id: int, days: int = 7) -> int:
 async def can_withdraw(user_id: int) -> tuple:
     days = await count_recent_visits(user_id, days=7)
     return days >= 3, days
+
+
+# ═══════════ ПРЕДМЕТЫ ИЗ КЕЙСОВ ═══════════
+
+async def add_user_item(user_id: int, item_id: str, case_id: str,
+                        rarity: str, emoji: str, name: str, value: int,
+                        kind: str = "gift"):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO user_items (user_id, item_id, case_id, rarity, emoji, name, value, kind) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, item_id, case_id, rarity, emoji, name, value, kind),
+        )
+        await db.commit()
+
+
+async def get_user_items(user_id: int, limit: int = 100, only_unsold: bool = True):
+    async with aiosqlite.connect(DB_PATH) as db:
+        query = (
+            "SELECT id, item_id, case_id, rarity, emoji, name, value, kind, created_at "
+            "FROM user_items WHERE user_id = ?"
+        )
+        params = [user_id]
+        if only_unsold:
+            query += " AND sold = 0"
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        async with db.execute(query, params) as cur:
+            return await cur.fetchall()
+
+
+async def get_user_item(item_id: int, user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, item_id, case_id, rarity, emoji, name, value, kind, sold "
+            "FROM user_items WHERE id = ? AND user_id = ?",
+            (item_id, user_id),
+        ) as cur:
+            return await cur.fetchone()
+
+
+async def sell_user_item(item_id: int, user_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "UPDATE user_items SET sold = 1 WHERE id = ? AND user_id = ? AND sold = 0",
+            (item_id, user_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def delete_user_item(item_id: int, user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM user_items WHERE id = ? AND user_id = ?",
+            (item_id, user_id),
+        )
+        await db.commit()
+
+
+async def get_user_items_stats(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COUNT(*), COALESCE(SUM(value), 0) FROM user_items "
+            "WHERE user_id = ? AND sold = 0",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return {"count": row[0] or 0, "total_value": row[1] or 0}
+
+
+# ═══════════ БЕСПЛАТНЫЙ КЕЙС ═══════════
+
+async def get_free_case_info(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT last_claim, streak FROM free_case WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None, 0
+            return row[0], row[1]
+
+
+async def claim_free_case(user_id: int, streak: int):
+    now = datetime.datetime.utcnow().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO free_case (user_id, last_claim, streak) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET last_claim = ?, streak = ?",
+            (user_id, now, streak, now, streak),
+        )
+        await db.commit()
+
+
+# ═══════════ УЧЁТ ОБОРОТА (RTP) ═══════════
+
+async def log_house_flow(wagered: int, paid: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO house_flow (wagered, paid) VALUES (?, ?)",
+            (wagered, paid),
+        )
+        await db.commit()
+
+
+async def get_house_stats():
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COALESCE(SUM(wagered), 0), COALESCE(SUM(paid), 0) FROM house_flow"
+        ) as cur:
+            row = await cur.fetchone()
+            wagered = row[0] or 0
+            paid = row[1] or 0
+            profit = wagered - paid
+            rtp = (paid / wagered * 100) if wagered > 0 else 0
+            return {
+                "wagered": wagered,
+                "paid": paid,
+                "profit": profit,
+                "rtp": round(rtp, 2),
+            }
