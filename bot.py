@@ -72,7 +72,7 @@ async def cmd_start(message: types.Message):
     ])
 
     text = (
-        "🎰 <b>ДОБРО ПОЖАЛОВАТЬ В КАЗИНО</b> 🎰\n"
+        "🎰 <b>ДОБРО ПОЖАЛОВАТЬ В SlotsGame</b> 🎰\n"
         "\n"
         "✨ <b>Мир азарта ждёт тебя!</b>\n"
         "\n"
