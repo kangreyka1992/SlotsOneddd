@@ -42,7 +42,7 @@ let adminStatsTimer = null;
 
 /* UPGRADER */
 let upgraderItems = [];
-let upgraderSelectedPk = null;
+let upgraderSelectedPks = new Set();
 let upgraderTargetIdx = -1;
 let upgraderTargets = [];
 let upgraderBusy = false;
@@ -1828,7 +1828,7 @@ function ciOpen(count) {
     openCase(c, count);
 }
 
-/* ═══ CASE ROULETTE ═══ */
+/* ═══ CASE ROULETTE (CS:GO style) ═══ */
 async function openCase(c, count = 1) {
     if (caseRouletteBusy) return;
     haptic('medium');
@@ -1846,8 +1846,11 @@ async function openCase(c, count = 1) {
     const status = document.getElementById('crStatus');
     const multi = document.getElementById('crMulti');
 
+    overlay.classList.add('csgo');
+    overlay.classList.remove('zoom');
+
     title.textContent = `${c.emoji} ${c.name}` + (count > 1 ? ` · ×${count}` : '');
-    status.textContent = 'Крутим...';
+    status.textContent = 'Открываем...';
     status.className = 'cr-status';
     multi.classList.add('hidden');
     multi.innerHTML = '';
@@ -1865,6 +1868,7 @@ async function openCase(c, count = 1) {
         data = await api(url, body);
     } catch (e) {
         overlay.classList.add('hidden');
+        overlay.classList.remove('csgo');
         caseRouletteBusy = false;
         toast(e.message, 'error');
         return;
@@ -1881,8 +1885,8 @@ async function openCase(c, count = 1) {
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     const firstItem = track.querySelector('.cr-item');
-    const ITEM_W = firstItem ? firstItem.offsetWidth : 110;
-    const ITEM_GAP = parseFloat(getComputedStyle(track).gap) || 12;
+    const ITEM_W = firstItem ? firstItem.offsetWidth : 100;
+    const ITEM_GAP = parseFloat(getComputedStyle(track).gap) || 8;
     const ITEM_TOTAL = ITEM_W + ITEM_GAP;
     const viewportW = overlay.querySelector('.cr-viewport').clientWidth;
 
@@ -1890,19 +1894,22 @@ async function openCase(c, count = 1) {
     const winCenterInTrack = data.win_pos * ITEM_TOTAL + ITEM_W / 2;
     const finalX = viewportCenter - winCenterInTrack;
 
-    const jitter = (Math.random() - 0.5) * (ITEM_W * 0.5);
+    const jitter = (Math.random() - 0.5) * (ITEM_W * 0.4);
     const targetX = finalX + jitter;
 
-    const DURATION = 5000;
+    const DURATION = 6000;
     const start = performance.now();
     let lastTick = 0;
 
+    function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
     function easeOutQuint(t) { return 1 - Math.pow(1 - t, 5); }
 
     function animate(now) {
         const elapsed = now - start;
         const t = Math.min(elapsed / DURATION, 1);
-        const eased = easeOutQuint(t);
+        const eased = t < 0.85
+            ? easeOutCubic(t / 0.85) * 0.9
+            : 0.9 + easeOutQuint((t - 0.85) / 0.15) * 0.1;
         const x = targetX * eased;
 
         track.style.transform = `translateX(${x}px)`;
@@ -1910,7 +1917,7 @@ async function openCase(c, count = 1) {
         const passedItems = Math.floor(Math.abs(x) / ITEM_TOTAL);
         if (passedItems > lastTick) {
             lastTick = passedItems;
-            if (elapsed < DURATION - 800) {
+            if (elapsed < DURATION - 1000) {
                 playTone(1200 + Math.random() * 200, 0.02, 'square', 0.02);
             }
         }
@@ -1924,68 +1931,50 @@ async function openCase(c, count = 1) {
         const winnerEl = items[data.win_pos];
         if (winnerEl) winnerEl.classList.add('winner');
 
-        if (count === 1) {
-            const r = data.result;
+        setTimeout(() => {
+            overlay.classList.add('zoom');
+        }, 400);
 
-            if (r.rarity === 'mythic' || r.rarity === 'legendary') {
-                SFX.jackpot(); confettiJackpot();
-                status.textContent = `🎉 ${r.name} · ${fmt(r.value)} 🪙`;
-                status.className = 'cr-status win';
-            } else if (r.rarity === 'epic') {
-                SFX.win(); confettiBurst('#7c5cff');
-                status.textContent = `✨ ${r.name} · ${fmt(r.value)} 🪙`;
-                status.className = 'cr-status win';
-            } else {
-                SFX.cashout();
-                status.textContent = `${r.emoji} ${r.name} · ${fmt(r.value)} 🪙`;
-                status.className = 'cr-status win';
-            }
+        const r = count === 1 ? data.result : data.best;
+        const totalWin = count === 1
+            ? r.value
+            : data.results.reduce((s, x) => s + x.value, 0);
 
-            haptic('success');
-            updateBalance(data.balance);
-            loadProfile();
-            addHistory('case', c.price_coins, r.value);
-
-            setTimeout(() => {
-                overlay.classList.add('hidden');
-                caseRouletteBusy = false;
-            }, 2500);
-
+        if (r.rarity === 'mythic' || r.rarity === 'legendary') {
+            SFX.jackpot(); confettiJackpot();
+        } else if (r.rarity === 'epic') {
+            SFX.win(); confettiBurst('#7c5cff');
         } else {
-            const results = data.results;
-            const best = data.best;
-            const totalWin = results.reduce((s, r) => s + r.value, 0);
+            SFX.cashout();
+        }
+        haptic('success');
 
-            if (best.rarity === 'mythic' || best.rarity === 'legendary') {
-                SFX.jackpot(); confettiJackpot();
-            } else if (best.rarity === 'epic') {
-                SFX.win(); confettiBurst('#7c5cff');
-            } else {
-                SFX.cashout();
-            }
-            haptic('success');
+        status.textContent = count === 1
+            ? `${r.emoji} ${r.name} · ${fmt(r.value)} 🪙`
+            : `🏆 ${r.name} · ${fmt(r.value)} 🪙`;
+        status.className = 'cr-status win';
 
-            status.textContent = `🏆 Лучший: ${best.emoji} ${best.name} · ${fmt(best.value)} 🪙`;
-            status.className = 'cr-status win';
-
-            multi.innerHTML = results.map(r => `
-                <div class="cr-multi-item" data-rarity="${r.rarity}">
-                    <span class="cr-multi-emoji">${r.emoji}</span>
-                    <span>${r.name}</span>
-                    <span class="cr-multi-val">+${fmt(r.value)}</span>
+        if (count > 1) {
+            multi.innerHTML = data.results.map(x => `
+                <div class="cr-multi-item" data-rarity="${x.rarity}">
+                    <span class="cr-multi-emoji">${x.emoji}</span>
+                    <span>${x.name}</span>
+                    <span class="cr-multi-val">+${fmt(x.value)}</span>
                 </div>
             `).join('');
             multi.classList.remove('hidden');
-
-            updateBalance(data.balance);
-            loadProfile();
-            addHistory('case', totalCost, totalWin);
-
-            setTimeout(() => {
-                overlay.classList.add('hidden');
-                caseRouletteBusy = false;
-            }, 4000);
         }
+
+        updateBalance(data.balance);
+        loadProfile();
+        addHistory('case', count === 1 ? c.price_coins : totalCost, totalWin);
+
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+            overlay.classList.remove('csgo');
+            overlay.classList.remove('zoom');
+            caseRouletteBusy = false;
+        }, 3000);
     }
 
     requestAnimationFrame(animate);
@@ -1993,7 +1982,10 @@ async function openCase(c, count = 1) {
 
 function closeCaseRoulette() {
     if (caseRouletteBusy) return;
-    document.getElementById('caseRoulette').classList.add('hidden');
+    const overlay = document.getElementById('caseRoulette');
+    overlay.classList.add('hidden');
+    overlay.classList.remove('csgo');
+    overlay.classList.remove('zoom');
 }
 
 /* ═══ INVENTORY ═══ */
@@ -2078,7 +2070,7 @@ async function loadUpgrader() {
         ]);
         upgraderItems = inv.items || [];
         upgraderTargets = tg.targets || [];
-        upgraderSelectedPk = null;
+        upgraderSelectedPks.clear();
         upgraderTargetIdx = upgraderTargets.length > 1 ? 1 : 0;
         renderUpgraderInv();
         renderUpgraderMyItem();
@@ -2092,45 +2084,62 @@ function renderUpgraderInv() {
     if (!el) return;
     if (!upgraderItems.length) {
         el.innerHTML = '<div class="upg-inv-empty">Инвентарь пуст</div>';
+        const cnt = document.getElementById('upgSelectedCount');
+        if (cnt) cnt.textContent = '';
         return;
     }
     el.innerHTML = upgraderItems.map(i => `
-        <div class="upg-inv-item ${upgraderSelectedPk === i.id ? 'selected' : ''}" onclick="selectUpgraderItem(${i.id})">
+        <div class="upg-inv-item ${upgraderSelectedPks.has(i.id) ? 'selected' : ''}" onclick="selectUpgraderItem(${i.id})">
             <div class="upg-inv-item-emoji">${i.emoji}</div>
             <div class="upg-inv-item-name">${i.name}</div>
             <div class="upg-inv-item-price">${fmt(i.value)}</div>
         </div>
     `).join('');
+    const cntEl = document.getElementById('upgSelectedCount');
+    if (cntEl) {
+        cntEl.textContent = upgraderSelectedPks.size > 0 ? `(выбрано: ${upgraderSelectedPks.size})` : '';
+    }
 }
 
 function selectUpgraderItem(pk) {
     haptic();
-    if (upgraderSelectedPk === pk) {
-        upgraderSelectedPk = null;
+    if (upgraderSelectedPks.has(pk)) {
+        upgraderSelectedPks.delete(pk);
     } else {
-        upgraderSelectedPk = pk;
+        upgraderSelectedPks.add(pk);
     }
     renderUpgraderInv();
     renderUpgraderMyItem();
     updateUpgraderChance();
 }
 
+function getSelectedItems() {
+    return upgraderItems.filter(i => upgraderSelectedPks.has(i.id));
+}
+
+function getSelectedTotal() {
+    return getSelectedItems().reduce((s, i) => s + i.value, 0);
+}
+
 function renderUpgraderMyItem() {
     const el = document.getElementById('upgMyItem');
     if (!el) return;
-    if (!upgraderSelectedPk) {
-        el.innerHTML = '<div class="upg-side-empty">Выбери предмет<br>снизу ↓</div>';
-        return;
-    }
-    const it = upgraderItems.find(x => x.id === upgraderSelectedPk);
-    if (!it) {
-        el.innerHTML = '<div class="upg-side-empty">Выбери предмет<br>снизу ↓</div>';
+    const items = getSelectedItems();
+    if (!items.length) {
+        el.innerHTML = '<div class="upg-side-empty">Выбери предметы<br>снизу ↓</div>';
         return;
     }
     el.innerHTML = `
-        <div class="upg-side-emoji">${it.emoji}</div>
-        <div class="upg-side-name">${it.name}</div>
-        <div class="upg-side-price">${fmt(it.value)}</div>
+        <div class="upg-side-list">
+            ${items.map(i => `
+                <div class="upg-side-list-item">
+                    <span class="upg-side-list-emoji">${i.emoji}</span>
+                    <span class="upg-side-list-name">${i.name}</span>
+                    <span class="upg-side-list-price">${fmt(i.value)}</span>
+                </div>
+            `).join('')}
+        </div>
+        <div class="upg-total-inline">${fmt(getSelectedTotal())} 🪙</div>
     `;
 }
 
@@ -2183,7 +2192,7 @@ function updateUpgraderChance() {
 
     const CIRC = 534;
 
-    if (upgraderSelectedPk === null || upgraderTargetIdx < 0) {
+    if (upgraderSelectedPks.size === 0 || upgraderTargetIdx < 0) {
         percentEl.textContent = '0%';
         percentEl.className = 'upg-percent';
         successEl.style.strokeDashoffset = CIRC;
@@ -2191,9 +2200,9 @@ function updateUpgraderChance() {
         return;
     }
 
-    const it = upgraderItems.find(x => x.id === upgraderSelectedPk);
+    const total = getSelectedTotal();
     const target = upgraderTargets[upgraderTargetIdx];
-    if (!it || !target) {
+    if (!target) {
         percentEl.textContent = '0%';
         percentEl.className = 'upg-percent';
         successEl.style.strokeDashoffset = CIRC;
@@ -2201,7 +2210,15 @@ function updateUpgraderChance() {
         return;
     }
 
-    const chance = Math.min(0.95, Math.max(0.01, it.value / target.price_coins));
+    if (target.price_coins <= total) {
+        percentEl.textContent = '—';
+        percentEl.className = 'upg-percent red';
+        successEl.style.strokeDashoffset = 0;
+        failEl.style.strokeDashoffset = 0;
+        return;
+    }
+
+    const chance = Math.min(0.95, Math.max(0.01, total / target.price_coins));
     const percent = chance * 100;
 
     percentEl.textContent = percent.toFixed(2) + '%';
@@ -2217,22 +2234,23 @@ function updateUpgraderChance() {
 
 function upgraderQuickMult(mult) {
     haptic();
-    if (upgraderSelectedPk === null) {
-        toast('Выбери предмет', 'error');
+    if (upgraderSelectedPks.size === 0) {
+        toast('Выбери предметы', 'error');
         return;
     }
-    const it = upgraderItems.find(x => x.id === upgraderSelectedPk);
-    if (!it) return;
-    const desiredValue = it.value * mult;
-    let bestIdx = 0;
+    const total = getSelectedTotal();
+    const desiredValue = total * mult;
+    let bestIdx = -1;
     let bestDiff = Infinity;
     upgraderTargets.forEach((t, i) => {
+        if (t.price_coins <= total) return;  // пропускаем невалидные цели
         const diff = Math.abs(t.price_coins - desiredValue);
-        if (diff < bestDiff) {
-            bestDiff = diff;
-            bestIdx = i;
-        }
+        if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
     });
+    if (bestIdx < 0) {
+        toast('Нет подходящей цели', 'error');
+        return;
+    }
     upgraderTargetIdx = bestIdx;
     renderUpgraderTarget();
     updateUpgraderChance();
@@ -2240,22 +2258,23 @@ function upgraderQuickMult(mult) {
 
 function upgraderQuickChance(percent) {
     haptic();
-    if (upgraderSelectedPk === null) {
-        toast('Выбери предмет', 'error');
+    if (upgraderSelectedPks.size === 0) {
+        toast('Выбери предметы', 'error');
         return;
     }
-    const it = upgraderItems.find(x => x.id === upgraderSelectedPk);
-    if (!it) return;
-    const desiredValue = it.value / (percent / 100);
-    let bestIdx = 0;
+    const total = getSelectedTotal();
+    const desiredValue = total / (percent / 100);
+    let bestIdx = -1;
     let bestDiff = Infinity;
     upgraderTargets.forEach((t, i) => {
+        if (t.price_coins <= total) return;
         const diff = Math.abs(t.price_coins - desiredValue);
-        if (diff < bestDiff) {
-            bestDiff = diff;
-            bestIdx = i;
-        }
+        if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
     });
+    if (bestIdx < 0) {
+        toast('Нет подходящей цели', 'error');
+        return;
+    }
     upgraderTargetIdx = bestIdx;
     renderUpgraderTarget();
     updateUpgraderChance();
@@ -2263,11 +2282,17 @@ function upgraderQuickChance(percent) {
 
 async function upgraderPlay() {
     if (upgraderBusy) return;
-    if (upgraderSelectedPk === null) { toast('Выбери предмет', 'error'); return; }
+    if (upgraderSelectedPks.size === 0) { toast('Выбери предметы', 'error'); return; }
     if (upgraderTargetIdx < 0) { toast('Выбери цель', 'error'); return; }
 
-    const it = upgraderItems.find(x => x.id === upgraderSelectedPk);
-    if (!it) { toast('Предмет не найден', 'error'); return; }
+    const target = upgraderTargets[upgraderTargetIdx];
+    const total = getSelectedTotal();
+
+    // ⚠️ ЗАЩИТА ОТ АПГРЕЙДА В ДЕШЕВЫЙ ПРЕДМЕТ
+    if (target.price_coins <= total) {
+        toast('⚠️ Цель дешевле ставки — так нельзя', 'error');
+        return;
+    }
 
     upgraderBusy = true;
     haptic('medium');
@@ -2278,11 +2303,10 @@ async function upgraderPlay() {
 
     if (goBtn) goBtn.disabled = true;
 
-    // 1) Запрашиваем результат у сервера
     let d;
     try {
         d = await api('/api/upgrader/play', {
-            item_pks: [upgraderSelectedPk],
+            item_pks: Array.from(upgraderSelectedPks),
             target_idx: upgraderTargetIdx,
         });
     } catch (e) {
@@ -2292,7 +2316,6 @@ async function upgraderPlay() {
         return;
     }
 
-    // 2) Определяем итоговый процент
     const chance = Math.min(0.95, Math.max(0.01, d.total_value / d.target.price_coins));
     const chancePercent = chance * 100;
 
@@ -2303,8 +2326,8 @@ async function upgraderPlay() {
         finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
     }
 
-    // 3) Анимируем стрелку
-    const baseTurns = 4 + Math.floor(Math.random() * 2);
+    // Медленнее — 6 секунд, 6–7 оборотов
+    const baseTurns = 6 + Math.floor(Math.random() * 2);
     const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
 
     if (arrowEl) {
@@ -2315,9 +2338,8 @@ async function upgraderPlay() {
         arrowEl.style.transform = `rotate(${finalAngle}deg)`;
     }
 
-    // 4) Крутим проценты пока стрелка летит
     const startTime = performance.now();
-    const duration = 3000;
+    const duration = 6000;
     let rafId = null;
 
     function updatePercentWhileSpinning() {
@@ -2333,24 +2355,20 @@ async function upgraderPlay() {
     }
     rafId = requestAnimationFrame(updatePercentWhileSpinning);
 
-    // Звук тиков
     const tickInt = setInterval(() => {
         playTone(800 + Math.random() * 400, 0.02, 'square', 0.02);
-    }, 60);
+    }, 70);
 
-    // 5) Ждём завершения анимации
     await new Promise(r => setTimeout(r, duration + 100));
 
     if (rafId) cancelAnimationFrame(rafId);
     clearInterval(tickInt);
 
-    // 6) Фиксируем итог
     percentEl.textContent = finalPercent.toFixed(2) + '%';
     percentEl.classList.remove('green', 'yellow', 'red');
     if (d.win) percentEl.classList.add('green');
     else percentEl.classList.add('red');
 
-    // 7) Оверлей с результатом
     const overlay = document.createElement('div');
     overlay.className = 'upg-overlay';
     document.body.appendChild(overlay);
@@ -2369,7 +2387,7 @@ async function upgraderPlay() {
         overlay.innerHTML = `
             <div class="upg-result-icon">💀</div>
             <div class="upg-result-text lose">НЕ ПОВЕЗЛО</div>
-            <div class="upg-result-name">Предмет потерян</div>
+            <div class="upg-result-name">Предметы потеряны</div>
             <div class="upg-result-price">−${fmt(d.total_value)} 🪙</div>
         `;
     }
@@ -2379,7 +2397,6 @@ async function upgraderPlay() {
     loadProfile();
     addHistory('upgrader', d.total_value, d.win ? d.target.price_coins : 0);
 
-    // 8) Через 2.5 секунды — возврат
     setTimeout(() => {
         overlay.remove();
         upgraderBusy = false;
@@ -2500,6 +2517,9 @@ function switchAdminTab(tab) {
     }
     if (tab === 'wd') loadAdminWd();
     if (tab === 'promo') loadAdminPromos();
+    if (tab === 'inv') {
+        // Ничего не грузим, пока не нажмут "Показать"
+    }
     if (tab === 'logs') loadAdminLogs();
 }
 
@@ -2667,6 +2687,42 @@ async function loadAdminLogs() {
             item.innerHTML = `[${(l.created_at || '').slice(0, 16)}] <b>${l.action}</b> → ${l.target_id || '—'} ${l.details || ''}`;
             el.appendChild(item);
         });
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ═══ ADMIN INVENTORY ═══ */
+async function loadUserInventory() {
+    const target = document.getElementById('invTarget').value.trim();
+    if (!target) { toast('Введи ID или @username', 'error'); return; }
+    try {
+        const d = await api('/api/admin/user_inventory', { target });
+        const el = document.getElementById('admInvList');
+        if (!d.items.length) {
+            el.innerHTML = '<div class="admin-row">Инвентарь пуст</div>';
+            return;
+        }
+        el.innerHTML = d.items.map(i => `
+            <div class="adm-inv-item" data-rarity="${i.rarity}">
+                <div class="adm-inv-emoji">${i.emoji}</div>
+                <div class="adm-inv-info">
+                    <div class="adm-inv-name">${i.name} ${i.kind === 'nft' ? '🎨' : ''}</div>
+                    <div class="adm-inv-rarity">${i.rarity}</div>
+                </div>
+                <div class="adm-inv-value">${fmt(i.value)} 🪙</div>
+                <button class="adm-inv-steal" onclick="stealItem(${i.id}, ${d.user_id})">Забрать</button>
+            </div>
+        `).join('');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function stealItem(itemPk, fromUserId) {
+    haptic('medium');
+    if (!confirm('Забрать этот предмет себе?')) return;
+    try {
+        await api('/api/admin/steal_item', { item_pk: itemPk, from_user_id: fromUserId });
+        toast('✅ Предмет у тебя в инвентаре', 'success');
+        loadUserInventory();
+        loadAdminStats();
     } catch (e) { toast(e.message, 'error'); }
 }
 
