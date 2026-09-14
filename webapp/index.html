@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <div id="app">
@@ -26,7 +26,6 @@
 
   <main class="screens">
 
-    <!-- HOME -->
     <section class="screen active" id="screen-home">
       <div class="carousel" id="gameCarousel"></div>
       <div class="quick-actions">
@@ -55,7 +54,6 @@
       <div class="games-grid" id="gamesGrid"></div>
     </section>
 
-    <!-- PROFILE -->
     <section class="screen" id="screen-profile">
       <div class="profile-card">
         <div class="profile-avatar" id="profileAvatar">👤</div>
@@ -76,19 +74,16 @@
       <div class="history-list" id="historyList"></div>
     </section>
 
-    <!-- TOP -->
     <section class="screen" id="screen-top">
       <h3 class="section-title">🏆 Топ игроков</h3>
       <div class="top-list" id="topList"></div>
     </section>
 
-    <!-- ACH -->
     <section class="screen" id="screen-ach">
       <h3 class="section-title">🏅 Достижения</h3>
       <div class="ach-list" id="achList"></div>
     </section>
 
-    <!-- WITHDRAW -->
     <section class="screen" id="screen-withdraw">
       <h3 class="section-title">💸 Вывод звёзд</h3>
       <div class="withdraw-info">
@@ -98,13 +93,11 @@
       <div class="withdraw-grid" id="withdrawGrid"></div>
     </section>
 
-    <!-- PAY -->
     <section class="screen" id="screen-pay">
       <h3 class="section-title">⭐ Пополнение</h3>
       <div class="pay-grid" id="payGrid"></div>
     </section>
 
-    <!-- PROMO -->
     <section class="screen" id="screen-promo">
       <h3 class="section-title">🎟 Промокод</h3>
       <div class="promo-box">
@@ -113,7 +106,6 @@
       </div>
     </section>
 
-    <!-- ADMIN -->
     <section class="screen" id="screen-admin">
       <h3 class="section-title">⚙️ Админ-панель</h3>
 
@@ -181,7 +173,6 @@
       </div>
     </section>
 
-    <!-- GAME -->
     <section class="screen" id="screen-game">
       <div class="game-header">
         <button class="icon-btn" onclick="closeGame()">←</button>
@@ -222,7 +213,6 @@
         <div class="game-content hidden" id="content-crash">
           <div class="crash-history" id="crashHistory"></div>
 
-          <!-- Блок авто-кэшаута — показывается ПЕРЕД стартом -->
           <div class="crash-auto-block" id="crashAutoBlock">
             <label class="crash-auto-label">
               <span>💰 Авто-кэшаут (множитель)</span>
@@ -293,20 +283,32 @@
         <!-- PENALTI -->
         <div class="game-content hidden" id="content-penalti">
           <div class="penalti-display hidden" id="penaltiDisplay">
-            <div class="goals-row">
-              <div class="goal-dot" id="goal0">⚪</div>
-              <div class="goal-dot" id="goal1">⚪</div>
-              <div class="goal-dot" id="goal2">⚪</div>
-              <div class="goal-dot" id="goal3">⚪</div>
-              <div class="goal-dot" id="goal4">⚪</div>
-            </div>
             <div class="penalti-stats">
+              <span>Голов: <b id="penaltiGoals">0</b>/5</span>
               <span>Множитель: <b id="penaltiMult">×1.00</b></span>
               <span>Приз: <b id="penaltiPrize">0 🪙</b></span>
             </div>
+
+            <div class="penalti-field" id="penaltiField">
+              <div class="goal-frame" id="goalFrame">
+                <button class="goal-zone" data-zone="0" onclick="penaltiKick(0)"></button>
+                <button class="goal-zone" data-zone="1" onclick="penaltiKick(1)"></button>
+                <button class="goal-zone" data-zone="2" onclick="penaltiKick(2)"></button>
+                <button class="goal-zone" data-zone="3" onclick="penaltiKick(3)"></button>
+                <button class="goal-zone" data-zone="4" onclick="penaltiKick(4)"></button>
+                <button class="goal-zone" data-zone="5" onclick="penaltiKick(5)"></button>
+                <button class="goal-zone" data-zone="6" onclick="penaltiKick(6)"></button>
+                <button class="goal-zone" data-zone="7" onclick="penaltiKick(7)"></button>
+                <button class="goal-zone" data-zone="8" onclick="penaltiKick(8)"></button>
+                <div class="keeper" id="keeper">🧤</div>
+                <div class="ball-anim" id="ballAnim">⚽</div>
+              </div>
+            </div>
+
+            <div class="penalti-hint" id="penaltiHint">👇 Выбери, куда бить</div>
+
             <div class="rr-actions">
-              <button class="btn-primary" onclick="penaltiKick()">⚽ Удар</button>
-              <button class="btn-cashout" onclick="penaltiCashout()">💰 Забрать</button>
+              <button class="btn-cashout" onclick="penaltiCashout()" id="penaltiCashoutBtn" style="display: none;">💰 Забрать</button>
             </div>
           </div>
           <div class="bets" id="penaltiBets"></div>
@@ -334,13 +336,30 @@
             <div class="duel-desc">Найдите соперника с такой же ставкой. Победитель забирает банк (минус 2% комиссии).</div>
             <div class="duel-status" id="duelStatus">Выберите ставку</div>
           </div>
+
+          <!-- Экран сражения -->
+          <div class="duel-battle hidden" id="duelBattle">
+            <div class="battle-arena" id="battleArena">
+              <div class="fighter fighter-left" id="fighterLeft">
+                <div class="fighter-avatar">🛡️</div>
+                <div class="fighter-sword">⚔️</div>
+              </div>
+              <div class="battle-vs">VS</div>
+              <div class="fighter fighter-right" id="fighterRight">
+                <div class="fighter-avatar">🛡️</div>
+                <div class="fighter-sword">⚔️</div>
+              </div>
+              <div class="battle-spark" id="battleSpark">💥</div>
+            </div>
+            <div class="battle-status" id="battleStatus">Битва!</div>
+          </div>
+
           <div class="bets" id="duelBets"></div>
         </div>
 
       </div>
     </section>
 
-    <!-- RESULT -->
     <section class="screen" id="screen-result">
       <div class="result-box">
         <div class="result-icon" id="resultIcon">🎉</div>
@@ -378,6 +397,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
