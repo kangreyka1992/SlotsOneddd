@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <div id="app">
@@ -194,8 +194,8 @@
         <div class="game-content hidden" id="content-slots2">
           <div class="slots2-lines" id="slots2Lines">
             <button class="lines-btn" data-lines="1" onclick="setSlotsLines(1)">1</button>
-            <button class="lines-btn" data-lines="5" onclick="setSlotsLines(5)">5</button>
-            <button class="lines-btn active" data-lines="10" onclick="setSlotsLines(10)">10</button>
+            <button class="lines-btn active" data-lines="5" onclick="setSlotsLines(5)">5</button>
+            <button class="lines-btn" data-lines="10" onclick="setSlotsLines(10)">10</button>
             <button class="lines-btn" data-lines="20" onclick="setSlotsLines(20)">20</button>
           </div>
           <div class="slots2-field" id="slots2Field"></div>
@@ -221,17 +221,26 @@
         <!-- CRASH -->
         <div class="game-content hidden" id="content-crash">
           <div class="crash-history" id="crashHistory"></div>
+
+          <!-- Блок авто-кэшаута — показывается ПЕРЕД стартом -->
+          <div class="crash-auto-block" id="crashAutoBlock">
+            <label class="crash-auto-label">
+              <span>💰 Авто-кэшаут (множитель)</span>
+              <input type="number" id="crashAuto" min="1.1" max="100" step="0.1" value="2.0">
+            </label>
+            <div class="crash-auto-hint">Оставьте 2.0 если хотите забрать вручную. При достижении — выигрыш зачислится автоматически.</div>
+          </div>
+
           <div class="crash-display hidden" id="crashDisplay">
             <div class="crash-field" id="crashField">
               <canvas id="crashCanvas"></canvas>
               <div class="crash-mult" id="crashMult">×1.00</div>
               <div class="crash-prize" id="crashPrize">0 🪙</div>
-            </div>
-            <div class="crash-auto">
-              <label>Авто-кэшаут: <input type="number" id="crashAuto" min="1.1" max="100" step="0.1" value="2.0"></label>
+              <div class="crash-auto-inline hidden" id="crashAutoInline"></div>
             </div>
             <button class="btn-cashout" onclick="crashCashout()">💰 Забрать</button>
           </div>
+
           <div class="bets" id="crashBets"></div>
         </div>
 
@@ -369,6 +378,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
