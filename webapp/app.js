@@ -40,6 +40,13 @@ let caseRouletteBusy = false;
 let currentCaseInfo = null;
 let adminStatsTimer = null;
 
+/* UPGRADER */
+let upgraderItems = [];
+let upgraderSelected = new Set();
+let upgraderTargetIdx = -1;
+let upgraderTargets = [];
+let upgraderBusy = false;
+
 /* ═══ SOUND ═══ */
 let audioCtx = null;
 
@@ -156,7 +163,8 @@ function renderHistory() {
     const names = {
         slots: '🎰 Слоты', slots2: '🎰 Слоты 5×3', mines: '⛏ Mines', crash: '📈 Crash',
         dice: '🎲 Кости', rr: '🔫 Рулетка', plinko: '🎯 Plinko',
-        penalti: '⚽ Penalti', coin: '🪙 Монетка', duel: '⚔️ Дуэль', case: '📦 Кейс'
+        penalti: '⚽ Penalti', coin: '🪙 Монетка', duel: '⚔️ Дуэль',
+        case: '📦 Кейс', upgrader: '⚡ Апгрейд'
     };
     el.innerHTML = gameHistory.map(h => {
         const diff = h.win - h.bet;
@@ -249,6 +257,7 @@ function showScreen(name) {
     if (name === 'admin') switchAdminTab('stats');
     if (name === 'cases') { loadCases(); loadFreeCaseStatus(); }
     if (name === 'inventory') loadInventory();
+    if (name === 'upgrader') loadUpgrader();
 }
 
 function updateBalance(b) {
@@ -1176,7 +1185,7 @@ async function plinkoPlay(bet) {
     }, 800);
 }
 
-/* ═══ PENALTI ═══ */
+/* ═══ PENALTI (без usedZones) ═══ */
 function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
 }
@@ -1214,7 +1223,7 @@ function zoneToScene(zone) {
 async function penaltiStart(bet) {
     try {
         const d = await gameApi('/api/penalti/start', { bet });
-        penaltiState = { bet, step: 0, usedZones: new Set() };
+        penaltiState = { bet, step: 0 };
         lastBet = bet;
         updateBalance(d.balance);
         document.getElementById('penaltiBets').classList.add('hidden');
@@ -1234,12 +1243,8 @@ async function penaltiStart(bet) {
 
 function resetPenaltiField() {
     document.querySelectorAll('.goal-zone').forEach(z => {
-        const zone = parseInt(z.dataset.zone);
-        const isUsed = penaltiState && penaltiState.usedZones && penaltiState.usedZones.has(zone);
-        z.disabled = isUsed;
-        z.classList.remove('scored', 'missed');
-        if (isUsed) z.classList.add('used');
-        else z.classList.remove('used');
+        z.disabled = false;
+        z.classList.remove('scored', 'missed', 'used');
     });
 
     const keeper = document.getElementById('keeper');
@@ -1263,10 +1268,6 @@ async function penaltiKick(zone) {
     haptic();
     if (!penaltiState) return;
     if (gameLocked) { toast('⏳ Дождись окончания', 'error'); return; }
-    if (penaltiState.usedZones && penaltiState.usedZones.has(zone)) {
-        toast('Эта зона уже использована', 'error');
-        return;
-    }
 
     document.querySelectorAll('.goal-zone').forEach(z => z.disabled = true);
     document.getElementById('penaltiHint').textContent = '⚽ Удар...';
@@ -1343,8 +1344,6 @@ async function penaltiKick(zone) {
             return;
         }
 
-        // запоминаем использованную зону
-        penaltiState.usedZones.add(zone);
         penaltiState.step = d.step;
 
         document.getElementById('penaltiHint').textContent = `⚽ Гол! Бей ещё или забери`;
@@ -1358,10 +1357,7 @@ async function penaltiKick(zone) {
         }, 1200);
     } catch (e) {
         toast(e.message, 'error');
-        document.querySelectorAll('.goal-zone').forEach(z => {
-            const zn = parseInt(z.dataset.zone);
-            if (!penaltiState || !penaltiState.usedZones.has(zn)) z.disabled = false;
-        });
+        document.querySelectorAll('.goal-zone').forEach(z => z.disabled = false);
         gameLocked = false;
     }
 }
@@ -1387,7 +1383,7 @@ async function penaltiCashout() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ═══ МОНЕТКА ═══ */
+/* ═══ МОНЕТКА (кнопки блокируются) ═══ */
 function initCoin() {
     renderCoinHistory();
     renderBets('coinBets', coinStart);
@@ -1413,10 +1409,19 @@ function coinStart(bet) {
     document.getElementById('coinDisplay').classList.remove('hidden');
     document.getElementById('coinResult').textContent = 'Выберите сторону';
     document.getElementById('coinFace').textContent = '🪙';
+
+    // разблокируем кнопки при старте
+    const choices = document.querySelector('.coin-choices');
+    if (choices) choices.classList.remove('disabled');
 }
 
 async function flipCoin(side) {
     haptic();
+
+    // блокируем кнопки
+    const choices = document.querySelector('.coin-choices');
+    if (choices) choices.classList.add('disabled');
+
     const face = document.getElementById('coinFace');
     face.classList.remove('coin-heads', 'coin-tails');
     face.classList.add('flipping');
@@ -1432,12 +1437,11 @@ async function flipCoin(side) {
         if (d.result === 'heads') {
             face.textContent = '👑';
             face.classList.add('coin-heads');
-            SFX.win();
         } else {
             face.textContent = '🔢';
             face.classList.add('coin-tails');
-            SFX.win();
         }
+        SFX.win();
 
         setTimeout(() => {
             face.classList.remove('coin-heads', 'coin-tails');
@@ -1468,6 +1472,7 @@ async function flipCoin(side) {
         }, 800);
     } catch (e) {
         face.classList.remove('flipping', 'coin-heads', 'coin-tails');
+        if (choices) choices.classList.remove('disabled');
         toast(e.message, 'error');
         gameLocked = false;
     }
@@ -2067,6 +2072,182 @@ async function sellAllItems() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
+/* ═══ UPGRADER ═══ */
+async function loadUpgrader() {
+    try {
+        const [inv, tg] = await Promise.all([
+            api('/api/cases/inventory'),
+            api('/api/upgrader/targets'),
+        ]);
+        upgraderItems = inv.items || [];
+        upgraderTargets = tg.targets || [];
+        upgraderSelected.clear();
+        upgraderTargetIdx = -1;
+        renderUpgraderItems();
+        renderUpgraderTargets();
+        renderUpgraderTargetView();
+        updateUpgraderChance();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderUpgraderItems() {
+    const el = document.getElementById('upgItems');
+    if (!el) return;
+    if (!upgraderItems.length) {
+        el.innerHTML = '<div style="font-size:11px;color:#8b95a5;padding:8px;">Инвентарь пуст</div>';
+        document.getElementById('upgTotal').textContent = '0 🪙';
+        return;
+    }
+    el.innerHTML = upgraderItems.map(i => `
+        <div class="upg-item ${upgraderSelected.has(i.id) ? 'selected' : ''}" onclick="toggleUpgraderItem(${i.id})">
+            <span class="upg-item-emoji">${i.emoji}</span>
+            <span class="upg-item-name">${i.name}</span>
+            <span class="upg-item-price">${fmt(i.value)}</span>
+        </div>
+    `).join('');
+    updateUpgraderTotal();
+}
+
+function toggleUpgraderItem(pk) {
+    haptic();
+    if (upgraderSelected.has(pk)) upgraderSelected.delete(pk);
+    else upgraderSelected.add(pk);
+    renderUpgraderItems();
+    updateUpgraderChance();
+}
+
+function updateUpgraderTotal() {
+    let total = 0;
+    for (const pk of upgraderSelected) {
+        const it = upgraderItems.find(x => x.id === pk);
+        if (it) total += it.value;
+    }
+    document.getElementById('upgTotal').textContent = fmt(total) + ' 🪙';
+}
+
+function renderUpgraderTargets() {
+    const el = document.getElementById('upgTargets');
+    if (!el) return;
+    el.innerHTML = upgraderTargets.map((t, i) => `
+        <button class="upg-target-btn ${i === upgraderTargetIdx ? 'selected' : ''}" onclick="selectUpgraderTarget(${i})">
+            <div class="upg-target-emoji">${t.emoji}</div>
+            <div class="upg-target-name">${t.name}</div>
+            <div class="upg-target-price">${fmt(t.price_coins)}</div>
+        </button>
+    `).join('');
+}
+
+function selectUpgraderTarget(idx) {
+    haptic();
+    upgraderTargetIdx = idx;
+    renderUpgraderTargets();
+    renderUpgraderTargetView();
+    updateUpgraderChance();
+}
+
+function renderUpgraderTargetView() {
+    const el = document.getElementById('upgTarget');
+    const priceEl = document.getElementById('upgTargetPrice');
+    if (upgraderTargetIdx < 0) {
+        el.innerHTML = '<div class="upg-target-empty">Выбери цель ↓</div>';
+        priceEl.textContent = '—';
+        return;
+    }
+    const t = upgraderTargets[upgraderTargetIdx];
+    el.innerHTML = `
+        <div>
+            <div class="upg-target-emoji">${t.emoji}</div>
+            <div class="upg-target-name">${t.name}</div>
+            <div class="upg-target-rarity">${t.rarity}</div>
+        </div>
+    `;
+    priceEl.textContent = fmt(t.price_coins) + ' 🪙';
+}
+
+function updateUpgraderChance() {
+    const el = document.getElementById('upgChance');
+    if (!el) return;
+    if (upgraderTargetIdx < 0 || upgraderSelected.size === 0) {
+        el.textContent = 'Шанс: —';
+        el.className = 'upg-chance';
+        return;
+    }
+    let total = 0;
+    for (const pk of upgraderSelected) {
+        const it = upgraderItems.find(x => x.id === pk);
+        if (it) total += it.value;
+    }
+    const target = upgraderTargets[upgraderTargetIdx];
+    const chance = Math.min(0.95, Math.max(0.01, total / target.price_coins));
+    const percent = (chance * 100).toFixed(1);
+    el.textContent = `Шанс: ${percent}%`;
+    el.className = 'upg-chance ' + (chance < 0.2 ? 'low' : chance < 0.5 ? 'mid' : '');
+}
+
+async function upgraderPlay() {
+    if (upgraderBusy) return;
+    if (upgraderTargetIdx < 0) { toast('Выбери цель', 'error'); return; }
+    if (upgraderSelected.size === 0) { toast('Выбери хотя бы один предмет', 'error'); return; }
+
+    upgraderBusy = true;
+    haptic('medium');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'upg-overlay';
+    overlay.innerHTML = `<div class="upg-roll rolling">?</div>`;
+    document.body.appendChild(overlay);
+
+    const rollEl = overlay.querySelector('.upg-roll');
+    const rollInt = setInterval(() => {
+        rollEl.textContent = (Math.random() * 100).toFixed(1) + '%';
+        playTone(600 + Math.random() * 400, 0.02, 'square', 0.02);
+    }, 60);
+
+    try {
+        const d = await api('/api/upgrader/play', {
+            item_pks: Array.from(upgraderSelected),
+            target_idx: upgraderTargetIdx,
+        });
+        await new Promise(r => setTimeout(r, 1800));
+        clearInterval(rollInt);
+
+        if (d.win) {
+            SFX.jackpot();
+            confettiJackpot();
+            overlay.innerHTML = `
+                <div class="upg-result-icon">${d.target.emoji}</div>
+                <div class="upg-result-text win">УСПЕХ!</div>
+                <div class="upg-result-name">${d.target.name}</div>
+                <div class="upg-result-price">+${fmt(d.target.price_coins)} 🪙</div>
+            `;
+        } else {
+            SFX.lose();
+            overlay.innerHTML = `
+                <div class="upg-result-icon">💀</div>
+                <div class="upg-result-text lose">НЕ ПОВЕЗЛО</div>
+                <div class="upg-result-name">Предметы потеряны</div>
+                <div class="upg-result-price">−${fmt(d.total_value)} 🪙</div>
+            `;
+        }
+
+        haptic(d.win ? 'success' : 'error');
+        updateBalance(d.balance);
+        loadProfile();
+        addHistory('upgrader', d.total_value, d.win ? d.target.price_coins : 0);
+
+        setTimeout(() => {
+            overlay.remove();
+            upgraderBusy = false;
+            loadUpgrader();
+        }, 2500);
+    } catch (e) {
+        clearInterval(rollInt);
+        overlay.remove();
+        upgraderBusy = false;
+        toast(e.message, 'error');
+    }
+}
+
 /* ═══ БЕСПЛАТНЫЙ КЕЙС ═══ */
 async function loadFreeCaseStatus() {
     try {
@@ -2171,7 +2352,6 @@ function switchAdminTab(tab) {
     if (content) content.classList.remove('hidden');
     haptic();
 
-    // сбрасываем старый таймер
     if (adminStatsTimer) { clearInterval(adminStatsTimer); adminStatsTimer = null; }
 
     if (tab === 'stats') {
