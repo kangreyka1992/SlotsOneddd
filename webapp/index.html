@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 <div id="app">
@@ -50,8 +50,39 @@
         <div class="qa-icon">⚙️</div>
         <div class="qa-text" style="font-size: 13px;">Админ-панель</div>
       </button>
+      <h3 class="section-title">📦 Кейсы</h3>
+      <button class="free-case-btn" id="freeCaseBtn" onclick="openFreeCase()">
+        <div class="free-case-icon">🎁</div>
+        <div class="free-case-info">
+          <div class="free-case-title">Бесплатный кейс</div>
+          <div class="free-case-sub" id="freeCaseSub">Проверяем...</div>
+        </div>
+        <div class="free-case-streak hidden" id="freeCaseStreak"></div>
+      </button>
+      <div class="cases-grid" id="homeCasesGrid"></div>
+      <button class="btn-secondary" onclick="showScreen('cases')" style="margin-top: 12px;">📦 Все кейсы</button>
       <h3 class="section-title">🔥 Все игры</h3>
       <div class="games-grid" id="gamesGrid"></div>
+    </section>
+
+    <section class="screen" id="screen-cases">
+      <h3 class="section-title">📦 Кейсы</h3>
+      <button class="free-case-btn" id="freeCaseBtn2" onclick="openFreeCase()">
+        <div class="free-case-icon">🎁</div>
+        <div class="free-case-info">
+          <div class="free-case-title">Бесплатный кейс</div>
+          <div class="free-case-sub" id="freeCaseSub2">Проверяем...</div>
+        </div>
+        <div class="free-case-streak hidden" id="freeCaseStreak2"></div>
+      </button>
+      <div class="cases-grid" id="casesGrid"></div>
+    </section>
+
+    <section class="screen" id="screen-inventory">
+      <h3 class="section-title">🎒 Инвентарь</h3>
+      <div class="inventory-stats" id="inventoryStats"></div>
+      <button class="btn-primary" onclick="sellAllItems()" style="margin-bottom: 12px;">💸 Продать всё</button>
+      <div class="inventory-list" id="inventoryList"></div>
     </section>
 
     <section class="screen" id="screen-profile">
@@ -88,7 +119,7 @@
       <h3 class="section-title">💸 Вывод звёзд</h3>
       <div class="withdraw-info">
         <div class="withdraw-balance"><span id="withdrawBalance">0</span> 🪙</div>
-        <div class="withdraw-hint">Курс: 100 🪙 = 1 ⭐ · Минимум 15 ⭐</div>
+        <div class="withdraw-hint">Курс: 125 🪙 = 1 ⭐ · Минимум 15 ⭐</div>
       </div>
       <div class="withdraw-grid" id="withdrawGrid"></div>
     </section>
@@ -123,6 +154,13 @@
           <div class="admin-stat-card"><div class="admin-stat-val" id="admCoins">0</div><div class="admin-stat-lbl">Монет</div></div>
           <div class="admin-stat-card"><div class="admin-stat-val" id="admWd">0</div><div class="admin-stat-lbl">Выводов</div></div>
           <div class="admin-stat-card"><div class="admin-stat-val" id="admStars">0</div><div class="admin-stat-lbl">⭐ Выведено</div></div>
+        </div>
+        <h4 class="admin-subtitle">📈 Оборот (RTP)</h4>
+        <div class="admin-stats-grid">
+          <div class="admin-stat-card"><div class="admin-stat-val" id="admWagered">0</div><div class="admin-stat-lbl">Поставлено</div></div>
+          <div class="admin-stat-card"><div class="admin-stat-val" id="admPaid">0</div><div class="admin-stat-lbl">Выплачено</div></div>
+          <div class="admin-stat-card"><div class="admin-stat-val" id="admProfit">0</div><div class="admin-stat-lbl">Профит</div></div>
+          <div class="admin-stat-card"><div class="admin-stat-val" id="admRtp">0%</div><div class="admin-stat-lbl">RTP</div></div>
         </div>
         <h4 class="admin-subtitle">🏆 Топ по балансу</h4>
         <div id="admTop"></div>
@@ -384,17 +422,17 @@
     <button class="nav-btn active" data-nav="home" onclick="showScreen('home')">
       <span class="nav-icon">🎰</span><span class="nav-lbl">Игры</span>
     </button>
-    <button class="nav-btn" data-nav="profile" onclick="showScreen('profile')">
-      <span class="nav-icon">👤</span><span class="nav-lbl">Профиль</span>
+    <button class="nav-btn" data-nav="cases" onclick="showScreen('cases')">
+      <span class="nav-icon">📦</span><span class="nav-lbl">Кейсы</span>
     </button>
-    <button class="nav-btn" data-nav="top" onclick="showScreen('top')">
-      <span class="nav-icon">🏆</span><span class="nav-lbl">Топ</span>
+    <button class="nav-btn" data-nav="inventory" onclick="showScreen('inventory')">
+      <span class="nav-icon">🎒</span><span class="nav-lbl">Инвентарь</span>
     </button>
     <button class="nav-btn" data-nav="withdraw" onclick="showScreen('withdraw')">
       <span class="nav-icon">💸</span><span class="nav-lbl">Вывод</span>
     </button>
-    <button class="nav-btn" data-nav="pay" onclick="showScreen('pay')">
-      <span class="nav-icon">⭐</span><span class="nav-lbl">Пополнить</span>
+    <button class="nav-btn" data-nav="profile" onclick="showScreen('profile')">
+      <span class="nav-icon">👤</span><span class="nav-lbl">Профиль</span>
     </button>
   </nav>
 
@@ -402,6 +440,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
