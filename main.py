@@ -30,9 +30,16 @@ from database import (
     log_admin_action, get_admin_logs,
     log_visit, can_withdraw,
     has_deposited,
+    # кейсы
+    add_user_item, get_user_items, get_user_item, sell_user_item,
+    delete_user_item, get_user_items_stats,
+    # бесплатный кейс
+    get_free_case_info, claim_free_case,
+    # rtp
+    log_house_flow, get_house_stats,
 )
 
-WITHDRAW_RATE = 100
+WITHDRAW_RATE = 125  # вывод дороже пополнения — защита от минуса
 MIN_WITHDRAW = 15
 BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
@@ -186,6 +193,7 @@ async def api_slots(request: Request):
         await add_balance(uid, win)
 
     await log_game(uid, bet, win)
+    await log_house_flow(wagered=bet, paid=win)
     nb = await get_balance(uid)
 
     await unlock_achievement(uid, "first_bet")
@@ -309,6 +317,7 @@ async def api_slots2_spin(request: Request):
         await add_balance(uid, total_win)
 
     await log_game(uid, total_bet, total_win)
+    await log_house_flow(wagered=total_bet, paid=total_win)
     nb = await get_balance(uid)
 
     await unlock_achievement(uid, "first_bet")
@@ -410,6 +419,7 @@ async def api_mines_open(request: Request):
         bet = game["bet"]
         del mines_games[uid]
         await log_game(uid, bet, 0)
+        await log_house_flow(wagered=bet, paid=0)
         return {
             "hit_mine": True,
             "idx": idx,
@@ -426,6 +436,7 @@ async def api_mines_open(request: Request):
         win = int(game["bet"] * (1 + step_mult * safe))
         await add_balance(uid, win)
         await log_game(uid, game["bet"], win)
+        await log_house_flow(wagered=game["bet"], paid=win)
         del mines_games[uid]
         await unlock_achievement(uid, "first_bet")
         await unlock_achievement(uid, "first_win")
@@ -464,6 +475,7 @@ async def api_mines_cashout(request: Request):
     bet = game["bet"]
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
+    await log_house_flow(wagered=bet, paid=prize)
     del mines_games[uid]
     await unlock_achievement(uid, "first_bet")
     return {"prize": prize, "bet": bet, "balance": await get_balance(uid)}
@@ -549,6 +561,7 @@ async def api_crash_status(request: Request):
         prize = int(game["bet"] * game["auto_cashout"])
         await add_balance(uid, prize)
         await log_game(uid, game["bet"], prize)
+        await log_house_flow(wagered=game["bet"], paid=prize)
         await unlock_achievement(uid, "first_bet")
         if prize > game["bet"]:
             await unlock_achievement(uid, "first_win")
@@ -566,6 +579,7 @@ async def api_crash_status(request: Request):
         bet = game["bet"]
         del crash_games[uid]
         await log_game(uid, bet, 0)
+        await log_house_flow(wagered=bet, paid=0)
         return {
             "crashed": True,
             "mult": game["crash_at"],
@@ -599,6 +613,7 @@ async def api_crash_cashout(request: Request):
         bet = game["bet"]
         del crash_games[uid]
         await log_game(uid, bet, 0)
+        await log_house_flow(wagered=bet, paid=0)
         raise HTTPException(400, "crashed")
 
     prize = int(game["bet"] * mult)
@@ -606,6 +621,7 @@ async def api_crash_cashout(request: Request):
     del crash_games[uid]
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
+    await log_house_flow(wagered=bet, paid=prize)
     await unlock_achievement(uid, "first_bet")
     if prize > bet:
         await unlock_achievement(uid, "first_win")
@@ -651,6 +667,7 @@ async def api_dice(request: Request):
     if win > 0:
         await add_balance(uid, win)
     await log_game(uid, bet, win)
+    await log_house_flow(wagered=bet, paid=win)
     nb = await get_balance(uid)
     await unlock_achievement(uid, "first_bet")
     if win > 0:
@@ -704,6 +721,7 @@ async def api_rr_spin(request: Request):
         bet = game["bet"]
         del rr_games[uid]
         await log_game(uid, bet, 0)
+        await log_house_flow(wagered=bet, paid=0)
         return {"shot": True, "bet": bet, "balance": await get_balance(uid)}
 
     step += 1
@@ -715,6 +733,7 @@ async def api_rr_spin(request: Request):
         del rr_games[uid]
         await add_balance(uid, prize)
         await log_game(uid, bet, prize)
+        await log_house_flow(wagered=bet, paid=prize)
         await unlock_achievement(uid, "first_bet")
         await unlock_achievement(uid, "first_win")
         await unlock_achievement(uid, "rr_max")
@@ -742,6 +761,7 @@ async def api_rr_cashout(request: Request):
     del rr_games[uid]
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
+    await log_house_flow(wagered=bet, paid=prize)
     await unlock_achievement(uid, "first_bet")
     return {"prize": prize, "mult": mult, "bet": bet, "balance": await get_balance(uid)}
 
@@ -794,6 +814,7 @@ async def api_plinko(request: Request):
         await add_balance(uid, win)
 
     await log_game(uid, bet, win)
+    await log_house_flow(wagered=bet, paid=win)
     nb = await get_balance(uid)
 
     await unlock_achievement(uid, "first_bet")
@@ -805,23 +826,17 @@ async def api_plinko(request: Request):
     return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
-# ═══════════ PENALTI (полноценные ворота, вратарь прыгает сам) ═══════════
+# ═══════════ PENALTI ═══════════
 
 penalti_games: dict = {}
 PENALTI_TIMEOUT = 300
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
 
-# Веса зон, куда вратарь прыгает.
-# 0 1 2
-# 3 4 5
-# 6 7 8
 PENALTI_KEEPER_WEIGHTS = [
     1, 2, 1,
     3, 5, 3,
     3, 4, 3,
 ]
-
-# Насколько «умнее» вратарь на каждом шаге (0..4)
 PENALTI_SMARTNESS = [0.0, 0.15, 0.30, 0.50, 0.70]
 
 
@@ -913,6 +928,7 @@ async def api_penalti_kick(request: Request):
         bet = game["bet"]
         del penalti_games[uid]
         await log_game(uid, bet, 0)
+        await log_house_flow(wagered=bet, paid=0)
         return {
             "goal": False,
             "save": True,
@@ -934,6 +950,7 @@ async def api_penalti_kick(request: Request):
         del penalti_games[uid]
         await add_balance(uid, prize)
         await log_game(uid, bet, prize)
+        await log_house_flow(wagered=bet, paid=prize)
         await unlock_achievement(uid, "first_bet")
         await unlock_achievement(uid, "first_win")
         if prize >= 100000:
@@ -978,6 +995,7 @@ async def api_penalti_cashout(request: Request):
     del penalti_games[uid]
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
+    await log_house_flow(wagered=bet, paid=prize)
     await unlock_achievement(uid, "first_bet")
     return {"prize": prize, "mult": mult, "balance": await get_balance(uid)}
 
@@ -1023,6 +1041,7 @@ async def api_coin_flip(request: Request):
         await add_balance(uid, win)
 
     await log_game(uid, bet, win)
+    await log_house_flow(wagered=bet, paid=win)
     nb = await get_balance(uid)
     await unlock_achievement(uid, "first_bet")
     if win > 0:
@@ -1106,6 +1125,7 @@ async def api_duel_join(request: Request):
     await add_balance(winner, prize)
     await log_game(uid, bet, prize if winner == uid else 0)
     await log_game(opponent["uid"], bet, prize if winner == opponent["uid"] else 0)
+    await log_house_flow(wagered=bet * 2, paid=prize)
     await unlock_achievement(uid, "first_bet")
     await unlock_achievement(opponent["uid"], "first_bet")
     if winner == uid:
@@ -1182,6 +1202,375 @@ async def api_duel_cancel(request: Request):
         if duel_queue[i]["uid"] == uid:
             duel_queue.pop(i)
     return {"status": "ok"}
+
+
+# ═══════════ CASE SYSTEM ═══════════
+
+RARITY_TABLE = [
+    ("common",    "⬜", "Обычный",     7000, 0.30),
+    ("uncommon",  "🟩", "Необычный",   2200, 0.60),
+    ("rare",      "🟦", "Редкий",       650, 1.20),
+    ("epic",      "🟪", "Эпический",    130, 3.00),
+    ("legendary", "🟨", "Легендарный",   17, 12.00),
+    ("mythic",    "🟥", "Мифический",     3, 40.00),
+]
+
+ITEMS_BY_RARITY = {
+    "common": [
+        ("cherry",   "🍒", "Вишня"),
+        ("lemon",    "🍋", "Лимон"),
+        ("orange",   "🍊", "Апельсин"),
+        ("grape",    "🍇", "Виноград"),
+        ("coin",     "🪙", "Монетка"),
+    ],
+    "uncommon": [
+        ("gem",      "💎", "Самоцвет"),
+        ("star",     "⭐", "Звезда"),
+        ("clover",   "🍀", "Клевер"),
+        ("bell",     "🔔", "Колокольчик"),
+        ("horseshoe","🧲", "Подкова"),
+    ],
+    "rare": [
+        ("seven",    "7️⃣", "Семёрка"),
+        ("money",    "🤑", "Денежный"),
+        ("crown",    "👑", "Корона"),
+        ("trophy",   "🏆", "Кубок"),
+        ("ring",     "💍", "Кольцо"),
+    ],
+    "epic": [
+        ("rocket",   "🚀", "Ракета"),
+        ("diamond",  "💠", "Алмаз"),
+        ("skull",    "💀", "Череп"),
+        ("alien",    "👽", "Пришелец"),
+        ("robot",    "🤖", "Робот"),
+    ],
+    "legendary": [
+        ("dragon",   "🐉", "Дракон"),
+        ("phoenix",  "🦅", "Феникс"),
+        ("unicorn",  "🦄", "Единорог"),
+        ("galaxy",   "🌌", "Галактика"),
+        ("fire",     "🔥", "Пламя"),
+    ],
+    "mythic": [
+        ("blackhole","🕳️", "Чёрная дыра"),
+        ("cosmos",   "🌠", "Космос"),
+        ("infinite", "♾️", "Бесконечность"),
+        ("god",      "⚡", "Молния Бога"),
+        ("void",     "🔮", "Пустота"),
+    ],
+}
+
+CASES = [
+    ("starter",       "Стартовый",        "📦",  10, "Первый шаг в мир кейсов"),
+    ("bronze",        "Бронзовый",        "🥉",  20, "Для начинающих игроков"),
+    ("silver",        "Серебряный",       "🥈",  30, "Немного серьёзнее"),
+    ("gold",          "Золотой",          "🥇",  50, "Классика жанра"),
+    ("lucky",         "Счастливый",       "🍀",  75, "Клевер на удачу"),
+    ("diamond_small", "Малый Алмаз",      "💎", 100, "Блеск и шик"),
+    ("emerald",       "Изумрудный",       "💚", 150, "Зелёная волна"),
+    ("sapphire",      "Сапфировый",       "💙", 200, "Синяя бездна"),
+    ("ruby",          "Рубиновый",        "❤️", 250, "Огненный рубин"),
+    ("amethyst",      "Аметистовый",      "💜", 300, "Фиолетовый туман"),
+    ("topaz",         "Топазовый",        "🧡", 350, "Тёплый топаз"),
+    ("opal",          "Опаловый",         "🤍", 400, "Лунный камень"),
+    ("onyx",          "Ониксовый",        "🖤", 450, "Чёрный оникс"),
+    ("pearl",         "Жемчужный",        "🦪", 500, "Глубины океана"),
+    ("dragon_egg",    "Яйцо Дракона",     "🥚", 750, "Что внутри?"),
+    ("phoenix_fire",  "Пламя Феникса",    "🔥", 900, "Возрождение"),
+    ("ice_crystal",   "Ледяной Кристалл", "❄️",1000, "Вечный холод"),
+    ("storm",         "Штормовой",        "🌩️",1200, "Гроза морей"),
+    ("volcano",       "Вулканический",    "🌋",1500, "Раскалённая лава"),
+    ("abyss",         "Бездна",           "🕳️",1800, "Тёмная сторона"),
+    ("galaxy",        "Галактический",    "🌌",2500, "Звёздная пыль"),
+    ("nebula",        "Туманность",       "🌠",3000, "Космический туман"),
+    ("supernova",     "Сверхновая",       "💥",3500, "Взрыв звезды"),
+    ("black_hole",    "Чёрная Дыра",      "⚫",4000, "Гравитация вне закона"),
+    ("quantum",       "Квантовый",        "🔬",4500, "Микро и макро"),
+    ("infinity",      "Бесконечность",    "♾️",5000, "Предела нет"),
+    ("chronos",       "Хронос",           "⏳",5500, "Власть над временем"),
+    ("poseidon",      "Посейдон",         "🔱",6000, "Гнев морей"),
+    ("zeus",          "Зевс",             "⚡",7000, "Повелитель молний"),
+    ("olympus",       "Олимп",            "🏔️",8000, "Обитель богов"),
+    ("titan",         "Титан",            "🗿",10000, "Древняя сила"),
+]
+
+
+def _roll_case(case_id: str):
+    total_w = sum(r[3] for r in RARITY_TABLE)
+    r = random.randint(1, total_w)
+    cum = 0
+    chosen_rarity = RARITY_TABLE[0]
+    for rar in RARITY_TABLE:
+        cum += rar[3]
+        if r <= cum:
+            chosen_rarity = rar
+            break
+
+    rarity_id, rarity_emoji, rarity_name, _, value_mult = chosen_rarity
+    items = ITEMS_BY_RARITY[rarity_id]
+    item_id, emoji, name = random.choice(items)
+    return item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult
+
+
+@app.post("/api/cases/list")
+async def api_cases_list(request: Request):
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+    return {
+        "cases": [
+            {
+                "id": c[0],
+                "name": c[1],
+                "emoji": c[2],
+                "price_stars": c[3],
+                "price_coins": c[3] * RATE,
+                "desc": c[4],
+            }
+            for c in CASES
+        ]
+    }
+
+
+@app.post("/api/cases/open")
+async def api_cases_open(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    case_id = data.get("case_id", "")
+
+    case = next((c for c in CASES if c[0] == case_id), None)
+    if not case:
+        raise HTTPException(400, "Кейс не найден")
+
+    price_coins = case[3] * RATE
+    balance = await get_balance(uid)
+    if balance < price_coins:
+        raise HTTPException(400, f"Нужно {price_coins} 🪙")
+
+    await add_balance(uid, -price_coins)
+
+    item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+    value = int(price_coins * value_mult)
+
+    kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
+
+    await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
+
+    await log_game(uid, price_coins, 0)
+    await log_house_flow(wagered=price_coins, paid=0)
+    await unlock_achievement(uid, "first_bet")
+    if rarity_id in ("epic", "legendary", "mythic"):
+        await unlock_achievement(uid, "big_win")
+    if rarity_id == "mythic":
+        await unlock_achievement(uid, "jackpot")
+
+    new_balance = await get_balance(uid)
+
+    return {
+        "case_id": case_id,
+        "item_id": item_id,
+        "rarity": rarity_id,
+        "rarity_name": rarity_name,
+        "rarity_emoji": rarity_emoji,
+        "emoji": emoji,
+        "name": name,
+        "value": value,
+        "kind": kind,
+        "balance": new_balance,
+    }
+
+
+@app.post("/api/cases/inventory")
+async def api_cases_inventory(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    items = await get_user_items(uid, 100, only_unsold=True)
+    stats = await get_user_items_stats(uid)
+    return {
+        "items": [
+            {
+                "id": i[0],
+                "item_id": i[1],
+                "case_id": i[2],
+                "rarity": i[3],
+                "emoji": i[4],
+                "name": i[5],
+                "value": i[6],
+                "kind": i[7],
+                "created_at": i[8],
+            }
+            for i in items
+        ],
+        "stats": stats,
+    }
+
+
+@app.post("/api/cases/sell")
+async def api_cases_sell(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    item_pk = int(data.get("item_pk", 0))
+
+    item = await get_user_item(item_pk, uid)
+    if not item or item[8] == 1:
+        raise HTTPException(400, "Предмет не найден или уже продан")
+
+    sold = await sell_user_item(item_pk, uid)
+    if not sold:
+        raise HTTPException(400, "Не удалось продать")
+
+    value = item[6]
+    new_balance = await add_balance(uid, value)
+
+    return {
+        "ok": True,
+        "sold_value": value,
+        "balance": new_balance,
+    }
+
+
+@app.post("/api/cases/sell_all")
+async def api_cases_sell_all(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    items = await get_user_items(uid, 500, only_unsold=True)
+    total = 0
+    count = 0
+    for it in items:
+        pk = it[0]
+        value = it[6]
+        sold = await sell_user_item(pk, uid)
+        if sold:
+            total += value
+            count += 1
+
+    if total > 0:
+        new_balance = await add_balance(uid, total)
+    else:
+        new_balance = await get_balance(uid)
+
+    return {
+        "ok": True,
+        "count": count,
+        "total": total,
+        "balance": new_balance,
+    }
+
+
+# ═══════════ БЕСПЛАТНЫЙ КЕЙС (раз в 24 часа) ═══════════
+
+FREE_CASE_COOLDOWN = 24 * 60 * 60
+FREE_CASE_BASE_PRICE = 50 * RATE
+FREE_CASE_ALLOWED_RARITIES = ("common", "uncommon", "rare", "epic")
+
+
+def _roll_free_case():
+    table = [r for r in RARITY_TABLE if r[0] in FREE_CASE_ALLOWED_RARITIES]
+    total_w = sum(r[3] for r in table)
+    r = random.randint(1, total_w)
+    cum = 0
+    chosen = table[0]
+    for rar in table:
+        cum += rar[3]
+        if r <= cum:
+            chosen = rar
+            break
+
+    rarity_id, rarity_emoji, rarity_name, _, value_mult = chosen
+    items = ITEMS_BY_RARITY[rarity_id]
+    item_id, emoji, name = random.choice(items)
+    return item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult
+
+
+@app.post("/api/cases/free/status")
+async def api_cases_free_status(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    last, streak = await get_free_case_info(uid)
+    now = datetime.datetime.utcnow()
+
+    can_claim = True
+    seconds_left = 0
+
+    if last:
+        try:
+            last_dt = datetime.datetime.fromisoformat(last)
+            delta = (now - last_dt).total_seconds()
+            if delta < FREE_CASE_COOLDOWN:
+                can_claim = False
+                seconds_left = int(FREE_CASE_COOLDOWN - delta)
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        "can_claim": can_claim,
+        "seconds_left": seconds_left,
+        "streak": streak,
+    }
+
+
+@app.post("/api/cases/free/open")
+async def api_cases_free_open(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    if not await has_deposited(uid, min_stars=10):
+        raise HTTPException(400, "Бесплатный кейс доступен после пополнения на 10+ ⭐")
+
+    last, streak = await get_free_case_info(uid)
+    now = datetime.datetime.utcnow()
+
+    if last:
+        try:
+            last_dt = datetime.datetime.fromisoformat(last)
+            if (now - last_dt).total_seconds() < FREE_CASE_COOLDOWN:
+                raise HTTPException(400, "Бесплатный кейс пока недоступен")
+        except (ValueError, TypeError):
+            pass
+
+    new_streak = streak + 1
+    if last:
+        try:
+            last_dt = datetime.datetime.fromisoformat(last)
+            if (now - last_dt).total_seconds() > FREE_CASE_COOLDOWN * 2:
+                new_streak = 1
+        except (ValueError, TypeError):
+            new_streak = 1
+
+    streak_mult = 1.0 + min(new_streak - 1, 6) * (1.0 / 6.0)
+
+    item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_free_case()
+
+    base_value = int(FREE_CASE_BASE_PRICE * value_mult * streak_mult)
+    kind = "nft" if rarity_id == "epic" else "gift"
+
+    await add_user_item(uid, item_id, "free_daily", rarity_id, emoji, name, base_value, kind=kind)
+    await claim_free_case(uid, new_streak)
+
+    if rarity_id == "epic":
+        await unlock_achievement(uid, "big_win")
+
+    return {
+        "case_id": "free_daily",
+        "item_id": item_id,
+        "rarity": rarity_id,
+        "rarity_name": rarity_name,
+        "rarity_emoji": rarity_emoji,
+        "emoji": emoji,
+        "name": name,
+        "value": base_value,
+        "kind": kind,
+        "streak": new_streak,
+        "streak_mult": round(streak_mult, 2),
+        "balance": await get_balance(uid),
+    }
 
 
 # ═══════════ ВЫВОД ═══════════
@@ -1299,7 +1688,7 @@ async def api_daily(request: Request):
         except (ValueError, TypeError):
             pass
 
-    reward = 500 + min(streak, 7) * 100
+    reward = 200 + min(streak, 7) * 50
     new_streak = streak + 1
     await claim_daily(uid, new_streak)
     nb = await add_balance(uid, reward)
@@ -1354,6 +1743,7 @@ async def api_admin_stats(request: Request):
     data = await request.json()
     admin_only(data.get("initData", ""))
     s = await get_stats()
+    h = await get_house_stats()
     return {
         "users": s["users"],
         "coins": s["coins"],
@@ -1363,7 +1753,15 @@ async def api_admin_stats(request: Request):
             {"user_id": u[0], "username": u[1] or f"user_{u[0]}", "balance": u[2]}
             for u in s["top"]
         ],
+        "house": h,
     }
+
+
+@app.post("/api/admin/house")
+async def api_admin_house(request: Request):
+    data = await request.json()
+    admin_only(data.get("initData", ""))
+    return await get_house_stats()
 
 
 @app.post("/api/admin/withdrawals")
