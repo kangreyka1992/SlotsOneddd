@@ -32,6 +32,7 @@ from database import (
     has_deposited,
     add_user_item, get_user_items, get_user_item, sell_user_item,
     delete_user_item, get_user_items_stats,
+    get_user_item_by_id, mark_items_sold,
     get_free_case_info, claim_free_case,
     log_house_flow, get_house_stats,
 )
@@ -625,7 +626,7 @@ async def api_crash_cashout(request: Request):
     return {"prize": prize, "mult": mult, "bet": bet, "balance": await get_balance(uid)}
 
 
-# ═══════════ КОСТИ ═══════════
+# ═══════════ КОСТИ (исправлено) ═══════════
 
 @app.post("/api/dice/roll")
 async def api_dice(request: Request):
@@ -651,7 +652,7 @@ async def api_dice(request: Request):
     # 1-3  → 1,2,3   ×1.95
     # 4-6  → 4,5,6   ×1.95
     # 4-6+ → 4,5,6   ×2.9
-    # 6    → 6       ×5.7
+    # 6    → только 6 ×5.7
     if choice in ("low", "range_1_3"):
         if roll <= 3:
             mult = 1.95
@@ -835,18 +836,15 @@ async def api_plinko(request: Request):
     return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
-# ═══════════ PENALTI ═══════════
+# ═══════════ PENALTI (фикс вратаря) ═══════════
 
 penalti_games: dict = {}
 PENALTI_TIMEOUT = 300
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
 
-PENALTI_KEEPER_WEIGHTS = [
-    2, 4, 2,
-    5, 8, 5,
-    5, 7, 5,
-]
-PENALTI_SMARTNESS = [0.20, 0.35, 0.50, 0.65, 0.80]
+# Вратарь любит центр и низ, но теперь чаще попадает в зону удара
+PENALTI_KEEPER_WEIGHTS = [3, 5, 3, 5, 8, 5, 3, 5, 3]
+PENALTI_SMARTNESS = [0.20, 0.30, 0.45, 0.60, 0.75]
 
 
 def _keeper_pick_zone(step: int) -> int:
@@ -855,8 +853,8 @@ def _keeper_pick_zone(step: int) -> int:
     for i, w in enumerate(PENALTI_KEEPER_WEIGHTS):
         if w >= 4:
             weights.append(w * (1 + smart * 2))
-        elif w <= 1:
-            weights.append(w * (1 - smart * 0.7))
+        elif w <= 3:
+            weights.append(w * (1 - smart * 0.5))
         else:
             weights.append(w)
     total = sum(weights)
@@ -908,7 +906,6 @@ async def api_penalti_start(request: Request):
         "step": 0,
         "history": [],
         "started": time.time(),
-        "used_zones": [],
     }
     return {"balance": await get_balance(uid), "bet": bet}
 
@@ -926,9 +923,6 @@ async def api_penalti_kick(request: Request):
     game = penalti_games.get(uid)
     if not game:
         raise HTTPException(400, "no_game")
-
-    if zone in game.get("used_zones", []):
-        raise HTTPException(400, "zone_already_used")
 
     step = game["step"]
     if step >= 5:
@@ -952,7 +946,6 @@ async def api_penalti_kick(request: Request):
     step += 1
     game["step"] = step
     game["history"].append(zone)
-    game["used_zones"].append(zone)
     mult = PENALTI_MULTS[step - 1]
     prize = int(game["bet"] * mult)
 
@@ -971,7 +964,6 @@ async def api_penalti_kick(request: Request):
             "zone": zone, "keeper_zone": keeper_zone,
             "step": step, "maxed": True,
             "mult": mult, "prize": prize,
-            "used_zones": game["used_zones"],
             "balance": await get_balance(uid),
         }
 
@@ -980,7 +972,6 @@ async def api_penalti_kick(request: Request):
         "zone": zone, "keeper_zone": keeper_zone,
         "step": step, "maxed": False,
         "mult": mult, "prize": prize,
-        "used_zones": game["used_zones"],
         "balance": await get_balance(uid),
     }
 
@@ -1210,15 +1201,16 @@ async def api_duel_cancel(request: Request):
     return {"status": "ok"}
 
 
-# ═══════════ CASE SYSTEM ═══════════
+# ═══════════ CASE SYSTEM (повышены шансы) ═══════════
 
 RARITY_TABLE = [
-    ("common",    "⬜", "Обычный",     7000, 0.30),
-    ("uncommon",  "🟩", "Необычный",   2200, 0.60),
-    ("rare",      "🟦", "Редкий",       650, 1.20),
-    ("epic",      "🟪", "Эпический",    130, 3.00),
-    ("legendary", "🟨", "Легендарный",   17, 12.00),
-    ("mythic",    "🟥", "Мифический",     3, 40.00),
+    # (id, emoji, name, weight, value_mult) — RTP ≈ 82%
+    ("common",    "⬜", "Обычный",     6500, 0.40),
+    ("uncommon",  "🟩", "Необычный",   2300, 0.75),
+    ("rare",      "🟦", "Редкий",       800, 1.60),
+    ("epic",      "🟪", "Эпический",    300, 3.80),
+    ("legendary", "🟨", "Легендарный",   85, 11.00),
+    ("mythic",    "🟥", "Мифический",    15, 35.00),
 ]
 
 ITEMS_BY_RARITY = {
@@ -1634,6 +1626,124 @@ async def api_cases_sell_all(request: Request):
 
     new_balance = await add_balance(uid, total) if total > 0 else await get_balance(uid)
     return {"ok": True, "count": count, "total": total, "balance": new_balance}
+
+
+# ═══════════ UPGRADER ═══════════
+
+UPGRADER_TARGETS = [
+    ("🍒", "Вишня",       "common",    50),
+    ("🍋", "Лимон",       "common",    100),
+    ("🍊", "Апельсин",    "common",    200),
+    ("🍇", "Виноград",    "common",    400),
+    ("💎", "Самоцвет",    "uncommon",  800),
+    ("⭐", "Звезда",      "uncommon", 1500),
+    ("🍀", "Клевер",      "uncommon", 2500),
+    ("🔔", "Колокольчик", "uncommon", 4000),
+    ("7️⃣", "Семёрка",     "rare",     6000),
+    ("🤑", "Денежный",    "rare",     8000),
+    ("👑", "Корона",      "rare",    12000),
+    ("🏆", "Кубок",       "rare",    18000),
+    ("🚀", "Ракета",      "epic",    25000),
+    ("💠", "Алмаз",       "epic",    35000),
+    ("💀", "Череп",       "epic",    50000),
+    ("🐉", "Дракон",      "legendary", 100000),
+    ("🦅", "Феникс",      "legendary", 150000),
+    ("🦄", "Единорог",    "legendary", 250000),
+    ("🌌", "Галактика",   "legendary", 500000),
+    ("🌠", "Космос",      "mythic",   1000000),
+    ("♾️", "Бесконечность","mythic",  2000000),
+]
+
+
+@app.post("/api/upgrader/targets")
+async def api_upgrader_targets(request: Request):
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+    return {
+        "targets": [
+            {
+                "emoji": t[0],
+                "name": t[1],
+                "rarity": t[2],
+                "price_stars": t[3],
+                "price_coins": t[3] * RATE,
+            }
+            for t in UPGRADER_TARGETS
+        ]
+    }
+
+
+@app.post("/api/upgrader/play")
+async def api_upgrader_play(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    item_pks = data.get("item_pks", [])
+    target_idx = int(data.get("target_idx", -1))
+
+    if not item_pks:
+        raise HTTPException(400, "Выбери хотя бы один предмет")
+    if target_idx < 0 or target_idx >= len(UPGRADER_TARGETS):
+        raise HTTPException(400, "Неверная цель")
+
+    total_value = 0
+    for pk in item_pks:
+        it = await get_user_item(pk, uid)
+        if not it or it[8] == 1:
+            raise HTTPException(400, "Предмет не найден или уже продан")
+        total_value += it[6]
+
+    target = UPGRADER_TARGETS[target_idx]
+    target_price_coins = target[3] * RATE
+
+    if total_value <= 0:
+        raise HTTPException(400, "Некорректная ставка")
+
+    chance = total_value / target_price_coins
+    chance = max(0.01, min(0.95, chance))
+
+    roll = random.random()
+    win = roll < chance
+
+    await mark_items_sold(item_pks, uid)
+
+    if win:
+        await add_user_item(
+            uid,
+            f"upgrade_{target_idx}",
+            "upgrader",
+            target[2],
+            target[0],
+            target[1],
+            target_price_coins,
+            kind="nft" if target[2] in ("epic", "legendary", "mythic") else "gift",
+        )
+        result_item = {
+            "emoji": target[0],
+            "name": target[1],
+            "rarity": target[2],
+            "value": target_price_coins,
+        }
+    else:
+        result_item = None
+
+    await log_game(uid, total_value, target_price_coins if win else 0)
+    await log_house_flow(wagered=total_value, paid=target_price_coins if win else 0)
+
+    return {
+        "win": win,
+        "chance": round(chance * 100, 2),
+        "total_value": total_value,
+        "target": {
+            "emoji": target[0],
+            "name": target[1],
+            "rarity": target[2],
+            "price_coins": target_price_coins,
+        },
+        "result_item": result_item,
+        "balance": await get_balance(uid),
+    }
 
 
 # ═══════════ БЕСПЛАТНЫЙ КЕЙС ═══════════
