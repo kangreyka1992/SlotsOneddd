@@ -37,6 +37,8 @@ let gameLocked = false;
 let freeCaseTimer = null;
 let casesCache = [];
 let caseRouletteBusy = false;
+let currentCaseInfo = null;
+let adminStatsTimer = null;
 
 /* ═══ SOUND ═══ */
 let audioCtx = null;
@@ -232,6 +234,12 @@ function showScreen(name) {
     document.querySelectorAll('.nav-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.nav === name);
     });
+
+    // сбрасываем авто-таймер админки при уходе с экрана
+    if (name !== 'admin' && adminStatsTimer) {
+        clearInterval(adminStatsTimer);
+        adminStatsTimer = null;
+    }
 
     if (name === 'top') loadTop();
     if (name === 'ach') loadAch();
@@ -1206,7 +1214,7 @@ function zoneToScene(zone) {
 async function penaltiStart(bet) {
     try {
         const d = await gameApi('/api/penalti/start', { bet });
-        penaltiState = { bet, step: 0 };
+        penaltiState = { bet, step: 0, usedZones: new Set() };
         lastBet = bet;
         updateBalance(d.balance);
         document.getElementById('penaltiBets').classList.add('hidden');
@@ -1226,8 +1234,12 @@ async function penaltiStart(bet) {
 
 function resetPenaltiField() {
     document.querySelectorAll('.goal-zone').forEach(z => {
-        z.disabled = false;
+        const zone = parseInt(z.dataset.zone);
+        const isUsed = penaltiState && penaltiState.usedZones && penaltiState.usedZones.has(zone);
+        z.disabled = isUsed;
         z.classList.remove('scored', 'missed');
+        if (isUsed) z.classList.add('used');
+        else z.classList.remove('used');
     });
 
     const keeper = document.getElementById('keeper');
@@ -1251,6 +1263,10 @@ async function penaltiKick(zone) {
     haptic();
     if (!penaltiState) return;
     if (gameLocked) { toast('⏳ Дождись окончания', 'error'); return; }
+    if (penaltiState.usedZones && penaltiState.usedZones.has(zone)) {
+        toast('Эта зона уже использована', 'error');
+        return;
+    }
 
     document.querySelectorAll('.goal-zone').forEach(z => z.disabled = true);
     document.getElementById('penaltiHint').textContent = '⚽ Удар...';
@@ -1327,10 +1343,13 @@ async function penaltiKick(zone) {
             return;
         }
 
+        // запоминаем использованную зону
+        penaltiState.usedZones.add(zone);
+        penaltiState.step = d.step;
+
         document.getElementById('penaltiHint').textContent = `⚽ Гол! Бей ещё или забери`;
         document.getElementById('penaltiHint').className = 'penalti-hint success';
         document.getElementById('penaltiCashoutBtn').style.display = 'block';
-        penaltiState.step = d.step;
 
         setTimeout(() => {
             document.getElementById('penaltiScene').classList.remove('goal-flash');
@@ -1339,7 +1358,10 @@ async function penaltiKick(zone) {
         }, 1200);
     } catch (e) {
         toast(e.message, 'error');
-        document.querySelectorAll('.goal-zone').forEach(z => z.disabled = false);
+        document.querySelectorAll('.goal-zone').forEach(z => {
+            const zn = parseInt(z.dataset.zone);
+            if (!penaltiState || !penaltiState.usedZones.has(zn)) z.disabled = false;
+        });
         gameLocked = false;
     }
 }
@@ -1396,15 +1418,31 @@ function coinStart(bet) {
 async function flipCoin(side) {
     haptic();
     const face = document.getElementById('coinFace');
+    face.classList.remove('coin-heads', 'coin-tails');
     face.classList.add('flipping');
+    face.textContent = '🪙';
     SFX.flip();
 
     await new Promise(r => setTimeout(r, 600));
 
     try {
-        const d = await gameApi('/api/coin/flip', { bet: coinBet, side });
+        const d = await api('/api/coin/flip', { bet: coinBet, side });
         face.classList.remove('flipping');
-        face.textContent = d.result === 'heads' ? '👑' : '🔢';
+
+        if (d.result === 'heads') {
+            face.textContent = '👑';
+            face.classList.add('coin-heads');
+            SFX.win();
+        } else {
+            face.textContent = '🔢';
+            face.classList.add('coin-tails');
+            SFX.win();
+        }
+
+        setTimeout(() => {
+            face.classList.remove('coin-heads', 'coin-tails');
+        }, 1200);
+
         updateBalance(d.balance);
         loadProfile();
         addHistory('coin', coinBet, d.win);
@@ -1429,7 +1467,7 @@ async function flipCoin(side) {
             }
         }, 800);
     } catch (e) {
-        face.classList.remove('flipping');
+        face.classList.remove('flipping', 'coin-heads', 'coin-tails');
         toast(e.message, 'error');
         gameLocked = false;
     }
@@ -1731,15 +1769,11 @@ async function loadCases() {
         const homeEl = document.getElementById('homeCasesGrid');
 
         const cardHtml = (c) => `
-            <div class="case-card">
+            <div class="case-card" onclick="openCaseInfo('${c.id}')">
                 <div class="case-emoji">${c.emoji}</div>
                 <div class="case-name">${c.name}</div>
                 <div class="case-price">${c.price_stars} ⭐ · ${fmt(c.price_coins)} 🪙</div>
                 <div class="case-desc">${c.desc}</div>
-                <div class="case-actions">
-                    <button class="case-open-btn" onclick="openCaseById('${c.id}')">Открыть</button>
-                    <button class="case-x10-btn" onclick="openCaseById('${c.id}', 10)">×10</button>
-                </div>
             </div>
         `;
 
@@ -1748,8 +1782,46 @@ async function loadCases() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-function openCaseById(id, count = 1) {
-    const c = casesCache.find(x => x.id === id);
+async function openCaseInfo(id) {
+    haptic();
+    try {
+        const d = await api('/api/cases/info', { case_id: id });
+        currentCaseInfo = d;
+
+        document.getElementById('ciTitle').textContent = `${d.emoji} ${d.name}`;
+
+        const rarityColors = {
+            common: '#8b95a5', uncommon: '#00d68f', rare: '#4a9eff',
+            epic: '#7c5cff', legendary: '#ffc107', mythic: '#ff4757',
+        };
+
+        const el = document.getElementById('ciContents');
+        el.innerHTML = d.items.map(i => `
+            <div class="ci-item" data-rarity="${i.rarity}">
+                <div class="ci-emoji">${i.emoji}</div>
+                <div>
+                    <div class="ci-name">${i.name}</div>
+                    <div class="ci-rarity" style="color:${rarityColors[i.rarity]}">${i.rarity_emoji} ${i.rarity_name}</div>
+                </div>
+                <div style="text-align:right">
+                    <div class="ci-price">${fmt(i.value)} 🪙</div>
+                    <div class="ci-chance">${i.chance}%</div>
+                </div>
+            </div>
+        `).join('');
+
+        document.getElementById('caseInfo').classList.remove('hidden');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function closeCaseInfo() {
+    document.getElementById('caseInfo').classList.add('hidden');
+}
+
+function ciOpen(count) {
+    if (!currentCaseInfo) return;
+    closeCaseInfo();
+    const c = casesCache.find(x => x.id === currentCaseInfo.case_id);
     if (!c) { toast('Кейс не найден', 'error'); return; }
     openCase(c, count);
 }
@@ -2099,7 +2171,13 @@ function switchAdminTab(tab) {
     if (content) content.classList.remove('hidden');
     haptic();
 
-    if (tab === 'stats') loadAdminStats();
+    // сбрасываем старый таймер
+    if (adminStatsTimer) { clearInterval(adminStatsTimer); adminStatsTimer = null; }
+
+    if (tab === 'stats') {
+        loadAdminStats();
+        adminStatsTimer = setInterval(loadAdminStats, 5000);
+    }
     if (tab === 'wd') loadAdminWd();
     if (tab === 'promo') loadAdminPromos();
     if (tab === 'logs') loadAdminLogs();
@@ -2173,6 +2251,7 @@ async function setWdStatus(id, status) {
         await api('/api/admin/withdraw/status', { id, status });
         toast('✅ Обновлено', 'success');
         loadAdminWd();
+        loadAdminStats();
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -2186,6 +2265,7 @@ async function adminGive() {
         toast(`✅ +${fmt(amount)} 🪙 → баланс ${fmt(d.balance)}`, 'success');
         document.getElementById('giveTarget').value = '';
         document.getElementById('giveAmount').value = '';
+        loadAdminStats();
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -2199,6 +2279,7 @@ async function adminSetbal() {
         toast(`✅ Баланс установлен: ${fmt(amount)} 🪙`, 'success');
         document.getElementById('setbalTarget').value = '';
         document.getElementById('setbalAmount').value = '';
+        loadAdminStats();
     } catch (e) { toast(e.message, 'error'); }
 }
 
