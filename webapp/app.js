@@ -73,6 +73,8 @@ const SFX = {
         [523, 659, 784, 1046, 1318].forEach((f, i) => setTimeout(() => playTone(f, 0.2, 'triangle', 0.1), i * 100));
     },
     flip:    () => { for (let i = 0; i < 6; i++) setTimeout(() => playTone(400 + i * 100, 0.05, 'square', 0.03), i * 80); },
+    sword:   () => { playTone(1800, 0.08, 'square', 0.06); setTimeout(() => playTone(1200, 0.1, 'sawtooth', 0.05), 60); },
+    clash:   () => { playTone(2200, 0.05, 'square', 0.08); playTone(1400, 0.12, 'sawtooth', 0.06); playTone(800, 0.15, 'square', 0.05); },
 };
 
 function toggleSound() {
@@ -185,7 +187,7 @@ function confettiJackpot() {
 
 /* ═══ RESULT SCREEN ═══ */
 function showResult({ icon, title, titleClass, amount, details, game, bet }) {
-    gameLocked = false;   // разблокируем UI
+    gameLocked = false;
     document.getElementById('resultIcon').textContent = icon;
     const titleEl = document.getElementById('resultTitle');
     titleEl.textContent = title;
@@ -214,7 +216,6 @@ function playAgain() {
 
 /* ═══ UI ═══ */
 function showScreen(name) {
-    // Блокируем навигацию, если идёт игра
     if (gameLocked && name !== 'game' && name !== 'result') {
         toast('⏳ Дождись окончания игры', 'error');
         return;
@@ -262,7 +263,7 @@ const GAMES_META = {
     plinko:  { name: 'Plinko',    desc: 'До ×100',  icon: '🎯', cls: 'plinko', sub: 'Шарик удачи' },
     dice:    { name: 'Кости',     desc: 'До ×5.7',  icon: '🎲', cls: '',       sub: 'Угадай диапазон' },
     rr:      { name: 'Рулетка',   desc: 'До ×7',    icon: '🔫', cls: '',       sub: 'Русская рулетка' },
-    penalti: { name: 'Penalti',   desc: 'До ×7',    icon: '⚽', cls: '',       sub: 'Забивай и забирай' },
+    penalti: { name: 'Penalti',   desc: 'До ×7',    icon: '⚽', cls: '',       sub: 'Забей и забери' },
     coin:    { name: 'Монетка',   desc: '×1.95',    icon: '🪙', cls: '',       sub: '50/50' },
     duel:    { name: 'PvP Дуэль', desc: '×1.96',    icon: '⚔️', cls: '',       sub: 'Против игрока' },
 };
@@ -414,6 +415,8 @@ function openGame(game) {
         initPlinko();
     }
     if (game === 'penalti') {
+        // Авто-сброс зависшей игры на сервере
+        api('/api/penalti/reset').catch(() => {});
         document.getElementById('penaltiBets').classList.remove('hidden');
         document.getElementById('penaltiDisplay').classList.add('hidden');
         initPenalti();
@@ -424,7 +427,11 @@ function openGame(game) {
         initCoin();
     }
     if (game === 'duel') {
+        // Авто-очистка очереди
+        api('/api/duel/cancel').catch(() => {});
         document.getElementById('duelBets').classList.remove('hidden');
+        document.getElementById('duelBattle').classList.add('hidden');
+        document.getElementById('duelDisplay').classList.remove('hidden');
         document.getElementById('duelStatus').textContent = 'Выберите ставку';
         document.getElementById('duelStatus').className = 'duel-status';
         renderBets('duelBets', duelJoin);
@@ -592,7 +599,7 @@ async function minesStart(bet) {
         updateBalance(d.balance);
         renderMinesGrid(d.field);
         loadProfile();
-        gameLocked = false;   // разблокируем — теперь можно кликать по клеткам
+        gameLocked = false;
     } catch (e) { toast(e.message, 'error'); gameLocked = false; }
 }
 
@@ -718,7 +725,7 @@ async function crashStart(bet) {
             autoInline.textContent = auto > 1 ? `Авто-кэшаут: ×${auto.toFixed(2)}` : '';
         }
 
-        gameLocked = false;   // разблокируем — можно жать «Забрать»
+        gameLocked = false;
         startCrashCanvas();
         pollCrash();
         loadProfile();
@@ -982,7 +989,7 @@ async function rrStart(bet) {
         document.getElementById('rrMult').textContent = '×1.00';
         document.getElementById('rrPrize').textContent = '0 🪙';
         loadProfile();
-        gameLocked = false;   // разблокируем — можно жать «Крутить»
+        gameLocked = false;
     } catch (e) { toast(e.message, 'error'); gameLocked = false; }
 }
 
@@ -1127,16 +1134,13 @@ async function plinkoPlay(bet) {
         await new Promise(r => setTimeout(r, 80));
         playTone(600 + i * 60, 0.05, 'square', 0.03);
         const top = (fieldHeight / steps) * i;
-        // Убираем шум на последних шагах, чтобы шарик точно попал в слот
         const noise = i < steps - 2 ? (Math.random() - 0.5) * 20 : 0;
         const randX = 50 + noise + (finalXPercent - 50) * (i / steps);
         ball.style.top = top + 'px';
         ball.style.left = randX + '%';
     }
 
-    // Фиксируем шарик ровно в слоте
     ball.style.left = finalXPercent + '%';
-
     await new Promise(r => setTimeout(r, 200));
 
     const slotEl = document.querySelector(`.plinko-slot[data-idx="${slotIdx}"]`);
@@ -1145,7 +1149,6 @@ async function plinkoPlay(bet) {
         setTimeout(() => slotEl.classList.remove('hit'), 2000);
     }
 
-    // Берём множитель из ПОДСВЕЧЕННОГО слота — гарантирует совпадение
     const shownMult = PLINKO_MULTIPLIERS[plinkoRisk][slotIdx];
 
     setTimeout(() => {
@@ -1164,7 +1167,7 @@ async function plinkoPlay(bet) {
     }, 800);
 }
 
-/* ═══ PENALTI ═══ */
+/* ═══ PENALTI (интерактивный) ═══ */
 function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
 }
@@ -1179,64 +1182,157 @@ async function penaltiStart(bet) {
         document.getElementById('penaltiDisplay').classList.remove('hidden');
         document.getElementById('penaltiMult').textContent = '×1.00';
         document.getElementById('penaltiPrize').textContent = '0 🪙';
+        document.getElementById('penaltiGoals').textContent = '0';
+        document.getElementById('penaltiCashoutBtn').style.display = 'none';
+        document.getElementById('penaltiHint').textContent = '👇 Выбери, куда бить';
+        document.getElementById('penaltiHint').className = 'penalti-hint';
 
-        for (let i = 0; i < 5; i++) {
-            const g = document.getElementById('goal' + i);
-            g.textContent = '⚪';
-            g.className = 'goal-dot';
-        }
+        resetPenaltiField();
         loadProfile();
-        gameLocked = false;   // разблокируем — можно бить
+        gameLocked = false;
     } catch (e) { toast(e.message, 'error'); gameLocked = false; }
 }
 
-async function penaltiKick() {
+function resetPenaltiField() {
+    document.querySelectorAll('.goal-zone').forEach(z => {
+        z.disabled = false;
+        z.classList.remove('keeper-here', 'scored', 'missed');
+    });
+    const keeper = document.getElementById('keeper');
+    keeper.style.left = '50%';
+    keeper.style.top = '50%';
+    keeper.classList.add('idle');
+
+    const ball = document.getElementById('ballAnim');
+    ball.style.opacity = '0';
+    ball.style.left = '50%';
+    ball.style.bottom = '0';
+    ball.style.top = 'auto';
+    ball.style.transition = 'none';
+    void ball.offsetWidth;
+    ball.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+}
+
+function getZoneCoords(zone) {
+    const col = zone % 3;
+    const row = Math.floor(zone / 3);
+    const lefts  = [22, 50, 78];
+    const tops   = [22, 50, 78];
+    return { left: lefts[col], top: tops[row] };
+}
+
+async function penaltiKick(zone) {
     haptic();
+    if (!penaltiState) return;
+    if (gameLocked) { toast('⏳ Дождись окончания', 'error'); return; }
+
+    document.querySelectorAll('.goal-zone').forEach(z => z.disabled = true);
+    document.getElementById('penaltiHint').textContent = '⚽ Удар...';
+    document.getElementById('penaltiHint').className = 'penalti-hint';
+
+    const ball = document.getElementById('ballAnim');
+    const target = getZoneCoords(zone);
+    ball.style.opacity = '1';
+    ball.style.left = '50%';
+    ball.style.bottom = '0';
+    ball.style.top = 'auto';
+
+    await new Promise(r => setTimeout(r, 50));
+    ball.style.top = target.top + '%';
+    ball.style.bottom = 'auto';
+    ball.style.left = target.left + '%';
+
     try {
-        const d = await api('/api/penalti/kick');
+        const d = await gameApi('/api/penalti/kick', { zone });
+        await new Promise(r => setTimeout(r, 500));
+
         updateBalance(d.balance);
 
-        const goalEl = document.getElementById('goal' + d.step);
-        if (d.goal) {
-            goalEl.textContent = '⚽';
-            goalEl.classList.add('hit');
-            SFX.win();
-        } else {
-            goalEl.textContent = '❌';
-            goalEl.classList.add('miss');
-            SFX.lose();
-        }
+        const keeper = document.getElementById('keeper');
+        keeper.classList.remove('idle');
 
-        if (!d.goal) {
+        const kTarget = getZoneCoords(d.keeper_zone);
+        keeper.style.left = kTarget.left + '%';
+        keeper.style.top = kTarget.top + '%';
+
+        const zoneEl = document.querySelector(`.goal-zone[data-zone="${zone}"]`);
+        const keeperZoneEl = document.querySelector(`.goal-zone[data-zone="${d.keeper_zone}"]`);
+
+        if (d.save) {
+            if (zoneEl) zoneEl.classList.add('missed');
+            if (keeperZoneEl) keeperZoneEl.classList.add('keeper-here');
+            document.getElementById('penaltiHint').textContent = '🧤 Вратарь поймал!';
+            document.getElementById('penaltiHint').className = 'penalti-hint fail';
+            document.getElementById('penaltiField').classList.add('save-flash');
+            SFX.lose();
+            haptic('heavy');
             penaltiState = null;
             loadProfile();
             addHistory('penalti', lastBet, 0);
+
             setTimeout(() => {
-                showResult({ icon: '❌', title: 'Вратарь поймал!', titleClass: 'lose',
-                    amount: `−${fmt(lastBet)} 🪙`, details: `Голов забито: ${d.step}`,
+                document.getElementById('penaltiField').classList.remove('save-flash');
+                showResult({ icon: '🧤', title: 'ВРАТАРЬ ПОЙМАЛ!', titleClass: 'lose',
+                    amount: `−${fmt(lastBet)} 🪙`,
+                    details: `Голов забито: ${d.step}`,
                     game: 'penalti', bet: lastBet });
-            }, 1000);
+            }, 1400);
             return;
         }
+
+        if (zoneEl) zoneEl.classList.add('scored');
+        if (keeperZoneEl && d.keeper_zone !== zone) keeperZoneEl.classList.add('keeper-here');
+        document.getElementById('penaltiField').classList.add('goal-flash');
+        SFX.win();
+        haptic('success');
+
+        document.getElementById('penaltiGoals').textContent = d.step;
+        document.getElementById('penaltiMult').textContent = `×${d.mult}`;
+        document.getElementById('penaltiPrize').textContent = `${fmt(d.prize)} 🪙`;
+
         if (d.maxed) {
             penaltiState = null;
             loadProfile();
             addHistory('penalti', lastBet, d.prize);
             setTimeout(() => {
-                showResult({ icon: '🏆', title: 'Максимум!', titleClass: 'win',
-                    amount: `+${fmt(d.prize)} 🪙`, details: `5 голов · Множитель ×${d.mult}`,
+                document.getElementById('penaltiField').classList.remove('goal-flash');
+                showResult({ icon: '🏆', title: 'МАКСИМУМ!', titleClass: 'win',
+                    amount: `+${fmt(d.prize)} 🪙`,
+                    details: `5 голов · Множитель ×${d.mult}`,
                     game: 'penalti', bet: lastBet });
-            }, 800);
+            }, 1200);
             return;
         }
+
+        document.getElementById('penaltiHint').textContent = `⚽ Гол! Бей ещё или забери`;
+        document.getElementById('penaltiHint').className = 'penalti-hint success';
+        document.getElementById('penaltiCashoutBtn').style.display = 'block';
         penaltiState.step = d.step;
-        document.getElementById('penaltiMult').textContent = `×${d.mult}`;
-        document.getElementById('penaltiPrize').textContent = `${fmt(d.prize)} 🪙`;
-    } catch (e) { toast(e.message, 'error'); }
+
+        setTimeout(() => {
+            document.getElementById('penaltiField').classList.remove('goal-flash');
+            document.querySelectorAll('.goal-zone').forEach(z => {
+                z.disabled = false;
+                z.classList.remove('scored', 'missed', 'keeper-here');
+            });
+            ball.style.opacity = '0';
+            keeper.classList.add('idle');
+            gameLocked = false;
+        }, 1200);
+
+    } catch (e) {
+        toast(e.message, 'error');
+        document.querySelectorAll('.goal-zone').forEach(z => z.disabled = false);
+        gameLocked = false;
+    }
 }
 
 async function penaltiCashout() {
     haptic();
+    if (!penaltiState || penaltiState.step <= 0) {
+        toast('Сначала забей гол', 'error');
+        return;
+    }
     try {
         const d = await api('/api/penalti/cashout');
         updateBalance(d.balance);
@@ -1334,7 +1430,7 @@ async function duelJoin(bet) {
             status.className = 'duel-status waiting';
             document.querySelectorAll('#duelBets button').forEach(b => b.disabled = true);
             startDuelPolling();
-            gameLocked = false;   // разблокируем — но ставки disabled
+            gameLocked = false;
         } else if (d.status === 'matched') {
             updateBalance(d.balance);
             loadProfile();
@@ -1342,18 +1438,88 @@ async function duelJoin(bet) {
             status.textContent = d.you_win ? '🏆 Победа!' : '😢 Поражение';
             status.className = 'duel-status';
             gameLocked = false;
-            setTimeout(() => {
-                showResult({
-                    icon: d.you_win ? '🏆' : '😢',
-                    title: d.you_win ? 'ПОБЕДА!' : 'Поражение',
-                    titleClass: d.you_win ? 'win' : 'lose',
-                    amount: d.you_win ? `+${fmt(d.prize)} 🪙` : `−${fmt(bet)} 🪙`,
-                    details: d.you_win ? 'Вы победили соперника!' : 'Соперник оказался удачливее',
-                    game: 'duel', bet
-                });
-            }, 800);
+            // Запускаем анимацию сражения
+            playDuelBattle(d.you_win, d.prize, bet);
         }
     } catch (e) { toast(e.message, 'error'); gameLocked = false; }
+}
+
+function playDuelBattle(youWin, prize, bet) {
+    const battleEl = document.getElementById('duelBattle');
+    const displayEl = document.getElementById('duelDisplay');
+    const fighterLeft = document.getElementById('fighterLeft');
+    const fighterRight = document.getElementById('fighterRight');
+    const spark = document.getElementById('battleSpark');
+    const battleStatus = document.getElementById('battleStatus');
+
+    // Показываем арену, скрываем приветствие
+    displayEl.classList.add('hidden');
+    battleEl.classList.remove('hidden');
+
+    // Сброс состояния бойцов
+    fighterLeft.className = 'fighter fighter-left';
+    fighterRight.className = 'fighter fighter-right';
+    spark.classList.remove('burst');
+    battleStatus.textContent = '⚔️ Битва начинается...';
+    battleStatus.className = 'battle-status';
+
+    // Ты — левый боец, соперник — правый
+    // Если ты победил — правый "получает", если проиграл — левый
+
+    const you = fighterLeft;
+    const enemy = fighterRight;
+
+    // Фаза 1: сближение (0.5 сек)
+    setTimeout(() => {
+        SFX.sword();
+        you.classList.add('attacking');
+        battleStatus.textContent = '🗡️ Удар!';
+        haptic('medium');
+
+        // Фаза 2: враг атакует в ответ
+        setTimeout(() => {
+            you.classList.remove('attacking');
+            SFX.sword();
+            enemy.classList.add('attacking');
+            battleStatus.textContent = '🛡️ Ответный удар!';
+            haptic('medium');
+
+            // Фаза 3: финальный удар + вспышка
+            setTimeout(() => {
+                enemy.classList.remove('attacking');
+                SFX.clash();
+                spark.classList.add('burst');
+                haptic('heavy');
+
+                if (youWin) {
+                    enemy.classList.add('defeated');
+                    you.classList.add('victorious');
+                    battleStatus.textContent = '🏆 ПОБЕДА!';
+                    battleStatus.className = 'battle-status win';
+                    confettiBurst('#ffc107');
+                } else {
+                    you.classList.add('defeated');
+                    enemy.classList.add('victorious');
+                    battleStatus.textContent = '💀 Поражение';
+                    battleStatus.className = 'battle-status lose';
+                }
+
+                // Через 2 сек показываем результат
+                setTimeout(() => {
+                    showResult({
+                        icon: youWin ? '🏆' : '💀',
+                        title: youWin ? 'ПОБЕДА В ДУЭЛИ!' : 'Поражение',
+                        titleClass: youWin ? 'win' : 'lose',
+                        amount: youWin ? `+${fmt(prize)} 🪙` : `−${fmt(bet)} 🪙`,
+                        details: youWin
+                            ? `Вы победили соперника!<br>Ставка: ${fmt(bet)} 🪙<br>Выигрыш: ${fmt(prize)} 🪙`
+                            : `Соперник оказался сильнее<br>Ставка: ${fmt(bet)} 🪙 сгорела`,
+                        game: 'duel', bet
+                    });
+                }, 2200);
+            }, 500);
+        }, 500);
+    }, 300);
 }
 
 function startDuelPolling() {
@@ -1367,20 +1533,13 @@ function startDuelPolling() {
                 updateBalance(d.balance);
                 loadProfile();
                 addHistory('duel', d.bet, d.you_win ? d.prize : 0);
+
                 const status = document.getElementById('duelStatus');
                 status.textContent = d.you_win ? '🏆 Победа!' : '😢 Поражение';
                 status.className = 'duel-status';
-                SFX[d.you_win ? 'win' : 'lose']();
-                setTimeout(() => {
-                    showResult({
-                        icon: d.you_win ? '🏆' : '😢',
-                        title: d.you_win ? 'ПОБЕДА!' : 'Поражение',
-                        titleClass: d.you_win ? 'win' : 'lose',
-                        amount: d.you_win ? `+${fmt(d.prize)} 🪙` : `−${fmt(d.bet)} 🪙`,
-                        details: d.you_win ? 'Вы победили соперника!' : 'Соперник оказался удачливее',
-                        game: 'duel', bet: d.bet
-                    });
-                }, 800);
+
+                // Запускаем анимацию сражения
+                playDuelBattle(d.you_win, d.prize, d.bet);
             }
         } catch (e) {}
     }, 1500);
@@ -1741,6 +1900,10 @@ function bootstrap() {
     loadProfile();
     pushFeed();
     setInterval(pushFeed, 5000);
+
+    // Авто-очистка зависших игр при старте
+    api('/api/penalti/reset').catch(() => {});
+    api('/api/duel/cancel').catch(() => {});
 
     let touchStart = 0;
     document.querySelector('.screens').addEventListener('touchstart', e => {
