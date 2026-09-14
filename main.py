@@ -849,10 +849,6 @@ async def api_penalti_start(request: Request):
     if balance < bet:
         raise HTTPException(400, "not_enough_coins")
 
-    max_bet = max(100, int(balance * 0.1))
-    if bet > max_bet:
-        raise HTTPException(400, f"Максимум {max_bet} 🪙 (10% от баланса)")
-
     await add_balance(uid, -bet)
     penalti_games[uid] = {
         "bet": bet,
@@ -865,7 +861,6 @@ async def api_penalti_start(request: Request):
         "balance": await get_balance(uid),
         "bet": bet,
         "keeper_zone": penalti_games[uid]["keeper_zone"],
-        "max_bet": max_bet,
     }
 
 
