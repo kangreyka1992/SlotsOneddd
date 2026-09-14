@@ -30,16 +30,13 @@ from database import (
     log_admin_action, get_admin_logs,
     log_visit, can_withdraw,
     has_deposited,
-    # кейсы
     add_user_item, get_user_items, get_user_item, sell_user_item,
     delete_user_item, get_user_items_stats,
-    # бесплатный кейс
     get_free_case_info, claim_free_case,
-    # rtp
     log_house_flow, get_house_stats,
 )
 
-WITHDRAW_RATE = 125  # вывод дороже пополнения — защита от минуса
+WITHDRAW_RATE = 125
 MIN_WITHDRAW = 15
 BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
@@ -930,12 +927,9 @@ async def api_penalti_kick(request: Request):
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
         return {
-            "goal": False,
-            "save": True,
-            "zone": zone,
-            "keeper_zone": keeper_zone,
-            "step": step,
-            "bet": bet,
+            "goal": False, "save": True,
+            "zone": zone, "keeper_zone": keeper_zone,
+            "step": step, "bet": bet,
             "balance": await get_balance(uid),
         }
 
@@ -956,26 +950,18 @@ async def api_penalti_kick(request: Request):
         if prize >= 100000:
             await unlock_achievement(uid, "big_win")
         return {
-            "goal": True,
-            "save": False,
-            "zone": zone,
-            "keeper_zone": keeper_zone,
-            "step": step,
-            "maxed": True,
-            "mult": mult,
-            "prize": prize,
+            "goal": True, "save": False,
+            "zone": zone, "keeper_zone": keeper_zone,
+            "step": step, "maxed": True,
+            "mult": mult, "prize": prize,
             "balance": await get_balance(uid),
         }
 
     return {
-        "goal": True,
-        "save": False,
-        "zone": zone,
-        "keeper_zone": keeper_zone,
-        "step": step,
-        "maxed": False,
-        "mult": mult,
-        "prize": prize,
+        "goal": True, "save": False,
+        "zone": zone, "keeper_zone": keeper_zone,
+        "step": step, "maxed": False,
+        "mult": mult, "prize": prize,
         "balance": await get_balance(uid),
     }
 
@@ -1295,18 +1281,20 @@ CASES = [
 ]
 
 
-def _roll_case(case_id: str):
+def _pick_random_rarity():
     total_w = sum(r[3] for r in RARITY_TABLE)
     r = random.randint(1, total_w)
     cum = 0
-    chosen_rarity = RARITY_TABLE[0]
     for rar in RARITY_TABLE:
         cum += rar[3]
         if r <= cum:
-            chosen_rarity = rar
-            break
+            return rar
+    return RARITY_TABLE[0]
 
-    rarity_id, rarity_emoji, rarity_name, _, value_mult = chosen_rarity
+
+def _roll_case(case_id: str):
+    rarity = _pick_random_rarity()
+    rarity_id, rarity_emoji, rarity_name, _, value_mult = rarity
     items = ITEMS_BY_RARITY[rarity_id]
     item_id, emoji, name = random.choice(items)
     return item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult
@@ -1328,6 +1316,87 @@ async def api_cases_list(request: Request):
             }
             for c in CASES
         ]
+    }
+
+
+@app.post("/api/cases/spin")
+async def api_cases_spin(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    case_id = data.get("case_id", "")
+
+    case = next((c for c in CASES if c[0] == case_id), None)
+    if not case:
+        raise HTTPException(400, "Кейс не найден")
+
+    price_coins = case[3] * RATE
+    balance = await get_balance(uid)
+    if balance < price_coins:
+        raise HTTPException(400, f"Нужно {price_coins} 🪙")
+
+    await add_balance(uid, -price_coins)
+
+    item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+    value = int(price_coins * value_mult)
+    kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
+
+    await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
+    await log_game(uid, price_coins, 0)
+    await log_house_flow(wagered=price_coins, paid=0)
+    await unlock_achievement(uid, "first_bet")
+    if rarity_id in ("epic", "legendary", "mythic"):
+        await unlock_achievement(uid, "big_win")
+    if rarity_id == "mythic":
+        await unlock_achievement(uid, "jackpot")
+
+    TRACK_LEN = 50
+    WIN_POS = 45
+
+    track = []
+    for i in range(TRACK_LEN):
+        if i == WIN_POS:
+            track.append({
+                "emoji": emoji,
+                "name": name,
+                "rarity": rarity_id,
+                "rarity_name": rarity_name,
+                "rarity_emoji": rarity_emoji,
+                "value": value,
+                "is_win": True,
+            })
+            continue
+
+        rar = _pick_random_rarity()
+        rar_id, rar_emoji, rar_name, _, rar_mult = rar
+        items = ITEMS_BY_RARITY[rar_id]
+        iid, iemoji, iname = random.choice(items)
+        fake_price = int(price_coins * rar_mult)
+        track.append({
+            "emoji": iemoji,
+            "name": iname,
+            "rarity": rar_id,
+            "rarity_name": rar_name,
+            "rarity_emoji": rar_emoji,
+            "value": fake_price,
+            "is_win": False,
+        })
+
+    return {
+        "track": track,
+        "win_pos": WIN_POS,
+        "result": {
+            "case_id": case_id,
+            "item_id": item_id,
+            "rarity": rarity_id,
+            "rarity_name": rarity_name,
+            "rarity_emoji": rarity_emoji,
+            "emoji": emoji,
+            "name": name,
+            "value": value,
+            "kind": kind,
+        },
+        "balance": await get_balance(uid),
     }
 
 
@@ -1461,7 +1530,7 @@ async def api_cases_sell_all(request: Request):
     }
 
 
-# ═══════════ БЕСПЛАТНЫЙ КЕЙС (раз в 24 часа) ═══════════
+# ═══════════ БЕСПЛАТНЫЙ КЕЙС ═══════════
 
 FREE_CASE_COOLDOWN = 24 * 60 * 60
 FREE_CASE_BASE_PRICE = 50 * RATE
