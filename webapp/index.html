@@ -10,7 +10,6 @@
 <body>
 <div id="app">
 
-  <!-- ═══ HEADER ═══ -->
   <header class="header">
     <div class="header-left">
       <div class="logo">🎰</div>
@@ -22,10 +21,8 @@
     <button class="icon-btn" id="soundToggle" onclick="toggleSound()">🔊</button>
   </header>
 
-  <!-- ═══ LIVE FEED ═══ -->
   <div class="live-feed" id="liveFeed"></div>
 
-  <!-- ═══ SCREENS ═══ -->
   <main class="screens">
 
     <!-- HOME -->
@@ -80,7 +77,7 @@
       <div class="top-list" id="topList"></div>
     </section>
 
-    <!-- ACH (пустой экран, оставлен для совместимости) -->
+    <!-- ACH -->
     <section class="screen" id="screen-ach">
       <h3 class="section-title">🏅 Достижения</h3>
       <div class="ach-list" id="achList"></div>
@@ -120,19 +117,25 @@
       </div>
       <div class="game-body">
 
-        <!-- SLOTS -->
-        <div class="game-content hidden" id="content-slots">
-          <div class="slots-machine">
-            <div class="slot-reel" id="slot0">❓</div>
-            <div class="slot-reel" id="slot1">❓</div>
-            <div class="slot-reel" id="slot2">❓</div>
+        <!-- SLOTS 5×3 -->
+        <div class="game-content hidden" id="content-slots2">
+          <div class="slots2-lines" id="slots2Lines">
+            <button class="lines-btn" data-lines="1" onclick="setSlotsLines(1)">1</button>
+            <button class="lines-btn" data-lines="5" onclick="setSlotsLines(5)">5</button>
+            <button class="lines-btn active" data-lines="10" onclick="setSlotsLines(10)">10</button>
+            <button class="lines-btn" data-lines="20" onclick="setSlotsLines(20)">20</button>
           </div>
-          <div class="game-result" id="slotsResult">Выберите ставку</div>
-          <div class="bets" id="slotsBets"></div>
+          <div class="slots2-field" id="slots2Field"></div>
+          <div class="game-result" id="slots2Result">Выберите ставку</div>
+          <div class="bets" id="slots2Bets"></div>
         </div>
 
-        <!-- MINES -->
+        <!-- MINES 2.0 -->
         <div class="game-content hidden" id="content-mines">
+          <div class="mines-settings" id="minesSettings">
+            <div class="mines-setting-label">Количество мин:</div>
+            <div class="mines-setting-options" id="minesOptions"></div>
+          </div>
           <div class="game-info hidden" id="minesInfo">
             <span>Открыто: <b id="minesOpened">0</b></span>
             <span>Приз: <b id="minesPrize">0</b> 🪙</span>
@@ -142,20 +145,21 @@
           <button class="btn-cashout hidden" id="minesCashout" onclick="minesCashout()">💰 Забрать</button>
         </div>
 
-        <!-- ROCKET -->
-        <div class="game-content hidden" id="content-rocket">
-          <div class="rocket-history" id="rocketHistory"></div>
-          <div class="rocket-display hidden" id="rocketDisplay">
-            <div class="rocket-field" id="rocketField">
-              <canvas id="rocketCanvas"></canvas>
-              <div class="rocket-emoji" id="rocketEmoji">🚀</div>
-              <div class="rocket-flame" id="rocketFlame">🔥</div>
-              <div class="rocket-mult" id="rocketMult">×1.00</div>
-              <div class="rocket-prize" id="rocketPrize">0 🪙</div>
+        <!-- CRASH -->
+        <div class="game-content hidden" id="content-crash">
+          <div class="crash-history" id="crashHistory"></div>
+          <div class="crash-display hidden" id="crashDisplay">
+            <div class="crash-field" id="crashField">
+              <canvas id="crashCanvas"></canvas>
+              <div class="crash-mult" id="crashMult">×1.00</div>
+              <div class="crash-prize" id="crashPrize">0 🪙</div>
             </div>
-            <button class="btn-cashout" onclick="rocketCashout()">💰 Забрать</button>
+            <div class="crash-auto">
+              <label>Авто-кэшаут: <input type="number" id="crashAuto" min="1.1" max="100" step="0.1" value="2.0"></label>
+            </div>
+            <button class="btn-cashout" onclick="crashCashout()">💰 Забрать</button>
           </div>
-          <div class="bets" id="rocketBets"></div>
+          <div class="bets" id="crashBets"></div>
         </div>
 
         <!-- DICE -->
@@ -240,6 +244,17 @@
           <div class="bets" id="coinBets"></div>
         </div>
 
+        <!-- DUEL -->
+        <div class="game-content hidden" id="content-duel">
+          <div class="duel-display" id="duelDisplay">
+            <div class="duel-icon">⚔️</div>
+            <div class="duel-title">PvP Дуэль</div>
+            <div class="duel-desc">Найдите соперника с такой же ставкой. Победитель забирает банк (минус 2% комиссии).</div>
+            <div class="duel-status" id="duelStatus">Выберите ставку</div>
+          </div>
+          <div class="bets" id="duelBets"></div>
+        </div>
+
       </div>
     </section>
 
@@ -259,7 +274,6 @@
 
   </main>
 
-  <!-- ═══ BOTTOM NAV ═══ -->
   <nav class="bottom-nav">
     <button class="nav-btn active" data-nav="home" onclick="showScreen('home')">
       <span class="nav-icon">🎰</span><span class="nav-lbl">Игры</span>
