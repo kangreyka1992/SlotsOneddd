@@ -121,7 +121,6 @@ async function api(url, body = {}) {
     return res.json();
 }
 
-// Обёртка для игровых запросов — блокирует UI на время игры
 async function gameApi(url, body = {}) {
     if (gameLocked) {
         throw new Error('⏳ Дождись окончания игры');
@@ -185,7 +184,7 @@ function confettiJackpot() {
     })();
 }
 
-/* ═══ RESULT SCREEN ═══ */
+/* ═══ RESULT ═══ */
 function showResult({ icon, title, titleClass, amount, details, game, bet }) {
     gameLocked = false;
     document.getElementById('resultIcon').textContent = icon;
@@ -255,7 +254,7 @@ function updateBalance(b) {
     });
 }
 
-/* ═══ CAROUSEL + GAMES GRID ═══ */
+/* ═══ CAROUSEL + GRID ═══ */
 const GAMES_META = {
     slots2:  { name: 'Слоты 5×3', desc: 'До ×50',   icon: '🎰', cls: 'slots',  sub: '20 линий, джекпот' },
     crash:   { name: 'Crash',     desc: 'До ×100',  icon: '📈', cls: 'rocket', sub: 'Успей забрать' },
@@ -415,7 +414,6 @@ function openGame(game) {
         initPlinko();
     }
     if (game === 'penalti') {
-        // Авто-сброс зависшей игры на сервере
         api('/api/penalti/reset').catch(() => {});
         document.getElementById('penaltiBets').classList.remove('hidden');
         document.getElementById('penaltiDisplay').classList.add('hidden');
@@ -427,7 +425,6 @@ function openGame(game) {
         initCoin();
     }
     if (game === 'duel') {
-        // Авто-очистка очереди
         api('/api/duel/cancel').catch(() => {});
         document.getElementById('duelBets').classList.remove('hidden');
         document.getElementById('duelBattle').classList.add('hidden');
@@ -1167,7 +1164,7 @@ async function plinkoPlay(bet) {
     }, 800);
 }
 
-/* ═══ PENALTI (интерактивный) ═══ */
+/* ═══ PENALTI ═══ */
 function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
 }
@@ -1175,7 +1172,7 @@ function initPenalti() {
 async function penaltiStart(bet) {
     try {
         const d = await gameApi('/api/penalti/start', { bet });
-        penaltiState = { bet, step: 0 };
+        penaltiState = { bet, step: 0, keeperZone: d.keeper_zone };
         lastBet = bet;
         updateBalance(d.balance);
         document.getElementById('penaltiBets').classList.add('hidden');
@@ -1184,24 +1181,38 @@ async function penaltiStart(bet) {
         document.getElementById('penaltiPrize').textContent = '0 🪙';
         document.getElementById('penaltiGoals').textContent = '0';
         document.getElementById('penaltiCashoutBtn').style.display = 'none';
-        document.getElementById('penaltiHint').textContent = '👇 Выбери, куда бить';
+        document.getElementById('penaltiHint').textContent = '👇 Вратарь в зоне — туда нельзя';
         document.getElementById('penaltiHint').className = 'penalti-hint';
 
-        resetPenaltiField();
+        resetPenaltiField(d.keeper_zone);
         loadProfile();
         gameLocked = false;
     } catch (e) { toast(e.message, 'error'); gameLocked = false; }
 }
 
-function resetPenaltiField() {
+function resetPenaltiField(keeperZone) {
     document.querySelectorAll('.goal-zone').forEach(z => {
         z.disabled = false;
         z.classList.remove('keeper-here', 'scored', 'missed');
     });
+
     const keeper = document.getElementById('keeper');
-    keeper.style.left = '50%';
-    keeper.style.top = '50%';
-    keeper.classList.add('idle');
+    if (keeperZone !== null && keeperZone !== undefined) {
+        const kCoords = getZoneCoords(keeperZone);
+        keeper.style.left = kCoords.left + '%';
+        keeper.style.top = kCoords.top + '%';
+        keeper.classList.add('idle');
+
+        const keeperZoneEl = document.querySelector(`.goal-zone[data-zone="${keeperZone}"]`);
+        if (keeperZoneEl) {
+            keeperZoneEl.disabled = true;
+            keeperZoneEl.classList.add('keeper-here');
+        }
+    } else {
+        keeper.style.left = '50%';
+        keeper.style.top = '50%';
+        keeper.classList.add('idle');
+    }
 
     const ball = document.getElementById('ballAnim');
     ball.style.opacity = '0';
@@ -1225,6 +1236,11 @@ async function penaltiKick(zone) {
     haptic();
     if (!penaltiState) return;
     if (gameLocked) { toast('⏳ Дождись окончания', 'error'); return; }
+
+    if (zone === penaltiState.keeperZone) {
+        toast('🧤 Вратарь здесь — выбери другую зону', 'error');
+        return;
+    }
 
     document.querySelectorAll('.goal-zone').forEach(z => z.disabled = true);
     document.getElementById('penaltiHint').textContent = '⚽ Удар...';
@@ -1251,17 +1267,19 @@ async function penaltiKick(zone) {
         const keeper = document.getElementById('keeper');
         keeper.classList.remove('idle');
 
-        const kTarget = getZoneCoords(d.keeper_zone);
-        keeper.style.left = kTarget.left + '%';
-        keeper.style.top = kTarget.top + '%';
+        const diveZone = d.keeper_dive_zone !== undefined ? d.keeper_dive_zone : d.keeper_zone;
+        const kDive = getZoneCoords(diveZone);
+        keeper.style.left = kDive.left + '%';
+        keeper.style.top = kDive.top + '%';
 
         const zoneEl = document.querySelector(`.goal-zone[data-zone="${zone}"]`);
-        const keeperZoneEl = document.querySelector(`.goal-zone[data-zone="${d.keeper_zone}"]`);
 
         if (d.save) {
             if (zoneEl) zoneEl.classList.add('missed');
-            if (keeperZoneEl) keeperZoneEl.classList.add('keeper-here');
-            document.getElementById('penaltiHint').textContent = '🧤 Вратарь поймал!';
+            const diveEl = document.querySelector(`.goal-zone[data-zone="${diveZone}"]`);
+            if (diveEl && !diveEl.disabled) diveEl.classList.add('keeper-here');
+
+            document.getElementById('penaltiHint').textContent = '🧤 Вратарь допрыгнул!';
             document.getElementById('penaltiHint').className = 'penalti-hint fail';
             document.getElementById('penaltiField').classList.add('save-flash');
             SFX.lose();
@@ -1281,7 +1299,6 @@ async function penaltiKick(zone) {
         }
 
         if (zoneEl) zoneEl.classList.add('scored');
-        if (keeperZoneEl && d.keeper_zone !== zone) keeperZoneEl.classList.add('keeper-here');
         document.getElementById('penaltiField').classList.add('goal-flash');
         SFX.win();
         haptic('success');
@@ -1308,21 +1325,25 @@ async function penaltiKick(zone) {
         document.getElementById('penaltiHint').className = 'penalti-hint success';
         document.getElementById('penaltiCashoutBtn').style.display = 'block';
         penaltiState.step = d.step;
+        penaltiState.keeperZone = d.next_keeper_zone;
 
         setTimeout(() => {
             document.getElementById('penaltiField').classList.remove('goal-flash');
-            document.querySelectorAll('.goal-zone').forEach(z => {
-                z.disabled = false;
-                z.classList.remove('scored', 'missed', 'keeper-here');
-            });
+            resetPenaltiField(d.next_keeper_zone);
             ball.style.opacity = '0';
-            keeper.classList.add('idle');
             gameLocked = false;
         }, 1200);
 
     } catch (e) {
         toast(e.message, 'error');
         document.querySelectorAll('.goal-zone').forEach(z => z.disabled = false);
+        if (penaltiState && penaltiState.keeperZone !== null) {
+            const keeperZoneEl = document.querySelector(`.goal-zone[data-zone="${penaltiState.keeperZone}"]`);
+            if (keeperZoneEl) {
+                keeperZoneEl.disabled = true;
+                keeperZoneEl.classList.add('keeper-here');
+            }
+        }
         gameLocked = false;
     }
 }
@@ -1438,7 +1459,6 @@ async function duelJoin(bet) {
             status.textContent = d.you_win ? '🏆 Победа!' : '😢 Поражение';
             status.className = 'duel-status';
             gameLocked = false;
-            // Запускаем анимацию сражения
             playDuelBattle(d.you_win, d.prize, bet);
         }
     } catch (e) { toast(e.message, 'error'); gameLocked = false; }
@@ -1452,31 +1472,24 @@ function playDuelBattle(youWin, prize, bet) {
     const spark = document.getElementById('battleSpark');
     const battleStatus = document.getElementById('battleStatus');
 
-    // Показываем арену, скрываем приветствие
     displayEl.classList.add('hidden');
     battleEl.classList.remove('hidden');
 
-    // Сброс состояния бойцов
     fighterLeft.className = 'fighter fighter-left';
     fighterRight.className = 'fighter fighter-right';
     spark.classList.remove('burst');
     battleStatus.textContent = '⚔️ Битва начинается...';
     battleStatus.className = 'battle-status';
 
-    // Ты — левый боец, соперник — правый
-    // Если ты победил — правый "получает", если проиграл — левый
-
     const you = fighterLeft;
     const enemy = fighterRight;
 
-    // Фаза 1: сближение (0.5 сек)
     setTimeout(() => {
         SFX.sword();
         you.classList.add('attacking');
         battleStatus.textContent = '🗡️ Удар!';
         haptic('medium');
 
-        // Фаза 2: враг атакует в ответ
         setTimeout(() => {
             you.classList.remove('attacking');
             SFX.sword();
@@ -1484,7 +1497,6 @@ function playDuelBattle(youWin, prize, bet) {
             battleStatus.textContent = '🛡️ Ответный удар!';
             haptic('medium');
 
-            // Фаза 3: финальный удар + вспышка
             setTimeout(() => {
                 enemy.classList.remove('attacking');
                 SFX.clash();
@@ -1504,7 +1516,6 @@ function playDuelBattle(youWin, prize, bet) {
                     battleStatus.className = 'battle-status lose';
                 }
 
-                // Через 2 сек показываем результат
                 setTimeout(() => {
                     showResult({
                         icon: youWin ? '🏆' : '💀',
@@ -1538,7 +1549,6 @@ function startDuelPolling() {
                 status.textContent = d.you_win ? '🏆 Победа!' : '😢 Поражение';
                 status.className = 'duel-status';
 
-                // Запускаем анимацию сражения
                 playDuelBattle(d.you_win, d.prize, d.bet);
             }
         } catch (e) {}
@@ -1710,7 +1720,7 @@ async function claimDaily() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ═══ АДМИН-ПАНЕЛЬ ═══ */
+/* ═══ АДМИНКА ═══ */
 function switchAdminTab(tab) {
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.admin-content').forEach(c => c.classList.add('hidden'));
@@ -1901,7 +1911,6 @@ function bootstrap() {
     pushFeed();
     setInterval(pushFeed, 5000);
 
-    // Авто-очистка зависших игр при старте
     api('/api/penalti/reset').catch(() => {});
     api('/api/duel/cancel').catch(() => {});
 
