@@ -605,12 +605,10 @@ async def get_user_item(item_id: int, user_id: int):
 
 
 async def get_user_item_by_id(item_pk: int, user_id: int):
-    """Алиас get_user_item — оставлен для совместимости с апгрейдером."""
     return await get_user_item(item_pk, user_id)
 
 
 async def mark_items_sold(item_pks: list, user_id: int):
-    """Помечает несколько предметов как проданные (для апгрейдера)."""
     if not item_pks:
         return
     async with aiosqlite.connect(DB_PATH) as db:
@@ -650,6 +648,26 @@ async def get_user_items_stats(user_id: int):
         ) as cur:
             row = await cur.fetchone()
             return {"count": row[0] or 0, "total_value": row[1] or 0}
+
+
+async def get_user_items_admin(user_id: int, limit: int = 100):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, item_id, case_id, rarity, emoji, name, value, kind, created_at "
+            "FROM user_items WHERE user_id = ? AND sold = 0 ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ) as cur:
+            return await cur.fetchall()
+
+
+async def transfer_item(item_pk: int, from_user_id: int, to_user_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "UPDATE user_items SET user_id = ? WHERE id = ? AND user_id = ? AND sold = 0",
+            (to_user_id, item_pk, from_user_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
 
 
 async def get_free_case_info(user_id: int):
