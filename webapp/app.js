@@ -28,25 +28,75 @@ let lastBet = 0;
 let withdrawAllowed = false;
 let withdrawDays = 0;
 let plinkoRisk = 'low';
+let soundEnabled = true;
+let gameHistory = [];
+
+/* ═══ SOUND ═══ */
+let audioCtx = null;
+
+function initAudio() {
+    if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    }
+}
+
+function playTone(freq, duration, type = 'sine', vol = 0.08) {
+    if (!soundEnabled) return;
+    initAudio();
+    if (!audioCtx) return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {}
+}
+
+const SFX = {
+    click:   () => playTone(880, 0.06, 'square', 0.05),
+    spin:    () => playTone(440, 0.1, 'sawtooth', 0.04),
+    win:     () => { playTone(660, 0.12); setTimeout(() => playTone(880, 0.12), 100); setTimeout(() => playTone(1320, 0.2), 200); },
+    lose:    () => { playTone(300, 0.15, 'sawtooth'); setTimeout(() => playTone(200, 0.25, 'sawtooth'), 100); },
+    explode: () => { playTone(120, 0.4, 'sawtooth', 0.12); playTone(80, 0.5, 'square', 0.1); },
+    cashout: () => { playTone(880, 0.1); setTimeout(() => playTone(1100, 0.15), 80); },
+    jackpot: () => {
+        [523, 659, 784, 1046, 1318].forEach((f, i) => setTimeout(() => playTone(f, 0.2, 'triangle', 0.1), i * 100));
+    },
+    flip:    () => { for (let i = 0; i < 6; i++) setTimeout(() => playTone(400 + i * 100, 0.05, 'square', 0.03), i * 80); },
+};
+
+function toggleSound() {
+    soundEnabled = !soundEnabled;
+    document.getElementById('soundToggle').textContent = soundEnabled ? '🔊' : '🔇';
+    toast(soundEnabled ? '🔊 Звук включён' : '🔇 Звук выключен');
+}
 
 /* ═══ UTILS ═══ */
-
 function fmt(n) {
     return (n || 0).toLocaleString('ru-RU').replace(/,/g, '.');
 }
 
 function toast(text, type = '') {
     const el = document.getElementById('toast');
-    if (!el) { console.error('Toast element not found'); return; }
+    if (!el) return;
     el.textContent = text;
     el.className = 'toast show ' + type;
-    setTimeout(() => el.className = 'toast', 2500);
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.className = 'toast', 2500);
 }
 
 function haptic(type = 'light') {
     try {
         if (type === 'success') tg.HapticFeedback.notificationOccurred('success');
         else if (type === 'error') tg.HapticFeedback.notificationOccurred('error');
+        else if (type === 'medium') tg.HapticFeedback.impactOccurred('medium');
+        else if (type === 'heavy') tg.HapticFeedback.impactOccurred('heavy');
         else tg.HapticFeedback.impactOccurred('light');
     } catch (e) {}
 }
@@ -65,8 +115,59 @@ async function api(url, body = {}) {
     return res.json();
 }
 
-/* ═══ ЭКРАН РЕЗУЛЬТАТА ═══ */
+function addHistory(game, bet, win) {
+    gameHistory.unshift({ game, bet, win, ts: Date.now() });
+    gameHistory = gameHistory.slice(0, 20);
+    renderHistory();
+}
 
+function renderHistory() {
+    const el = document.getElementById('historyList');
+    if (!el) return;
+    if (!gameHistory.length) {
+        el.innerHTML = '<div class="history-item"><span class="h-game">История пуста</span></div>';
+        return;
+    }
+    const names = {
+        slots: '🎰 Слоты', mines: '⛏ Mines', rocket: '🚀 Ракетка',
+        dice: '🎲 Кости', rr: '🔫 Рулетка', plinko: '🎯 Plinko',
+        penalti: '⚽ Penalti', coin: '🪙 Монетка'
+    };
+    el.innerHTML = gameHistory.map(h => {
+        const diff = h.win - h.bet;
+        const cls = diff >= 0 ? 'h-win' : 'h-lose';
+        const sign = diff >= 0 ? '+' : '−';
+        return `<div class="history-item">
+            <span class="h-game">${names[h.game] || h.game}</span>
+            <span class="${cls}">${sign}${fmt(Math.abs(diff))} 🪙</span>
+        </div>`;
+    }).join('');
+}
+
+/* ═══ CONFETTI ═══ */
+function confettiBurst(color = '#ffc107') {
+    if (typeof confetti !== 'function') return;
+    confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: [color, '#ffffff', '#ff8f00'],
+        scalar: 0.9,
+    });
+}
+
+function confettiJackpot() {
+    if (typeof confetti !== 'function') return;
+    const end = Date.now() + 1500;
+    const colors = ['#ffc107', '#ff6b6b', '#7c5cff', '#00d68f'];
+    (function frame() {
+        confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors });
+        confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors });
+        if (Date.now() < end) requestAnimationFrame(frame);
+    })();
+}
+
+/* ═══ RESULT SCREEN ═══ */
 function showResult({ icon, title, titleClass, amount, details, game, bet }) {
     document.getElementById('resultIcon').textContent = icon;
     const titleEl = document.getElementById('resultTitle');
@@ -84,7 +185,20 @@ function showResult({ icon, title, titleClass, amount, details, game, bet }) {
     document.getElementById('resultDetails').innerHTML = details || '';
     lastGame = game;
     lastBet = bet;
-    haptic(titleClass === 'lose' ? 'error' : 'success');
+
+    if (titleClass === 'jackpot') {
+        SFX.jackpot();
+        confettiJackpot();
+        haptic('success');
+    } else if (titleClass === 'win') {
+        SFX.win();
+        confettiBurst('#00d68f');
+        haptic('success');
+    } else {
+        SFX.lose();
+        haptic('error');
+    }
+
     showScreen('result');
 }
 
@@ -95,37 +209,109 @@ function playAgain() {
 }
 
 /* ═══ UI ═══ */
-
 function showScreen(name) {
     const screen = document.getElementById('screen-' + name);
-    if (!screen) { console.error('Screen not found: screen-' + name); return; }
+    if (!screen) return;
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     screen.classList.add('active');
-    haptic();
+    screen.scrollTop = 0;
+
+    document.querySelectorAll('.nav-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.nav === name);
+    });
 
     if (name === 'top') loadTop();
     if (name === 'ach') loadAch();
-    if (name === 'ref') loadRef();
     if (name === 'withdraw') loadWithdrawStatus();
     if (name === 'pay') renderPay();
-    if (name === 'admin') switchAdminTab('stats');
+    if (name === 'profile') { loadProfile(); renderHistory(); }
 }
 
 function updateBalance(b) {
+    const prev = profile.balance;
     profile.balance = b;
     ['headerBalance', 'profileBalance', 'gameBalance', 'withdrawBalance'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.textContent = fmt(b);
+        if (el) {
+            el.textContent = fmt(b);
+            if (prev !== b && id === 'headerBalance') {
+                el.classList.remove('balance-bump');
+                void el.offsetWidth;
+                el.classList.add('balance-bump');
+            }
+        }
     });
 }
 
-/* ═══ ПРОФИЛЬ ═══ */
+/* ═══ CAROUSEL + GAMES GRID ═══ */
+const GAMES_META = {
+    slots:   { name: 'Слоты',    desc: 'До ×10',   icon: '🎰', cls: 'slots',  sub: 'Классика с джекпотом' },
+    mines:   { name: 'Gold Mine', desc: 'До ×2.5',  icon: '⛏', cls: 'mines',  sub: 'Копай или продай' },
+    rocket:  { name: 'Ракетка',  desc: 'Растущий ×', icon: '🚀', cls: 'rocket', sub: 'Успей забрать' },
+    plinko:  { name: 'Plinko',   desc: 'До ×100',  icon: '🎯', cls: 'plinko', sub: 'Шарик удачи' },
+    dice:    { name: 'Кости',    desc: 'До ×5.7',  icon: '🎲', cls: '',       sub: 'Угадай диапазон' },
+    rr:      { name: 'Рулетка',  desc: 'До ×7',    icon: '🔫', cls: '',       sub: 'Русская рулетка' },
+    penalti: { name: 'Penalti',  desc: 'До ×7',    icon: '⚽', cls: '',       sub: 'Забивай и забирай' },
+    coin:    { name: 'Монетка',  desc: '×1.95',    icon: '🪙', cls: '',       sub: '50/50' },
+};
 
+function renderCarousel() {
+    const el = document.getElementById('gameCarousel');
+    if (!el) return;
+    const featured = ['slots', 'mines', 'rocket', 'plinko'];
+    el.innerHTML = featured.map(g => {
+        const m = GAMES_META[g];
+        return `<div class="carousel-card ${m.cls}" onclick="openGame('${g}')">
+            <div class="carousel-emoji">${m.icon}</div>
+            <div class="carousel-title">${m.name}</div>
+            <div class="carousel-sub">${m.sub}</div>
+        </div>`;
+    }).join('');
+}
+
+function renderGamesGrid() {
+    const el = document.getElementById('gamesGrid');
+    if (!el) return;
+    el.innerHTML = Object.entries(GAMES_META).map(([key, m]) => `
+        <div class="game-card" onclick="openGame('${key}')">
+            <div class="game-card-icon">${m.icon}</div>
+            <div class="game-card-name">${m.name}</div>
+            <div class="game-card-desc">${m.desc}</div>
+        </div>
+    `).join('');
+}
+
+/* ═══ LIVE FEED ═══ */
+const FEED_NAMES = ['Игрок', 'Lucky', 'Ace', 'King', 'Pro', 'Master', 'Winner', 'Star'];
+const FEED_GAMES = ['Слоты', 'Plinko', 'Ракетка', 'Mines', 'Кости', 'Penalti'];
+
+function pushFeed() {
+    const el = document.getElementById('liveFeed');
+    if (!el) return;
+    const name = FEED_NAMES[Math.floor(Math.random() * FEED_NAMES.length)];
+    const game = FEED_GAMES[Math.floor(Math.random() * FEED_GAMES.length)];
+    const amount = [500, 1200, 5000, 15000, 50000, 120000][Math.floor(Math.random() * 6)];
+    const item = document.createElement('div');
+    item.className = 'feed-item';
+    item.innerHTML = `🎉 <b>@${name}${Math.floor(Math.random()*99)}</b> выиграл <b>${fmt(amount)}</b> 🪙 в ${game}`;
+    el.prepend(item);
+    while (el.children.length > 8) el.lastChild.remove();
+}
+
+/* ═══ PROFILE ═══ */
 async function loadProfile() {
     try {
         const d = await api('/api/profile');
         profile = d;
         updateBalance(d.balance);
+
+        const nameEl = document.getElementById('headerName');
+        const profileNameEl = document.getElementById('profileName');
+        const avatarEl = document.getElementById('profileAvatar');
+        const displayName = d.username ? '@' + d.username : 'Игрок';
+        if (nameEl) nameEl.textContent = displayName;
+        if (profileNameEl) profileNameEl.textContent = displayName;
+        if (avatarEl) avatarEl.textContent = (d.username || 'И')[0].toUpperCase();
 
         const sg = document.getElementById('statGames');
         const sw = document.getElementById('statWagered');
@@ -134,18 +320,22 @@ async function loadProfile() {
         if (sw) sw.textContent = fmt(d.stats?.wagered || 0);
         if (so) so.textContent = fmt(d.stats?.won || 0);
 
-        const disc = document.getElementById('discountInfo');
-        if (disc) disc.innerHTML = d.discount > 0 ? `🎁 <b>Скидка ${d.discount}%</b> на пополнение` : '';
-
-        const adminBtn = document.getElementById('adminBtn');
-        if (adminBtn && d.is_admin) adminBtn.classList.remove('hidden');
+        // Уровень
+        const games = d.stats?.games || 0;
+        const level = Math.floor(Math.sqrt(games / 10)) + 1;
+        const nextLevelGames = Math.pow(level, 2) * 10;
+        const prevLevelGames = Math.pow(level - 1, 2) * 10;
+        const progress = Math.min(100, ((games - prevLevelGames) / (nextLevelGames - prevLevelGames)) * 100);
+        const lf = document.getElementById('levelFill');
+        const lt = document.getElementById('levelText');
+        if (lf) lf.style.width = progress + '%';
+        if (lt) lt.textContent = `Уровень ${level} · ${games} игр`;
     } catch (e) {
         console.error('Profile load error:', e);
     }
 }
 
-/* ═══ ИГРЫ ═══ */
-
+/* ═══ GAMES ═══ */
 function openGame(game) {
     haptic();
     const content = document.getElementById('content-' + game);
@@ -153,15 +343,11 @@ function openGame(game) {
     document.querySelectorAll('.game-content').forEach(c => c.classList.add('hidden'));
     content.classList.remove('hidden');
 
-    const titles = {
-        slots: '🎰 Слоты', mines: '⛏ Gold Mine',
-        rocket: '🚀 Ракетка', dice: '🎲 Кости', rr: '🔫 Русская рулетка',
-        plinko: '🎯 Plinko', penalti: '⚽ Penalti', coin: '🪙 Монетка',
-    };
     const titleEl = document.getElementById('gameTitle');
-    if (titleEl) titleEl.textContent = titles[game] || 'Игра';
+    if (titleEl) titleEl.textContent = GAMES_META[game]?.name || 'Игра';
 
     showScreen('game');
+    updateBalance(profile.balance);
 
     minesState = null; rrState = null; diceBet = null; penaltiState = null; coinBet = null;
 
@@ -227,28 +413,26 @@ function closeGame() {
 
 function renderBets(containerId, onPick) {
     const el = document.getElementById(containerId);
-    if (!el) { console.error('Bets container not found: ' + containerId); return; }
+    if (!el) return;
     el.innerHTML = '';
     BETS.forEach(b => {
         const btn = document.createElement('button');
         btn.className = 'bet-btn';
         btn.textContent = fmt(b) + ' 🪙';
         if (b > profile.balance) btn.disabled = true;
-        btn.onclick = () => onPick(b);
+        btn.onclick = () => { SFX.click(); haptic(); onPick(b); };
         el.appendChild(btn);
     });
     const all = document.createElement('button');
     all.className = 'bet-btn allin';
     all.textContent = '💯 Весь баланс';
     if (profile.balance <= 0) all.disabled = true;
-    all.onclick = () => onPick(profile.balance);
+    all.onclick = () => { SFX.click(); haptic('medium'); onPick(profile.balance); };
     el.appendChild(all);
 }
 
 /* ═══ СЛОТЫ ═══ */
-
 async function spinSlots(bet) {
-    haptic();
     document.querySelectorAll('#slotsBets button').forEach(b => b.disabled = true);
     const reels = [0, 1, 2].map(i => document.getElementById('slot' + i));
     reels.forEach(el => el.classList.add('spinning'));
@@ -257,18 +441,20 @@ async function spinSlots(bet) {
     res.className = 'game-result';
 
     const fake = ['🍒', '🍋', '🍊', '💎', '🤑', '7️⃣'];
-    const int = setInterval(() => {
+    const spinInt = setInterval(() => {
+        SFX.spin();
         reels.forEach(el => el.textContent = fake[Math.floor(Math.random() * 6)]);
     }, 80);
 
     try {
         const d = await api('/api/slots/spin', { bet });
         await new Promise(r => setTimeout(r, 900));
-        clearInterval(int);
+        clearInterval(spinInt);
         reels.forEach(el => el.classList.remove('spinning'));
         d.result.forEach((s, i) => reels[i].textContent = s);
         updateBalance(d.balance);
         loadProfile();
+        addHistory('slots', bet, d.win);
 
         setTimeout(() => {
             if (d.jackpot) {
@@ -286,17 +472,15 @@ async function spinSlots(bet) {
             }
         }, 300);
     } catch (e) {
-        clearInterval(int);
+        clearInterval(spinInt);
         reels.forEach(el => el.classList.remove('spinning'));
         toast(e.message, 'error');
         renderBets('slotsBets', spinSlots);
     }
 }
 
-/* ═══ GOLD MINE ═══ */
-
+/* ═══ MINES ═══ */
 async function minesStart(bet) {
-    haptic();
     try {
         const d = await api('/api/mines/start', { bet });
         minesState = { field: 5, bet, opened: new Set() };
@@ -337,8 +521,11 @@ async function minesOpen(idx, cell) {
         if (d.hit_mine) {
             cell.textContent = '💥';
             cell.classList.add('mine');
+            SFX.explode();
+            haptic('heavy');
             minesState = null;
             loadProfile();
+            addHistory('mines', d.bet || lastBet, 0);
             setTimeout(() => {
                 showResult({ icon: '💥', title: 'ВЗРЫВ!', titleClass: 'lose',
                     amount: `−${fmt(d.bet || lastBet)} 🪙`, details: 'Вы наткнулись на бомбу',
@@ -349,8 +536,10 @@ async function minesOpen(idx, cell) {
         if (d.won) {
             cell.textContent = '💎';
             cell.classList.add('opened');
+            SFX.cashout();
             minesState = null;
             loadProfile();
+            addHistory('mines', lastBet, d.win);
             setTimeout(() => {
                 showResult({ icon: '🏆', title: 'Всё золото собрано!', titleClass: 'win',
                     amount: `+${fmt(d.win)} 🪙`, details: 'Все безопасные клетки открыты<br>Множитель: ×2.5',
@@ -360,6 +549,7 @@ async function minesOpen(idx, cell) {
         }
         cell.textContent = '💰';
         cell.classList.add('opened');
+        SFX.click();
         minesState.opened.add(idx);
         document.getElementById('minesOpened').textContent = d.opened.length;
         document.getElementById('minesPrize').textContent = fmt(d.current_prize);
@@ -372,8 +562,10 @@ async function minesCashout() {
     try {
         const d = await api('/api/mines/cashout');
         updateBalance(d.balance);
+        SFX.cashout();
         minesState = null;
         loadProfile();
+        addHistory('mines', d.bet || lastBet, d.prize);
         setTimeout(() => {
             showResult({ icon: '💎', title: 'Продано!', titleClass: 'win',
                 amount: `+${fmt(d.prize)} 🪙`, details: 'Вы продали золото',
@@ -383,7 +575,6 @@ async function minesCashout() {
 }
 
 /* ═══ РАКЕТКА ═══ */
-
 function renderRocketHistory() {
     const el = document.getElementById('rocketHistory');
     if (!el) return;
@@ -397,7 +588,6 @@ function renderRocketHistory() {
 }
 
 async function rocketStart(bet) {
-    haptic();
     try {
         const d = await api('/api/rocket/start', { bet });
         updateBalance(d.balance);
@@ -439,9 +629,7 @@ function startRocketCanvas() {
         if (rocketPoints.length > 1) {
             ctx.beginPath();
             ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
-            for (let i = 1; i < rocketPoints.length; i++) {
-                ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
-            }
+            for (let i = 1; i < rocketPoints.length; i++) ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
             ctx.strokeStyle = 'rgba(255, 193, 7, 0.15)';
             ctx.lineWidth = 24;
             ctx.lineJoin = 'round';
@@ -450,9 +638,7 @@ function startRocketCanvas() {
 
             ctx.beginPath();
             ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
-            for (let i = 1; i < rocketPoints.length; i++) {
-                ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
-            }
+            for (let i = 1; i < rocketPoints.length; i++) ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
             ctx.strokeStyle = '#ffc107';
             ctx.lineWidth = 4;
             ctx.lineJoin = 'round';
@@ -502,6 +688,8 @@ function pollRocket() {
                 mult.textContent = `×${d.mult.toFixed(2)}`;
                 mult.classList.add('crashed');
                 prize.textContent = '💥 Взрыв!';
+                SFX.explode();
+                haptic('heavy');
 
                 if (rocketCanvasCtx) {
                     const canvas = document.getElementById('rocketCanvas');
@@ -510,9 +698,7 @@ function pollRocket() {
                     if (rocketPoints.length > 1) {
                         ctx.beginPath();
                         ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
-                        for (let i = 1; i < rocketPoints.length; i++) {
-                            ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
-                        }
+                        for (let i = 1; i < rocketPoints.length; i++) ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
                         ctx.strokeStyle = 'rgba(255, 71, 87, 0.25)';
                         ctx.lineWidth = 28;
                         ctx.lineJoin = 'round';
@@ -521,9 +707,7 @@ function pollRocket() {
 
                         ctx.beginPath();
                         ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
-                        for (let i = 1; i < rocketPoints.length; i++) {
-                            ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
-                        }
+                        for (let i = 1; i < rocketPoints.length; i++) ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
                         ctx.strokeStyle = '#ff4757';
                         ctx.lineWidth = 5;
                         ctx.lineJoin = 'round';
@@ -538,6 +722,7 @@ function pollRocket() {
 
                 updateBalance(d.balance);
                 loadProfile();
+                addHistory('rocket', d.bet || lastBet, 0);
 
                 rocketHistoryArr.unshift(d.mult);
                 rocketHistoryArr = rocketHistoryArr.slice(0, 15);
@@ -574,9 +759,7 @@ function pollRocket() {
             flame.style.bottom = newY + 'px';
 
             rocketPoints.push({ x: newX, y: canvasY });
-            if (rocketPoints.length > 200) {
-                rocketPoints = rocketPoints.slice(-200);
-            }
+            if (rocketPoints.length > 200) rocketPoints = rocketPoints.slice(-200);
 
             mult.textContent = `×${d.mult.toFixed(2)}`;
             mult.classList.add('growing');
@@ -600,7 +783,9 @@ async function rocketCashout() {
     try {
         const d = await api('/api/rocket/cashout');
         updateBalance(d.balance);
+        SFX.cashout();
         loadProfile();
+        addHistory('rocket', d.bet || lastBet, d.prize);
 
         rocketHistoryArr.unshift(d.mult);
         rocketHistoryArr = rocketHistoryArr.slice(0, 15);
@@ -617,7 +802,6 @@ async function rocketCashout() {
 }
 
 /* ═══ КОСТИ ═══ */
-
 function diceStart(bet) {
     haptic();
     diceBet = bet;
@@ -651,6 +835,7 @@ async function rollDice(mode) {
         face.textContent = resultEmoji;
         updateBalance(d.balance);
         loadProfile();
+        addHistory('dice', diceBet, d.win);
 
         setTimeout(() => {
             if (d.win > 0) {
@@ -671,9 +856,7 @@ async function rollDice(mode) {
 }
 
 /* ═══ РУССКАЯ РУЛЕТКА ═══ */
-
 async function rrStart(bet) {
-    haptic();
     try {
         const d = await api('/api/rr/start', { bet });
         rrState = { bet, step: 0 };
@@ -702,8 +885,11 @@ async function rrSpin() {
         if (d.shot) {
             rev.textContent = '💥';
             rev.classList.add('shot');
+            SFX.explode();
+            haptic('heavy');
             rrState = null;
             loadProfile();
+            addHistory('rr', d.bet || lastBet, 0);
             setTimeout(() => {
                 showResult({ icon: '💥', title: 'ВЫСТРЕЛ!', titleClass: 'lose',
                     amount: `−${fmt(d.bet || lastBet)} 🪙`, details: 'Ставка сгорела',
@@ -712,8 +898,10 @@ async function rrSpin() {
             return;
         }
         if (d.won) {
+            SFX.win();
             rrState = null;
             loadProfile();
+            addHistory('rr', d.bet || lastBet, d.prize);
             setTimeout(() => {
                 showResult({ icon: '🏆', title: 'МАКСИМУМ!', titleClass: 'win',
                     amount: `+${fmt(d.prize)} 🪙`, details: '6 шагов · Множитель ×7.0',
@@ -721,10 +909,10 @@ async function rrSpin() {
             }, 800);
             return;
         }
+        SFX.click();
         rrState.step = d.step;
         document.getElementById('rrMult').textContent = `×${d.mult}`;
         document.getElementById('rrPrize').textContent = `${fmt(d.prize)} 🪙`;
-        haptic();
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -733,8 +921,10 @@ async function rrCashout() {
     try {
         const d = await api('/api/rr/cashout');
         updateBalance(d.balance);
+        SFX.cashout();
         rrState = null;
         loadProfile();
+        addHistory('rr', d.bet || lastBet, d.prize);
         setTimeout(() => {
             showResult({ icon: '💰', title: 'Забрано!', titleClass: 'win',
                 amount: `+${fmt(d.prize)} 🪙`, details: `Множитель: ×${d.mult}`,
@@ -744,7 +934,6 @@ async function rrCashout() {
 }
 
 /* ═══ PLINKO ═══ */
-
 const PLINKO_MULTIPLIERS = {
     low:    [10, 3, 1.6, 1.4, 1.1, 1, 0.5, 1, 1.1, 1.4, 1.6, 3, 10],
     medium: [25, 8, 3, 2, 1.4, 0.5, 0.2, 0.5, 1.4, 2, 3, 8, 25],
@@ -797,19 +986,18 @@ function renderPlinkoSlots() {
 }
 
 async function plinkoPlay(bet) {
-    haptic();
     lastBet = bet;
-
     const d = await api('/api/plinko/play', { bet, risk: plinkoRisk });
     if (!d) return;
 
     updateBalance(d.balance);
     loadProfile();
+    addHistory('plinko', bet, d.win);
 
     const ball = document.getElementById('plinkoBall');
     const field = document.getElementById('plinkoField');
     ball.style.display = 'block';
-    ball.style.top = '0px';
+    ball.style.top = '12px';
     ball.style.left = '50%';
     ball.style.transform = 'translateX(-50%)';
 
@@ -821,6 +1009,7 @@ async function plinkoPlay(bet) {
     const steps = 8;
     for (let i = 1; i <= steps; i++) {
         await new Promise(r => setTimeout(r, 100));
+        playTone(600 + i * 60, 0.05, 'square', 0.03);
         const top = (fieldHeight / steps) * i;
         const randX = 50 + (Math.random() - 0.5) * 30 + (finalXPercent - 50) * (i / steps);
         ball.style.top = top + 'px';
@@ -852,13 +1041,11 @@ async function plinkoPlay(bet) {
 }
 
 /* ═══ PENALTI ═══ */
-
 function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
 }
 
 async function penaltiStart(bet) {
-    haptic();
     try {
         const d = await api('/api/penalti/start', { bet });
         penaltiState = { bet, step: 0 };
@@ -888,14 +1075,17 @@ async function penaltiKick() {
         if (d.goal) {
             goalEl.textContent = '⚽';
             goalEl.classList.add('hit');
+            SFX.win();
         } else {
             goalEl.textContent = '❌';
             goalEl.classList.add('miss');
+            SFX.lose();
         }
 
         if (!d.goal) {
             penaltiState = null;
             loadProfile();
+            addHistory('penalti', lastBet, 0);
             setTimeout(() => {
                 showResult({ icon: '❌', title: 'Вратарь поймал!', titleClass: 'lose',
                     amount: `−${fmt(lastBet)} 🪙`, details: `Голов забито: ${d.step}`,
@@ -906,6 +1096,7 @@ async function penaltiKick() {
         if (d.maxed) {
             penaltiState = null;
             loadProfile();
+            addHistory('penalti', lastBet, d.prize);
             setTimeout(() => {
                 showResult({ icon: '🏆', title: 'Максимум!', titleClass: 'win',
                     amount: `+${fmt(d.prize)} 🪙`, details: `5 голов · Множитель ×${d.mult}`,
@@ -924,8 +1115,10 @@ async function penaltiCashout() {
     try {
         const d = await api('/api/penalti/cashout');
         updateBalance(d.balance);
+        SFX.cashout();
         penaltiState = null;
         loadProfile();
+        addHistory('penalti', lastBet, d.prize);
         setTimeout(() => {
             showResult({ icon: '💰', title: 'Забрано!', titleClass: 'win',
                 amount: `+${fmt(d.prize)} 🪙`, details: `Множитель: ×${d.mult}`,
@@ -935,7 +1128,6 @@ async function penaltiCashout() {
 }
 
 /* ═══ МОНЕТКА ═══ */
-
 function initCoin() {
     renderCoinHistory();
     renderBets('coinBets', coinStart);
@@ -967,6 +1159,7 @@ async function flipCoin(side) {
     haptic();
     const face = document.getElementById('coinFace');
     face.classList.add('flipping');
+    SFX.flip();
 
     await new Promise(r => setTimeout(r, 600));
 
@@ -977,6 +1170,7 @@ async function flipCoin(side) {
         face.textContent = d.result === 'heads' ? '👑' : '🔢';
         updateBalance(d.balance);
         loadProfile();
+        addHistory('coin', coinBet, d.win);
 
         coinHistory.unshift(d.result);
         coinHistory = coinHistory.slice(0, 15);
@@ -1004,7 +1198,6 @@ async function flipCoin(side) {
 }
 
 /* ═══ ПОПОЛНЕНИЕ ═══ */
-
 function renderPay() {
     const el = document.getElementById('payGrid');
     if (!el) return;
@@ -1025,6 +1218,7 @@ async function buyStars(stars) {
         tg.openInvoice(d.link, (status) => {
             if (status === 'paid') {
                 toast('✅ Оплата успешна', 'success');
+                SFX.cashout();
                 setTimeout(loadProfile, 1500);
             }
         });
@@ -1032,7 +1226,6 @@ async function buyStars(stars) {
 }
 
 /* ═══ ВЫВОД ═══ */
-
 async function loadWithdrawStatus() {
     try {
         const d = await api('/api/withdraw/status');
@@ -1096,7 +1289,6 @@ async function withdrawStars(stars) {
 }
 
 /* ═══ ТОП ═══ */
-
 async function loadTop() {
     try {
         const d = await api('/api/top');
@@ -1120,8 +1312,7 @@ async function loadTop() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ═══ ДОСТИЖЕНИЯ ═══ */
-
+/* ═══ ДОСТИЖЕНИЯ (оставлено, но можно не использовать) ═══ */
 async function loadAch() {
     try {
         const d = await api('/api/achievements');
@@ -1143,32 +1334,7 @@ async function loadAch() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ═══ РЕФЕРАЛЫ ═══ */
-
-async function loadRef() {
-    try {
-        const d = await api('/api/profile');
-        const link = `https://t.me/${BOT_USERNAME}?start=ref_${d.user_id}`;
-        const refEl = document.getElementById('refLink');
-        const invEl = document.getElementById('refInvited');
-        const bonEl = document.getElementById('refBonuses');
-        if (refEl) refEl.textContent = link;
-        if (invEl) invEl.textContent = d.referral.invited;
-        if (bonEl) bonEl.textContent = d.referral.bonuses;
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-function copyRef() {
-    const el = document.getElementById('refLink');
-    if (!el) return;
-    navigator.clipboard.writeText(el.textContent).then(() => {
-        toast('📋 Скопировано', 'success');
-        haptic();
-    });
-}
-
 /* ═══ ПРОМОКОД ═══ */
-
 async function activatePromo() {
     haptic();
     const el = document.getElementById('promoInput');
@@ -1177,207 +1343,47 @@ async function activatePromo() {
     try {
         const d = await api('/api/promo/activate', { code });
         toast(`✅ ${d.message}`, 'success');
+        SFX.cashout();
         el.value = '';
         loadProfile();
     } catch (e) { toast(e.message, 'error'); }
 }
 
 /* ═══ ЕЖЕДНЕВНЫЙ БОНУС ═══ */
-
 async function claimDaily() {
     haptic();
     try {
         const d = await api('/api/daily/claim');
         toast(`🎁 +${fmt(d.reward)} 🪙 (серия ${d.streak})`, 'success');
         updateBalance(d.balance);
+        confettiBurst('#ffc107');
+        SFX.win();
         haptic('success');
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ═══ АДМИНКА ═══ */
-
-function switchAdminTab(tab) {
-    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`.admin-tab[data-tab="${tab}"]`).classList.add('active');
-    document.querySelectorAll('.admin-content').forEach(c => c.classList.add('hidden'));
-    document.getElementById('admin-' + tab).classList.remove('hidden');
-    haptic();
-
-    if (tab === 'stats') loadAdminStats();
-    if (tab === 'wd') loadAdminWd();
-    if (tab === 'promo') loadAdminPromos();
-    if (tab === 'logs') loadAdminLogs();
-}
-
-async function loadAdminStats() {
-    try {
-        const d = await api('/api/admin/stats');
-        document.getElementById('admUsers').textContent = fmt(d.users);
-        document.getElementById('admCoins').textContent = fmt(d.coins);
-        document.getElementById('admWd').textContent = fmt(d.withdrawals);
-        document.getElementById('admStars').textContent = fmt(d.withdraw_stars);
-
-        const top = document.getElementById('admTop');
-        top.innerHTML = '';
-        d.top.forEach((u, i) => {
-            const row = document.createElement('div');
-            row.className = 'admin-row';
-            row.innerHTML = `<span>${i+1}. @${u.username}</span><b>${fmt(u.balance)} 🪙</b>`;
-            top.appendChild(row);
-        });
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-async function loadAdminWd() {
-    try {
-        const d = await api('/api/admin/withdrawals');
-        const el = document.getElementById('admWdList');
-        el.innerHTML = '';
-        if (!d.withdrawals.length) {
-            el.innerHTML = '<div class="admin-card">Заявок нет</div>';
-            return;
-        }
-        d.withdrawals.forEach(w => {
-            const item = document.createElement('div');
-            item.className = 'wd-item ' + w.status;
-            const icon = { done: '✅', pending: '⏳', failed: '❌' }[w.status] || '❔';
-            item.innerHTML = `
-                <div class="wd-header">
-                    <span>${icon} #${w.id} @${w.username}</span>
-                    <b>${w.stars} ⭐</b>
-                </div>
-                <div class="wd-info">
-                    Списано: ${fmt(w.coins)} 🪙 · ${w.created_at ? w.created_at.slice(0, 16) : ''}
-                </div>
-                ${w.status === 'pending' ? `
-                    <div class="wd-actions">
-                        <button class="wd-btn done" onclick="setWdStatus(${w.id}, 'done')">✅ Выплачено</button>
-                        <button class="wd-btn fail" onclick="setWdStatus(${w.id}, 'failed')">❌ Отклонить</button>
-                    </div>
-                ` : ''}
-            `;
-            el.appendChild(item);
-        });
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-async function setWdStatus(id, status) {
-    haptic();
-    try {
-        await api('/api/admin/withdraw/status', { id, status });
-        toast('✅ Обновлено', 'success');
-        loadAdminWd();
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-async function adminGive() {
-    haptic();
-    const target = document.getElementById('giveTarget').value.trim();
-    const amount = parseInt(document.getElementById('giveAmount').value);
-    if (!target || !amount) { toast('Заполните поля', 'error'); return; }
-    try {
-        const d = await api('/api/admin/give', { target, amount });
-        toast(`✅ +${fmt(amount)} 🪙 → баланс ${fmt(d.balance)}`, 'success');
-        document.getElementById('giveTarget').value = '';
-        document.getElementById('giveAmount').value = '';
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-async function adminSetbal() {
-    haptic();
-    const target = document.getElementById('setbalTarget').value.trim();
-    const amount = parseInt(document.getElementById('setbalAmount').value);
-    if (!target || isNaN(amount)) { toast('Заполните поля', 'error'); return; }
-    try {
-        await api('/api/admin/setbal', { target, amount });
-        toast(`✅ Баланс установлен: ${fmt(amount)} 🪙`, 'success');
-        document.getElementById('setbalTarget').value = '';
-        document.getElementById('setbalAmount').value = '';
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-async function loadAdminPromos() {
-    try {
-        const d = await api('/api/admin/promos');
-        const el = document.getElementById('admPromoList');
-        el.innerHTML = '';
-        if (!d.promos.length) {
-            el.innerHTML = '<div class="admin-row">Промокодов нет</div>';
-            return;
-        }
-        d.promos.forEach(p => {
-            const item = document.createElement('div');
-            item.className = 'promo-item';
-            const icon = p.kind === 'coins' ? '🪙' : '💸';
-            const limit = p.max_uses === 0 ? '∞' : p.max_uses;
-            item.innerHTML = `
-                <div>${icon} <b>${p.code}</b><br>${p.value} (${p.used}/${limit})</div>
-                <button class="del" onclick="adminDeletePromo('${p.code}')">🗑</button>
-            `;
-            el.appendChild(item);
-        });
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-async function adminCreatePromo() {
-    haptic();
-    const code = document.getElementById('promoCode').value.trim();
-    const kind = document.getElementById('promoKind').value;
-    const value = parseInt(document.getElementById('promoValue').value);
-    const max_uses = parseInt(document.getElementById('promoMaxUses').value) || 0;
-    if (!code || !value) { toast('Заполните поля', 'error'); return; }
-    try {
-        await api('/api/admin/promo/create', { code, kind, value, max_uses });
-        toast('✅ Промокод создан', 'success');
-        document.getElementById('promoCode').value = '';
-        document.getElementById('promoValue').value = '';
-        loadAdminPromos();
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-async function adminDeletePromo(code) {
-    haptic();
-    if (!confirm(`Удалить промокод ${code}?`)) return;
-    try {
-        await api('/api/admin/promo/delete', { code });
-        toast('🗑 Удалён', 'success');
-        loadAdminPromos();
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-async function loadAdminLogs() {
-    try {
-        const d = await api('/api/admin/logs');
-        const el = document.getElementById('admLogs');
-        el.innerHTML = '';
-        if (!d.logs.length) {
-            el.innerHTML = '<div class="admin-card">Логов нет</div>';
-            return;
-        }
-        d.logs.forEach(l => {
-            const item = document.createElement('div');
-            item.className = 'log-item';
-            item.innerHTML = `
-                [${(l.created_at || '').slice(0, 16)}] <b>${l.action}</b>
-                → ${l.target_id || '—'} ${l.details || ''}
-            `;
-            el.appendChild(item);
-        });
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-async function adminBroadcast() {
-    haptic();
-    const text = document.getElementById('broadcastText').value.trim();
-    if (!text) { toast('Введите текст', 'error'); return; }
-    if (!confirm('Отправить всем пользователям?')) return;
-    try {
-        const d = await api('/api/admin/broadcast', { text });
-        toast(`✅ Отправлено: ${d.sent}, ошибок: ${d.failed}`, 'success');
-        document.getElementById('broadcastText').value = '';
-    } catch (e) { toast(e.message, 'error'); }
-}
-
 /* ═══ СТАРТ ═══ */
+function bootstrap() {
+    renderCarousel();
+    renderGamesGrid();
+    renderHistory();
+    loadProfile();
+    pushFeed();
+    setInterval(pushFeed, 5000);
 
-loadProfile();
+    // Pull-to-refresh (простой)
+    let touchStart = 0;
+    document.querySelector('.screens').addEventListener('touchstart', e => {
+        touchStart = e.touches[0].clientY;
+    }, { passive: true });
+    document.querySelector('.screens').addEventListener('touchend', e => {
+        const diff = e.changedTouches[0].clientY - touchStart;
+        const screen = document.querySelector('.screen.active');
+        if (diff > 120 && screen && screen.scrollTop === 0) {
+            loadProfile();
+            toast('🔄 Обновлено');
+        }
+    }, { passive: true });
+}
+
+bootstrap();
