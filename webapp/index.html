@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 <div id="app">
@@ -439,7 +439,22 @@
   <div class="toast" id="toast"></div>
 </div>
 
+<!-- ═══ CASE ROULETTE (прокрут кейсов) ═══ -->
+<div id="caseRoulette" class="case-roulette hidden">
+  <div class="cr-header">
+    <div class="cr-title" id="crTitle">Кейс</div>
+    <button class="cr-close" onclick="closeCaseRoulette()">✕</button>
+  </div>
+  <div class="cr-viewport">
+    <div class="cr-track" id="crTrack"></div>
+    <div class="cr-cursor"></div>
+  </div>
+  <div class="cr-footer" id="crFooter">
+    <div class="cr-status" id="crStatus">Крутим...</div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
