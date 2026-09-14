@@ -484,10 +484,8 @@ async def api_mines_cancel(request: Request):
 
 crash_games: dict[int, dict] = {}
 
-# Коэффициенты роста множителя
-# mult = 1.0 + (elapsed ** EXP) * MULT
-CRASH_EXP = 1.15   # было 1.4 — чем меньше, тем медленнее ускоряется
-CRASH_MULT = 0.18  # было 0.35 — чем меньше, тем медленнее растёт
+CRASH_EXP = 1.15
+CRASH_MULT = 0.18
 
 
 def crash_mult_from_elapsed(elapsed: float) -> float:
@@ -807,13 +805,12 @@ async def api_plinko(request: Request):
     return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
-# ═══════════ PENALTI ═══════════
+# ═══════════ PENALTI (вратарь всегда в центре) ═══════════
 
 penalti_games: dict = {}
 PENALTI_TIMEOUT = 300
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
-PENALTI_SAVE_CHANCE = [0.15, 0.30, 0.55, 0.75, 0.90]
-PENALTI_DIST_MULT = {1: 1.5, 2: 1.0, 3: 0.5}
+PENALTI_SAVE_CHANCE = [0.05, 0.25, 0.50, 0.70, 0.88]
 
 
 def cleanup_penalti():
@@ -855,13 +852,8 @@ async def api_penalti_start(request: Request):
         "step": 0,
         "history": [],
         "started": time.time(),
-        "keeper_zone": random.randint(0, 8),
     }
-    return {
-        "balance": await get_balance(uid),
-        "bet": bet,
-        "keeper_zone": penalti_games[uid]["keeper_zone"],
-    }
+    return {"balance": await get_balance(uid), "bet": bet}
 
 
 @app.post("/api/penalti/kick")
@@ -882,25 +874,7 @@ async def api_penalti_kick(request: Request):
     if step >= 5:
         raise HTTPException(400, "already_max")
 
-    keeper_zone = game.get("keeper_zone")
-    if keeper_zone is None:
-        keeper_zone = random.randint(0, 8)
-        game["keeper_zone"] = keeper_zone
-
-    if zone == keeper_zone:
-        raise HTTPException(400, "zone_blocked")
-
-    def zone_distance(a, b):
-        ar, ac = divmod(a, 3)
-        br, bc = divmod(b, 3)
-        return max(abs(ar - br), abs(ac - bc))
-
-    dist = zone_distance(zone, keeper_zone)
-    dist_mult = PENALTI_DIST_MULT.get(dist, 1.0)
-
-    base_chance = PENALTI_SAVE_CHANCE[step]
-    save_chance = min(0.99, base_chance * dist_mult)
-
+    save_chance = PENALTI_SAVE_CHANCE[step]
     is_save = random.random() < save_chance
 
     if is_save:
@@ -909,31 +883,16 @@ async def api_penalti_kick(request: Request):
         await log_game(uid, bet, 0)
         return {
             "goal": False, "save": True,
-            "zone": zone, "keeper_zone": keeper_zone,
-            "keeper_dive_zone": zone,
+            "zone": zone,
             "step": step, "bet": bet,
             "balance": await get_balance(uid),
         }
-
-    neighbors = []
-    zr, zc = divmod(zone, 3)
-    for dr in (-1, 0, 1):
-        for dc in (-1, 0, 1):
-            if dr == 0 and dc == 0:
-                continue
-            nr, nc = zr + dr, zc + dc
-            if 0 <= nr < 3 and 0 <= nc < 3:
-                neighbors.append(nr * 3 + nc)
-    dive_zone = random.choice(neighbors) if neighbors else zone
 
     step += 1
     game["step"] = step
     game["history"].append(zone)
     mult = PENALTI_MULTS[step - 1]
     prize = int(game["bet"] * mult)
-
-    new_keeper_zone = random.randint(0, 8)
-    game["keeper_zone"] = new_keeper_zone
 
     if step >= 5:
         bet = game["bet"]
@@ -946,9 +905,7 @@ async def api_penalti_kick(request: Request):
             await unlock_achievement(uid, "big_win")
         return {
             "goal": True, "save": False,
-            "zone": zone, "keeper_zone": keeper_zone,
-            "keeper_dive_zone": dive_zone,
-            "next_keeper_zone": None,
+            "zone": zone,
             "step": step, "maxed": True,
             "mult": mult, "prize": prize,
             "balance": await get_balance(uid),
@@ -956,9 +913,7 @@ async def api_penalti_kick(request: Request):
 
     return {
         "goal": True, "save": False,
-        "zone": zone, "keeper_zone": keeper_zone,
-        "keeper_dive_zone": dive_zone,
-        "next_keeper_zone": new_keeper_zone,
+        "zone": zone,
         "step": step, "maxed": False,
         "mult": mult, "prize": prize,
         "balance": await get_balance(uid),
