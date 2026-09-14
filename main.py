@@ -146,7 +146,7 @@ async def api_top(request: Request):
     }
 
 
-# ═══════════ СЛОТЫ 3×3 (старые) ═══════════
+# ═══════════ СЛОТЫ 3×3 ═══════════
 
 @app.post("/api/slots/spin")
 async def api_slots(request: Request):
@@ -202,9 +202,8 @@ async def api_slots(request: Request):
     return {"result": result, "win": win, "jackpot": jackpot, "balance": nb}
 
 
-# ═══════════ СЛОТЫ 5×3 С ЛИНИЯМИ (ИСПРАВЛЕНО) ═══════════
+# ═══════════ СЛОТЫ 5×3 ═══════════
 
-# 20 линий на поле 5×3 (формат: [[row, col], ...])
 SLOT_LINES = [
     [(0,0),(0,1),(0,2),(0,3),(0,4)],
     [(1,0),(1,1),(1,2),(1,3),(1,4)],
@@ -228,8 +227,6 @@ SLOT_LINES = [
     [(2,0),(2,1),(2,2),(1,3),(0,4)],
 ]
 
-# Символы: (эмодзи, вес, множитель_за_3, множитель_за_4, множитель_за_5)
-# Множители — от ОБЩЕЙ ставки на спин (bet × lines)
 SLOT_SYMBOLS = [
     ("🍒", 30, 0.3, 1.2, 4),
     ("🍋", 25, 0.4, 1.5, 5),
@@ -245,9 +242,7 @@ _SYM_WEIGHTS = [s[1] for s in SLOT_SYMBOLS]
 
 
 def _slot_spin(bet: int, lines_count: int):
-    # bet — ставка НА ОДНУ ЛИНИЮ. Общая ставка = bet * lines_count
     total_bet = bet * lines_count
-
     field = [[random.choices(_SYM_EMOJI, weights=_SYM_WEIGHTS, k=1)[0] for _ in range(3)] for _ in range(5)]
 
     total_win = 0
@@ -256,7 +251,6 @@ def _slot_spin(bet: int, lines_count: int):
     for line_idx in range(lines_count):
         line = SLOT_LINES[line_idx]
         symbols = [field[c][r] for (r, c) in line]
-
         first = symbols[0]
         count = 1
         for s in symbols[1:]:
@@ -804,10 +798,17 @@ async def api_plinko(request: Request):
     return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
-# ═══════════ PENALTI ═══════════
+# ═══════════ PENALTI (интерактивный) ═══════════
 
 penalti_games: dict = {}
+
+# Зоны:
+#   0 1 2
+#   3 4 5
+#   6 7 8
+
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
+PENALTI_SAVE_CHANCE = [0.11, 0.15, 0.20, 0.25, 0.33]
 
 
 @app.post("/api/penalti/start")
@@ -827,8 +828,8 @@ async def api_penalti_start(request: Request):
         raise HTTPException(400, "not_enough_coins")
 
     await add_balance(uid, -bet)
-    penalti_games[uid] = {"bet": bet, "step": 0}
-    return {"balance": await get_balance(uid)}
+    penalti_games[uid] = {"bet": bet, "step": 0, "history": []}
+    return {"balance": await get_balance(uid), "bet": bet}
 
 
 @app.post("/api/penalti/kick")
@@ -836,22 +837,45 @@ async def api_penalti_kick(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
+    zone = int(data.get("zone", -1))
+
+    if zone < 0 or zone > 8:
+        raise HTTPException(400, "invalid_zone")
+
     game = penalti_games.get(uid)
     if not game:
         raise HTTPException(400, "no_game")
 
     step = game["step"]
-    chance = 0.9 - step * 0.1
-    goal = random.random() < chance
+    if step >= 5:
+        raise HTTPException(400, "already_max")
 
-    if not goal:
+    keeper_zone = random.randint(0, 8)
+
+    save_chance = PENALTI_SAVE_CHANCE[step]
+    is_save = (zone == keeper_zone) and (random.random() < save_chance * 9)
+
+    if not is_save and random.random() < max(0, save_chance - 1/9):
+        is_save = True
+        keeper_zone = zone
+
+    if is_save:
         bet = game["bet"]
         del penalti_games[uid]
         await log_game(uid, bet, 0)
-        return {"goal": False, "step": step, "balance": await get_balance(uid)}
+        return {
+            "goal": False,
+            "save": True,
+            "zone": zone,
+            "keeper_zone": keeper_zone,
+            "step": step,
+            "bet": bet,
+            "balance": await get_balance(uid),
+        }
 
     step += 1
     game["step"] = step
+    game["history"].append(zone)
     mult = PENALTI_MULTS[step - 1]
     prize = int(game["bet"] * mult)
 
@@ -864,9 +888,17 @@ async def api_penalti_kick(request: Request):
         await unlock_achievement(uid, "first_win")
         if prize >= 100000:
             await unlock_achievement(uid, "big_win")
-        return {"goal": True, "step": step, "maxed": True, "mult": mult, "prize": prize, "balance": await get_balance(uid)}
+        return {
+            "goal": True, "save": False, "zone": zone, "keeper_zone": keeper_zone,
+            "step": step, "maxed": True, "mult": mult, "prize": prize,
+            "balance": await get_balance(uid),
+        }
 
-    return {"goal": True, "step": step, "maxed": False, "mult": mult, "prize": prize, "balance": await get_balance(uid)}
+    return {
+        "goal": True, "save": False, "zone": zone, "keeper_zone": keeper_zone,
+        "step": step, "maxed": False, "mult": mult, "prize": prize,
+        "balance": await get_balance(uid),
+    }
 
 
 @app.post("/api/penalti/cashout")
