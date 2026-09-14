@@ -29,6 +29,7 @@ from database import (
     create_promo, delete_promo, list_promos,
     log_admin_action, get_admin_logs,
     log_visit, can_withdraw,
+    has_deposited,
 )
 
 WITHDRAW_RATE = 100
@@ -479,9 +480,18 @@ async def api_mines_cancel(request: Request):
     return {"balance": await get_balance(uid)}
 
 
-# ═══════════ CRASH ═══════════
+# ═══════════ CRASH (замедленный) ═══════════
 
 crash_games: dict[int, dict] = {}
+
+# Коэффициенты роста множителя
+# mult = 1.0 + (elapsed ** EXP) * MULT
+CRASH_EXP = 1.15   # было 1.4 — чем меньше, тем медленнее ускоряется
+CRASH_MULT = 0.18  # было 0.35 — чем меньше, тем медленнее растёт
+
+
+def crash_mult_from_elapsed(elapsed: float) -> float:
+    return round(1.0 + (elapsed ** CRASH_EXP) * CRASH_MULT, 2)
 
 
 @app.post("/api/crash/start")
@@ -534,8 +544,7 @@ async def api_crash_status(request: Request):
         raise HTTPException(400, "no_game")
 
     elapsed = time.time() - game["started"]
-    mult = 1.0 + (elapsed ** 1.4) * 0.35
-    mult = round(mult, 2)
+    mult = crash_mult_from_elapsed(elapsed)
 
     if game["auto_cashout"] and mult >= game["auto_cashout"] and not game["cashed"]:
         game["cashed"] = True
@@ -586,7 +595,7 @@ async def api_crash_cashout(request: Request):
         raise HTTPException(400, "no_game")
 
     elapsed = time.time() - game["started"]
-    mult = round(1.0 + (elapsed ** 1.4) * 0.35, 2)
+    mult = crash_mult_from_elapsed(elapsed)
 
     if mult >= game["crash_at"]:
         bet = game["bet"]
@@ -798,17 +807,12 @@ async def api_plinko(request: Request):
     return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
-# ═══════════ PENALTI (интерактивный) ═══════════
+# ═══════════ PENALTI ═══════════
 
 penalti_games: dict = {}
 PENALTI_TIMEOUT = 300
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
-
-# Новая логика сложности — после 2 голов шанс резко растёт
 PENALTI_SAVE_CHANCE = [0.15, 0.30, 0.55, 0.75, 0.90]
-
-# Множители шанса сейва от расстояния до вратаря
-# 1 — сосед, 2 — через одну, 3 — противоположный угол
 PENALTI_DIST_MULT = {1: 1.5, 2: 1.0, 3: 0.5}
 
 
@@ -845,6 +849,10 @@ async def api_penalti_start(request: Request):
     if balance < bet:
         raise HTTPException(400, "not_enough_coins")
 
+    max_bet = max(100, int(balance * 0.1))
+    if bet > max_bet:
+        raise HTTPException(400, f"Максимум {max_bet} 🪙 (10% от баланса)")
+
     await add_balance(uid, -bet)
     penalti_games[uid] = {
         "bet": bet,
@@ -857,6 +865,7 @@ async def api_penalti_start(request: Request):
         "balance": await get_balance(uid),
         "bet": bet,
         "keeper_zone": penalti_games[uid]["keeper_zone"],
+        "max_bet": max_bet,
     }
 
 
@@ -886,7 +895,6 @@ async def api_penalti_kick(request: Request):
     if zone == keeper_zone:
         raise HTTPException(400, "zone_blocked")
 
-    # Расстояние Чебышёва между зонами
     def zone_distance(a, b):
         ar, ac = divmod(a, 3)
         br, bc = divmod(b, 3)
@@ -905,17 +913,13 @@ async def api_penalti_kick(request: Request):
         del penalti_games[uid]
         await log_game(uid, bet, 0)
         return {
-            "goal": False,
-            "save": True,
-            "zone": zone,
-            "keeper_zone": keeper_zone,
+            "goal": False, "save": True,
+            "zone": zone, "keeper_zone": keeper_zone,
             "keeper_dive_zone": zone,
-            "step": step,
-            "bet": bet,
+            "step": step, "bet": bet,
             "balance": await get_balance(uid),
         }
 
-    # Гол! Вратарь прыгает в соседнюю с ударом зону для визуала
     neighbors = []
     zr, zc = divmod(zone, 3)
     for dr in (-1, 0, 1):
@@ -933,7 +937,6 @@ async def api_penalti_kick(request: Request):
     mult = PENALTI_MULTS[step - 1]
     prize = int(game["bet"] * mult)
 
-    # Новая зона вратаря для следующего удара
     new_keeper_zone = random.randint(0, 8)
     game["keeper_zone"] = new_keeper_zone
 
@@ -1285,6 +1288,12 @@ async def api_daily(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
+
+    if not await has_deposited(uid, min_stars=10):
+        raise HTTPException(
+            400,
+            "Ежедневный бонус доступен только после пополнения на 10+ ⭐"
+        )
 
     last, streak = await get_daily_info(uid)
     now = datetime.datetime.utcnow()
