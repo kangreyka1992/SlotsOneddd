@@ -399,6 +399,7 @@ async def api_dice(request: Request):
     uid = user["id"]
     bet = int(data.get("bet", 0))
     choice = data.get("choice")
+    exact = int(data.get("exact", 0))
 
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
@@ -412,14 +413,18 @@ async def api_dice(request: Request):
     win = 0
     mult = 0
 
-    if choice == "range_3_6" and roll >= 3:
+    # Поддерживаем оба варианта: "low/high/exact" и "range_3_6/range_4_6/range_6_6"
+    if choice in ("low", "range_3_6") and roll >= 3:
         mult = 1.95
         win = int(bet * mult)
-    elif choice == "range_4_6" and roll >= 4:
+    elif choice in ("high", "range_4_6") and roll >= 4:
         mult = 2.9
         win = int(bet * mult)
-    elif choice == "range_6_6" and roll == 6:
+    elif choice in ("exact", "range_6_6") and roll == 6:
         mult = 5.7
+        win = int(bet * mult)
+    elif choice == "exact_number" and roll == exact:
+        mult = 5.0
         win = int(bet * mult)
 
     if win > 0:
@@ -673,121 +678,10 @@ async def api_coin_flip(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
     bet = int(data.get("bet", 0))
-    side = data.get("side")
+    side = data.get("side")  # "heads" или "tails"
 
-def validate_init_data(init_data: str) -> dict:
-    if not init_data:
-        raise HTTPException(401, "no_init_data")
-    pairs = dict(parse_qsl(init_data, keep_blank_values=True))
-    received_hash = pairs.pop("hash", None)
-    if not received_hash:
-        raise HTTPException(401, "no_hash")
-    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(pairs.items()))
-    secret_key = hmac.new(b"WebAppData", bot.token.encode(), hashlib.sha256).digest()
-    computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(computed, received_hash):
-        raise HTTPException(401, "invalid_signature")
-    return json.loads(pairs.get("user", "{}"))
-
-
-def is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
-
-
-def admin_only(init_data: str) -> dict:
-    user = validate_init_data(init_data)
-    if not is_admin(user["id"]):
-        raise HTTPException(403, "no_access")
-    return user
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    task = asyncio.create_task(start_bot())
-    print("🚀 Бот и веб-сервер запущены")
-    yield
-    task.cancel()
-
-
-app = FastAPI(lifespan=lifespan)
-app.mount("/webapp", StaticFiles(directory="webapp", html=True), name="webapp")
-
-
-@app.get("/")
-async def root():
-    return FileResponse("webapp/index.html")
-
-
-# ═══════════ ПРОФИЛЬ ═══════════
-
-@app.post("/api/profile")
-async def api_profile(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    await ensure_user(uid, user.get("username"))
-    await log_visit(uid)
-
-    balance = await get_balance(uid)
-    stats = await get_user_full_stats(uid)
-    invited, bonuses = await get_referral_stats(uid)
-    discount = await get_discount(uid)
-
-    return {
-        "balance": balance,
-        "rate": RATE,
-        "withdraw_rate": WITHDRAW_RATE,
-        "min_withdraw": MIN_WITHDRAW,
-        "username": user.get("username") or user.get("first_name") or "игрок",
-        "user_id": uid,
-        "is_admin": is_admin(uid),
-        "stats": {
-            "wagered": stats[1] if stats else 0,
-            "won": stats[2] if stats else 0,
-            "games": stats[3] if stats else 0,
-            "daily_streak": stats[5] if stats else 0,
-        },
-        "referral": {"invited": invited, "bonuses": bonuses},
-        "discount": discount,
-    }
-
-
-@app.post("/api/achievements")
-async def api_ach(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    unlocked = {a[0] for a in await get_user_achievements(uid)}
-    return {
-        "achievements": [
-            {"id": aid, "name": a["name"], "desc": a["desc"], "unlocked": aid in unlocked}
-            for aid, a in ACHIEVEMENTS.items()
-        ]
-    }
-
-
-@app.post("/api/top")
-async def api_top(request: Request):
-    data = await request.json()
-    validate_init_data(data.get("initData", ""))
-    top = await get_top_players(10)
-    return {
-        "top": [
-            {"username": u[1] or f"user_{u[0]}", "balance": u[2], "games": u[4]}
-            for u in top
-        ]
-    }
-
-
-# ═══════════ СЛОТЫ ═══════════
-
-@app.post("/api/slots/spin")
-async def api_slots(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    bet = int(data.get("bet", 0))
-
+    if side not in ("heads", "tails"):
+        raise HTTPException(400, "invalid_side")
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
 
@@ -797,361 +691,21 @@ async def api_slots(request: Request):
 
     await add_balance(uid, -bet)
 
-    symbols = ["🍒", "🍋", "🍊", "💎", "🤑", "7️⃣"]
-    result = [random.choice(symbols) for _ in range(3)]
-
+    result = random.choice(["heads", "tails"])
     win = 0
-    jackpot = False
-    if result[0] == result[1] == result[2]:
-        if result[0] == "🤑":
-            win, jackpot = bet * 10, True
-        elif result[0] == "💎":
-            win = bet * 5
-        elif result[0] == "7️⃣":
-            win = bet * 4
-        else:
-            win = bet * 3
-    elif result[0] == result[1] or result[1] == result[2] or result[0] == result[2]:
-        win = bet * 2
-
-    if win > 0:
+    mult = 0
+    if result == side:
+        mult = 1.95
+        win = int(bet * mult)
         await add_balance(uid, win)
 
-    await log_game(uid, bet, win)
-    nb = await get_balance(uid)
-
-    await unlock_achievement(uid, "first_bet")
-    if win > 0:
-        await unlock_achievement(uid, "first_win")
-    if jackpot:
-        await unlock_achievement(uid, "jackpot")
-    if win >= 100000:
-        await unlock_achievement(uid, "big_win")
-    if bet >= 100000:
-        await unlock_achievement(uid, "high_roller")
-    if nb >= 1000000:
-        await unlock_achievement(uid, "millionaire")
-
-    return {"result": result, "win": win, "jackpot": jackpot, "balance": nb}
-
-
-# ═══════════ САПЁР ═══════════
-
-mines_games: dict[int, dict] = {}
-
-
-@app.post("/api/mines/start")
-async def api_mines_start(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    bet = int(data.get("bet", 0))
-
-    if uid in mines_games:
-        raise HTTPException(400, "already_playing")
-
-    if bet <= 0 or bet > 10000000:
-        raise HTTPException(400, "invalid_bet")
-
-    balance = await get_balance(uid)
-    if balance < bet:
-        raise HTTPException(400, "not_enough_coins")
-
-    await add_balance(uid, -bet)
-
-    mines_games[uid] = {
-        "bet": bet,
-        "mines": set(random.sample(list(range(25)), 5)),
-        "opened": set(),
-    }
-
-    return {"field": 5, "mines_count": 5, "bet": bet, "balance": await get_balance(uid)}
-
-
-@app.post("/api/mines/open")
-async def api_mines_open(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    idx = int(data.get("idx", -1))
-
-    game = mines_games.get(uid)
-    if not game or idx in game["opened"]:
-        raise HTTPException(400, "invalid")
-
-    field = 5
-
-    def around(i):
-        r, c = divmod(i, field)
-        n = 0
-        for dr in (-1, 0, 1):
-            for dc in (-1, 0, 1):
-                if dr == dc == 0:
-                    continue
-                nr, nc = r + dr, c + dc
-                if 0 <= nr < field and 0 <= nc < field and (nr * field + nc) in game["mines"]:
-                    n += 1
-        return n
-
-    if idx in game["mines"]:
-        game["opened"].add(idx)
-        bet = game["bet"]
-        del mines_games[uid]
-        await log_game(uid, bet, 0)
-        return {"hit_mine": True, "idx": idx, "bet": bet, "balance": await get_balance(uid)}
-
-    game["opened"].add(idx)
-    safe = 25 - 5
-
-    if len(game["opened"]) >= safe:
-        win = int(game["bet"] * 2.5)
-        await add_balance(uid, win)
-        await log_game(uid, game["bet"], win)
-        del mines_games[uid]
-        await unlock_achievement(uid, "first_bet")
-        await unlock_achievement(uid, "first_win")
-        return {"hit_mine": False, "won": True, "win": win, "balance": await get_balance(uid)}
-
-    return {
-        "hit_mine": False, "won": False, "idx": idx, "around": around(idx),
-        "opened": list(game["opened"]),
-        "current_prize": int(game["bet"] * (1 + 0.3 * len(game["opened"]))),
-        "balance": await get_balance(uid),
-    }
-
-
-@app.post("/api/mines/cashout")
-async def api_mines_cashout(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    game = mines_games.get(uid)
-    if not game or not game["opened"]:
-        raise HTTPException(400, "nothing_to_cashout")
-
-    prize = int(game["bet"] * (1 + 0.3 * len(game["opened"])))
-    bet = game["bet"]
-    await add_balance(uid, prize)
-    await log_game(uid, bet, prize)
-    del mines_games[uid]
-    await unlock_achievement(uid, "first_bet")
-    return {"prize": prize, "bet": bet, "balance": await get_balance(uid)}
-
-
-@app.post("/api/mines/cancel")
-async def api_mines_cancel(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    game = mines_games.pop(uid, None)
-    if game:
-        await add_balance(uid, game["bet"])
-    return {"balance": await get_balance(uid)}
-
-
-# ═══════════ РАКЕТКА ═══════════
-
-rockets: dict[int, dict] = {}
-
-
-@app.post("/api/rocket/start")
-async def api_rocket_start(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    bet = int(data.get("bet", 0))
-
-    if uid in rockets:
-        raise HTTPException(400, "already_playing")
-
-    if bet <= 0 or bet > 10000000:
-        raise HTTPException(400, "invalid_bet")
-
-    balance = await get_balance(uid)
-    if balance < bet:
-        raise HTTPException(400, "not_enough_coins")
-
-    await add_balance(uid, -bet)
-    r = random.random() * 98
-    rockets[uid] = {
-        "bet": bet,
-        "crash_at": max(1.0, 99 / (100 - r)),
-        "started": time.time(),
-    }
-    return {"balance": await get_balance(uid)}
-
-
-@app.post("/api/rocket/status")
-async def api_rocket_status(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    game = rockets.get(uid)
-    if not game:
-        raise HTTPException(400, "no_game")
-
-    elapsed = time.time() - game["started"]
-    mult = max(1.0, 1.0 + elapsed * 0.4)
-
-    if mult >= game["crash_at"]:
-        del rockets[uid]
-        await log_game(uid, game["bet"], 0)
-        return {"crashed": True, "mult": game["crash_at"], "bet": game["bet"], "balance": await get_balance(uid)}
-
-    return {"crashed": False, "mult": mult, "prize": int(game["bet"] * mult),
-            "bet": game["bet"], "balance": await get_balance(uid)}
-
-
-@app.post("/api/rocket/cashout")
-async def api_rocket_cashout(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    game = rockets.get(uid)
-    if not game:
-        raise HTTPException(400, "no_game")
-
-    elapsed = time.time() - game["started"]
-    mult = max(1.01, 1.0 + elapsed * 0.4)
-
-    if mult >= game["crash_at"]:
-        del rockets[uid]
-        await log_game(uid, game["bet"], 0)
-        raise HTTPException(400, "crashed")
-
-    prize = int(game["bet"] * mult)
-    bet = game["bet"]
-    del rockets[uid]
-    await add_balance(uid, prize)
-    await log_game(uid, bet, prize)
-    await unlock_achievement(uid, "first_bet")
-    if prize > bet:
-        await unlock_achievement(uid, "first_win")
-    return {"prize": prize, "mult": mult, "bet": bet, "balance": await get_balance(uid)}
-
-
-# ═══════════ КОСТИ ═══════════
-
-@app.post("/api/dice/roll")
-async def api_dice(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    bet = int(data.get("bet", 0))
-    choice = data.get("choice")
-    exact = int(data.get("exact", 0))
-
-    if bet <= 0 or bet > 10000000:
-        raise HTTPException(400, "invalid_bet")
-
-    balance = await get_balance(uid)
-    if balance < bet:
-        raise HTTPException(400, "not_enough_coins")
-
-    await add_balance(uid, -bet)
-    roll = random.randint(1, 6)
-    win = 0
-    if choice == "low" and roll in (1, 2, 3):
-        win = bet * 2
-    elif choice == "high" and roll in (4, 5, 6):
-        win = bet * 2
-    elif choice == "exact" and roll == exact:
-        win = bet * 5
-
-    if win > 0:
-        await add_balance(uid, win)
     await log_game(uid, bet, win)
     nb = await get_balance(uid)
     await unlock_achievement(uid, "first_bet")
     if win > 0:
         await unlock_achievement(uid, "first_win")
-    return {"roll": roll, "win": win, "balance": nb}
 
-
-# ═══════════ РУССКАЯ РУЛЕТКА ═══════════
-
-rr_games: dict[int, dict] = {}
-RR_MULTS = [1.1, 1.3, 1.7, 2.3, 3.5, 7.0]
-
-
-@app.post("/api/rr/start")
-async def api_rr_start(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    bet = int(data.get("bet", 0))
-
-    if uid in rr_games:
-        raise HTTPException(400, "already_playing")
-
-    if bet <= 0 or bet > 10000000:
-        raise HTTPException(400, "invalid_bet")
-
-    balance = await get_balance(uid)
-    if balance < bet:
-        raise HTTPException(400, "not_enough_coins")
-
-    await add_balance(uid, -bet)
-    rr_games[uid] = {"bet": bet, "step": 0}
-    return {"balance": await get_balance(uid)}
-
-
-@app.post("/api/rr/spin")
-async def api_rr_spin(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    game = rr_games.get(uid)
-    if not game:
-        raise HTTPException(400, "no_game")
-
-    step = game["step"]
-    bullets = step + 1
-
-    if random.random() < (bullets / 7):
-        bet = game["bet"]
-        del rr_games[uid]
-        await log_game(uid, bet, 0)
-        return {"shot": True, "bet": bet, "balance": await get_balance(uid)}
-
-    step += 1
-    game["step"] = step
-
-    if step >= 6:
-        prize = int(game["bet"] * RR_MULTS[5])
-        bet = game["bet"]
-        del rr_games[uid]
-        await add_balance(uid, prize)
-        await log_game(uid, bet, prize)
-        await unlock_achievement(uid, "first_bet")
-        await unlock_achievement(uid, "first_win")
-        await unlock_achievement(uid, "rr_max")
-        return {"shot": False, "won": True, "step": step, "mult": RR_MULTS[5],
-                "prize": prize, "bet": bet, "balance": await get_balance(uid)}
-
-    mult = RR_MULTS[step - 1]
-    return {"shot": False, "won": False, "step": step, "mult": mult,
-            "prize": int(game["bet"] * mult), "next_bullets": step + 1,
-            "balance": await get_balance(uid)}
-
-
-@app.post("/api/rr/cashout")
-async def api_rr_cashout(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    game = rr_games.get(uid)
-    if not game or game["step"] <= 0:
-        raise HTTPException(400, "nothing_to_cashout")
-
-    mult = RR_MULTS[game["step"] - 1]
-    prize = int(game["bet"] * mult)
-    bet = game["bet"]
-    del rr_games[uid]
-    await add_balance(uid, prize)
-    await log_game(uid, bet, prize)
-    await unlock_achievement(uid, "first_bet")
-    return {"prize": prize, "mult": mult, "bet": bet, "balance": await get_balance(uid)}
+    return {"result": result, "win": win, "mult": mult, "balance": nb}
 
 
 # ═══════════ ВЫВОД ═══════════
