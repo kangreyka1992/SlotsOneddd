@@ -448,7 +448,7 @@ function closeGame() {
     showScreen('home');
 }
 
-function renderBets(containerId, onPick, multiplier = 1, maxBetLimit = 0) {
+function renderBets(containerId, onPick, multiplier = 1) {
     const el = document.getElementById(containerId);
     if (!el) return;
     el.innerHTML = '';
@@ -458,14 +458,25 @@ function renderBets(containerId, onPick, multiplier = 1, maxBetLimit = 0) {
         btn.className = 'bet-btn';
         btn.textContent = fmt(b) + ' 🪙' + (multiplier > 1 ? ` (${fmt(cost)})` : '');
         if (cost > profile.balance || gameLocked) btn.disabled = true;
-        if (maxBetLimit > 0 && cost > maxBetLimit) btn.disabled = true;
         btn.onclick = () => {
             if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
             SFX.click(); haptic(); onPick(b);
         };
         el.appendChild(btn);
     });
-
+    const all = document.createElement('button');
+    all.className = 'bet-btn allin';
+    const maxBet = Math.floor(profile.balance / multiplier);
+    all.textContent = multiplier > 1
+        ? `💯 Макс (${fmt(maxBet)} × ${multiplier})`
+        : '💯 Весь баланс';
+    if (maxBet <= 0 || gameLocked) all.disabled = true;
+    all.onclick = () => {
+        if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
+        SFX.click(); haptic('medium'); onPick(maxBet);
+    };
+    el.appendChild(all);
+}
     if (maxBetLimit === 0) {
         const all = document.createElement('button');
         all.className = 'bet-btn allin';
