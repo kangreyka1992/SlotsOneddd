@@ -648,18 +648,30 @@ async def api_dice(request: Request):
     win = 0
     mult = 0
 
-    if choice in ("low", "range_3_6") and roll >= 3:
-        mult = 1.95
-        win = int(bet * mult)
-    elif choice in ("high", "range_4_6") and roll >= 4:
-        mult = 2.9
-        win = int(bet * mult)
-    elif choice in ("exact", "range_6_6") and roll == 6:
-        mult = 5.7
-        win = int(bet * mult)
-    elif choice == "exact_number" and roll == exact:
-        mult = 5.0
-        win = int(bet * mult)
+    # 1-3  → 1,2,3   ×1.95
+    # 4-6  → 4,5,6   ×1.95
+    # 4-6+ → 4,5,6   ×2.9
+    # 6    → 6       ×5.7
+    if choice in ("low", "range_1_3"):
+        if roll <= 3:
+            mult = 1.95
+            win = int(bet * mult)
+    elif choice in ("high", "range_4_6"):
+        if roll >= 4:
+            mult = 1.95
+            win = int(bet * mult)
+    elif choice == "range_4_6_plus":
+        if roll >= 4:
+            mult = 2.9
+            win = int(bet * mult)
+    elif choice in ("exact", "range_6_6"):
+        if roll == 6:
+            mult = 5.7
+            win = int(bet * mult)
+    elif choice == "exact_number":
+        if roll == exact:
+            mult = 5.0
+            win = int(bet * mult)
 
     if win > 0:
         await add_balance(uid, win)
@@ -830,11 +842,11 @@ PENALTI_TIMEOUT = 300
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
 
 PENALTI_KEEPER_WEIGHTS = [
-    1, 2, 1,
-    3, 5, 3,
-    3, 4, 3,
+    2, 4, 2,
+    5, 8, 5,
+    5, 7, 5,
 ]
-PENALTI_SMARTNESS = [0.0, 0.15, 0.30, 0.50, 0.70]
+PENALTI_SMARTNESS = [0.20, 0.35, 0.50, 0.65, 0.80]
 
 
 def _keeper_pick_zone(step: int) -> int:
@@ -896,6 +908,7 @@ async def api_penalti_start(request: Request):
         "step": 0,
         "history": [],
         "started": time.time(),
+        "used_zones": [],
     }
     return {"balance": await get_balance(uid), "bet": bet}
 
@@ -913,6 +926,9 @@ async def api_penalti_kick(request: Request):
     game = penalti_games.get(uid)
     if not game:
         raise HTTPException(400, "no_game")
+
+    if zone in game.get("used_zones", []):
+        raise HTTPException(400, "zone_already_used")
 
     step = game["step"]
     if step >= 5:
@@ -936,6 +952,7 @@ async def api_penalti_kick(request: Request):
     step += 1
     game["step"] = step
     game["history"].append(zone)
+    game["used_zones"].append(zone)
     mult = PENALTI_MULTS[step - 1]
     prize = int(game["bet"] * mult)
 
@@ -954,6 +971,7 @@ async def api_penalti_kick(request: Request):
             "zone": zone, "keeper_zone": keeper_zone,
             "step": step, "maxed": True,
             "mult": mult, "prize": prize,
+            "used_zones": game["used_zones"],
             "balance": await get_balance(uid),
         }
 
@@ -962,6 +980,7 @@ async def api_penalti_kick(request: Request):
         "zone": zone, "keeper_zone": keeper_zone,
         "step": step, "maxed": False,
         "mult": mult, "prize": prize,
+        "used_zones": game["used_zones"],
         "balance": await get_balance(uid),
     }
 
@@ -1302,7 +1321,6 @@ def _roll_case(case_id: str):
 
 
 def _build_track(case_id: str, price_coins: int, win_item: dict):
-    """Строит ленту для прокрута: 50 предметов, на 45-й позиции — выигрыш."""
     TRACK_LEN = 50
     WIN_POS = 45
     track = []
@@ -1343,6 +1361,49 @@ async def api_cases_list(request: Request):
             }
             for c in CASES
         ]
+    }
+
+
+@app.post("/api/cases/info")
+async def api_cases_info(request: Request):
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+    case_id = data.get("case_id", "")
+
+    case = next((c for c in CASES if c[0] == case_id), None)
+    if not case:
+        raise HTTPException(400, "Кейс не найден")
+
+    price_coins = case[3] * RATE
+
+    total_w = sum(r[3] for r in RARITY_TABLE)
+    items = []
+    for rar_id, rar_emoji, rar_name, weight, value_mult in RARITY_TABLE:
+        rarity_chance = weight / total_w
+        for item_id, emoji, name in ITEMS_BY_RARITY[rar_id]:
+            item_chance = rarity_chance / len(ITEMS_BY_RARITY[rar_id])
+            value = int(price_coins * value_mult)
+            items.append({
+                "item_id": item_id,
+                "emoji": emoji,
+                "name": name,
+                "rarity": rar_id,
+                "rarity_name": rar_name,
+                "rarity_emoji": rar_emoji,
+                "value": value,
+                "chance": round(item_chance * 100, 3),
+            })
+
+    items.sort(key=lambda x: -x["value"])
+
+    return {
+        "case_id": case_id,
+        "name": case[1],
+        "emoji": case[2],
+        "price_stars": case[3],
+        "price_coins": price_coins,
+        "desc": case[4],
+        "items": items,
     }
 
 
