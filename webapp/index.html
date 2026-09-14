@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=35">
+<link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
 <div id="app">
@@ -94,8 +94,10 @@
         <div class="upg-circle-wrap">
           <svg class="upg-circle" viewBox="0 0 200 200">
             <circle class="upg-circle-bg" cx="100" cy="100" r="85" />
-            <circle class="upg-circle-fill" id="upgCircleFill" cx="100" cy="100" r="85" />
+            <circle class="upg-circle-fail" id="upgCircleFail" cx="100" cy="100" r="85" />
+            <circle class="upg-circle-success" id="upgCircleSuccess" cx="100" cy="100" r="85" />
           </svg>
+          <div class="upg-arrow-spin" id="upgArrowSpin"></div>
           <div class="upg-circle-center">
             <div class="upg-percent" id="upgPercent">0%</div>
             <div class="upg-percent-label">шанс</div>
@@ -511,6 +513,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=35"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>
