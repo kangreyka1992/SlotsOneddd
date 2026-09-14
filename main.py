@@ -33,6 +33,7 @@ from database import (
     add_user_item, get_user_items, get_user_item, sell_user_item,
     delete_user_item, get_user_items_stats,
     get_user_item_by_id, mark_items_sold,
+    get_user_items_admin, transfer_item,
     get_free_case_info, claim_free_case,
     log_house_flow, get_house_stats,
 )
@@ -626,7 +627,7 @@ async def api_crash_cashout(request: Request):
     return {"prize": prize, "mult": mult, "bet": bet, "balance": await get_balance(uid)}
 
 
-# ═══════════ КОСТИ (исправлено) ═══════════
+# ═══════════ КОСТИ ═══════════
 
 @app.post("/api/dice/roll")
 async def api_dice(request: Request):
@@ -649,10 +650,6 @@ async def api_dice(request: Request):
     win = 0
     mult = 0
 
-    # 1-3  → 1,2,3   ×1.95
-    # 4-6  → 4,5,6   ×1.95
-    # 4-6+ → 4,5,6   ×2.9
-    # 6    → только 6 ×5.7
     if choice in ("low", "range_1_3"):
         if roll <= 3:
             mult = 1.95
@@ -836,13 +833,12 @@ async def api_plinko(request: Request):
     return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
-# ═══════════ PENALTI (фикс вратаря) ═══════════
+# ═══════════ PENALTI ═══════════
 
 penalti_games: dict = {}
 PENALTI_TIMEOUT = 300
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
 
-# Вратарь любит центр и низ, но теперь чаще попадает в зону удара
 PENALTI_KEEPER_WEIGHTS = [3, 5, 3, 5, 8, 5, 3, 5, 3]
 PENALTI_SMARTNESS = [0.20, 0.30, 0.45, 0.60, 0.75]
 
@@ -1201,10 +1197,9 @@ async def api_duel_cancel(request: Request):
     return {"status": "ok"}
 
 
-# ═══════════ CASE SYSTEM (повышены шансы) ═══════════
+# ═══════════ CASE SYSTEM ═══════════
 
 RARITY_TABLE = [
-    # (id, emoji, name, weight, value_mult) — RTP ≈ 82%
     ("common",    "⬜", "Обычный",     6500, 0.40),
     ("uncommon",  "🟩", "Необычный",   2300, 0.75),
     ("rare",      "🟦", "Редкий",       800, 1.60),
@@ -1259,6 +1254,7 @@ ITEMS_BY_RARITY = {
 }
 
 CASES = [
+    # ═══ БАЗОВЫЕ (1-31) ═══
     ("starter",       "Стартовый",        "📦",  10, "Первый шаг в мир кейсов"),
     ("bronze",        "Бронзовый",        "🥉",  20, "Для начинающих игроков"),
     ("silver",        "Серебряный",       "🥈",  30, "Немного серьёзнее"),
@@ -1290,6 +1286,78 @@ CASES = [
     ("zeus",          "Зевс",             "⚡",7000, "Повелитель молний"),
     ("olympus",       "Олимп",            "🏔️",8000, "Обитель богов"),
     ("titan",         "Титан",            "🗿",10000, "Древняя сила"),
+
+    # ═══ ДОПОЛНИТЕЛЬНЫЕ 70 (32-101) ═══
+    ("k_mecha",       "Механический",     "⚙️", 12000, "Железо и сталь"),
+    ("k_neon",        "Неоновый",         "💡", 13000, "Свет большого города"),
+    ("k_cyber",       "Киберпанк",        "🤖", 14000, "Будущее уже здесь"),
+    ("k_matrix",      "Матрица",          "🟢", 15000, "Зелёная таблетка"),
+    ("k_phantom",     "Фантом",           "👻", 16000, "Призрак в машине"),
+    ("k_wraith",      "Призрак",          "💨", 17000, "Невидимый враг"),
+    ("k_hydra",       "Гидра",            "🐍", 18000, "Многоголовая"),
+    ("k_griffin",     "Грифон",           "🦁", 19000, "Царь зверей и птиц"),
+    ("k_wyvern",      "Виверна",          "🐲", 20000, "Огненное дыхание"),
+    ("k_kraken",      "Кракен",           "🦑", 22000, "Морское чудовище"),
+    ("k_leviathan",   "Левиафан",         "🐋", 25000, "Властелин глубин"),
+    ("k_behemoth",    "Бегемот",          "🐘", 28000, "Древний титан"),
+    ("k_cerberus",    "Цербер",           "🐕", 30000, "Страж врат"),
+    ("k_hades",       "Аид",              "💀", 35000, "Царство мёртвых"),
+    ("k_anubis",      "Анубис",           "🐺", 40000, "Египетский бог"),
+    ("k_ra",          "Ра",               "☀️", 45000, "Солнечный бог"),
+    ("k_isis",        "Изида",            "🌙", 50000, "Лунная богиня"),
+    ("k_osiris",      "Осирис",           "🌿", 55000, "Бог возрождения"),
+    ("k_thor",        "Тор",              "🔨", 60000, "Бог грома"),
+    ("k_odin",        "Один",             "👁️", 65000, "Отец богов"),
+    ("k_loki",        "Локи",             "🎭", 70000, "Бог обмана"),
+    ("k_freya",       "Фрейя",            "🌸", 75000, "Богиня любви"),
+    ("k_tyr",         "Тюр",              "⚔️", 80000, "Бог войны"),
+    ("k_balder",      "Бальдр",           "✨", 85000, "Светлый бог"),
+    ("k_hel",         "Хель",             "🌑", 90000, "Владычица теней"),
+    ("k_ymir",        "Имир",             "🧊", 95000, "Ледяной великан"),
+    ("k_surt",        "Сурт",             "🔥", 100000, "Огненный великан"),
+    ("k_fenrir",      "Фенрир",           "🐺", 110000, "Волк апокалипсиса"),
+    ("k_jormung",     "Йормунганд",       "🐍", 120000, "Мировой змей"),
+    ("k_nidhogg",     "Нидхёгг",          "🐉", 130000, "Пожиратель корней"),
+    ("k_valkyrie",    "Валькирия",        "🦅", 140000, "Дева-воительница"),
+    ("k_einherjar",   "Эйнхерии",         "🛡️", 150000, "Воины Вальгаллы"),
+    ("k_berserk",     "Берсерк",          "🪓", 160000, "Ярость без границ"),
+    ("k_viking",      "Викинг",           "⛵", 170000, "Сын севера"),
+    ("k_rune",        "Руны",             "ᚱ", 180000, "Древние знаки"),
+    ("k_seidr",       "Сейдр",            "🔮", 200000, "Магия судьбы"),
+    ("k_yggdrasil",   "Иггдрасиль",       "🌳", 220000, "Древо жизни"),
+    ("k_asgard",      "Асгард",           "🏰", 250000, "Город богов"),
+    ("k_bifrost",     "Биврёст",          "🌈", 280000, "Радужный мост"),
+    ("k_ragnarok",    "Рагнарёк",         "💥", 300000, "Конец света"),
+    ("k_apocalypse",  "Апокалипсис",      "☄️", 350000, "Последний день"),
+    ("k_armageddon",  "Армагеддон",       "🌋", 400000, "Великая битва"),
+    ("k_extinction",  "Вымирание",        "🦖", 450000, "Древние ящеры"),
+    ("k_evolution",   "Эволюция",         "🧬", 500000, "Скачок развития"),
+    ("k_singularity", "Сингулярность",    "🕳️", 600000, "Точка невозврата"),
+    ("k_multiverse",  "Мультивселенная",  "🌀", 700000, "Мир во всех мирах"),
+    ("k_omniverse",   "Омниверс",         "♾️", 800000, "Всё сущее"),
+    ("k_creator",     "Создатель",        "🌟", 1000000, "Творец миров"),
+    ("k_architect",   "Архитектор",       "🏛️", 1100000, "Строитель реальности"),
+    ("k_eternity",    "Вечность",         "⏳", 1200000, "Бесконечное время"),
+    ("k_oblivion",    "Забвение",         "⚫", 1300000, "Пустота и ничто"),
+    ("k_chaos",       "Хаос",             "🌪️", 1400000, "Первозданный хаос"),
+    ("k_order",       "Порядок",          "⚖️", 1500000, "Закон вселенной"),
+    ("k_light",       "Свет",             "🔆", 1600000, "Начало всего"),
+    ("k_darkness",    "Тьма",             "🌑", 1700000, "Изначальная тьма"),
+    ("k_life",        "Жизнь",            "🌱", 1800000, "Искра бытия"),
+    ("k_death",       "Смерть",           "💀", 1900000, "Конец пути"),
+    ("k_rebirth",     "Перерождение",     "🦋", 2000000, "Новый цикл"),
+    ("k_ascension",   "Вознесение",       "⛰️", 2200000, "Путь наверх"),
+    ("k_enlighten",   "Просветление",     "🧘", 2400000, "Истина внутри"),
+    ("k_nirvana",     "Нирвана",          "🕉️", 2600000, "Освобождение"),
+    ("k_zenith",      "Зенит",            "🎯", 2800000, "Высшая точка"),
+    ("k_apex",        "Апекс",            "🏔️", 3000000, "Вершина мира"),
+    ("k_alpha",       "Альфа",            "🅰️", 3500000, "Начало"),
+    ("k_omega",       "Омега",            "🅾️", 4000000, "Конец"),
+    ("k_legend",      "Легенда",          "📜", 4500000, "История веков"),
+    ("k_myth",        "Миф",              "🐲", 5000000, "Древнее сказание"),
+    ("k_epic",        "Эпос",             "🎭", 5500000, "Героическая песнь"),
+    ("k_saga",        "Сага",             "📖", 6000000, "Хроники героев"),
+    ("k_universe",    "Вселенная",        "🌌", 7000000, "Всё и вся"),
 ]
 
 
@@ -1313,8 +1381,8 @@ def _roll_case(case_id: str):
 
 
 def _build_track(case_id: str, price_coins: int, win_item: dict):
-    TRACK_LEN = 50
-    WIN_POS = 45
+    TRACK_LEN = 60
+    WIN_POS = 55
     track = []
     for i in range(TRACK_LEN):
         if i == WIN_POS:
@@ -1572,7 +1640,7 @@ async def api_cases_inventory(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
-    items = await get_user_items(uid, 100, only_unsold=True)
+    items = await get_user_items(uid, 200, only_unsold=True)
     stats = await get_user_items_stats(uid)
     return {
         "items": [
@@ -1699,6 +1767,13 @@ async def api_upgrader_play(request: Request):
 
     if total_value <= 0:
         raise HTTPException(400, "Некорректная ставка")
+
+    # ⚠️ Защита: цель должна быть дороже ставки
+    if target_price_coins <= total_value:
+        raise HTTPException(
+            400,
+            "Цель дешевле твоей ставки — так нельзя"
+        )
 
     chance = total_value / target_price_coins
     chance = max(0.01, min(0.95, chance))
@@ -2197,6 +2272,59 @@ async def api_admin_logs(request: Request):
             for l in rows
         ]
     }
+
+
+@app.post("/api/admin/user_inventory")
+async def api_admin_user_inventory(request: Request):
+    data = await request.json()
+    admin = admin_only(data.get("initData", ""))
+    target = str(data.get("target", "")).strip()
+
+    if not target:
+        raise HTTPException(400, "Укажи ID или @username")
+
+    target_id = None
+    if target.startswith("@"):
+        row = await get_user_by_username(target)
+        if not row:
+            raise HTTPException(404, "Пользователь не найден")
+        target_id = row[0]
+    else:
+        try:
+            target_id = int(target)
+        except ValueError:
+            raise HTTPException(400, "Некорректный ID")
+
+    items = await get_user_items_admin(target_id, 200)
+    return {
+        "user_id": target_id,
+        "items": [
+            {
+                "id": i[0], "item_id": i[1], "case_id": i[2],
+                "rarity": i[3], "emoji": i[4], "name": i[5],
+                "value": i[6], "kind": i[7], "created_at": i[8],
+            }
+            for i in items
+        ],
+    }
+
+
+@app.post("/api/admin/steal_item")
+async def api_admin_steal_item(request: Request):
+    data = await request.json()
+    admin = admin_only(data.get("initData", ""))
+    item_pk = int(data.get("item_pk", 0))
+    from_user_id = int(data.get("from_user_id", 0))
+
+    if not item_pk or not from_user_id:
+        raise HTTPException(400, "Неверные параметры")
+
+    ok = await transfer_item(item_pk, from_user_id, admin["id"])
+    if not ok:
+        raise HTTPException(400, "Не удалось передать предмет")
+
+    await log_admin_action(admin["id"], "steal_item", from_user_id, f"#{item_pk}")
+    return {"ok": True}
 
 
 @app.post("/api/admin/broadcast")
