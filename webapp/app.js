@@ -25,6 +25,9 @@ let coinBet = null;
 let coinHistory = [];
 let lastGame = null;
 let lastBet = 0;
+let withdrawAllowed = false;
+let withdrawDays = 0;
+let plinkoRisk = 'low';
 
 /* ═══ UTILS ═══ */
 
@@ -65,27 +68,20 @@ async function api(url, body = {}) {
 /* ═══ ЭКРАН РЕЗУЛЬТАТА ═══ */
 
 function showResult({ icon, title, titleClass, amount, details, game, bet }) {
-    const iconEl = document.getElementById('resultIcon');
+    document.getElementById('resultIcon').textContent = icon;
     const titleEl = document.getElementById('resultTitle');
-    const amountEl = document.getElementById('resultAmount');
-    const detailsEl = document.getElementById('resultDetails');
-
-    if (!iconEl || !titleEl || !amountEl || !detailsEl) {
-        console.error('Result screen elements missing in HTML!');
-        return;
-    }
-
-    iconEl.textContent = icon;
     titleEl.textContent = title;
     titleEl.className = 'result-title ' + (titleClass || '');
 
+    const amountEl = document.getElementById('resultAmount');
     if (amount) {
         amountEl.textContent = amount;
         amountEl.style.display = 'block';
     } else {
         amountEl.style.display = 'none';
     }
-    detailsEl.innerHTML = details || '';
+
+    document.getElementById('resultDetails').innerHTML = details || '';
     lastGame = game;
     lastBet = bet;
     haptic(titleClass === 'lose' ? 'error' : 'success');
@@ -130,22 +126,21 @@ async function loadProfile() {
         const d = await api('/api/profile');
         profile = d;
         updateBalance(d.balance);
-        const statGames = document.getElementById('statGames');
-        const statWagered = document.getElementById('statWagered');
-        const statWon = document.getElementById('statWon');
-        if (statGames) statGames.textContent = fmt(d.stats?.games || 0);
-        if (statWagered) statWagered.textContent = fmt(d.stats?.wagered || 0);
-        if (statWon) statWon.textContent = fmt(d.stats?.won || 0);
+
+        const sg = document.getElementById('statGames');
+        const sw = document.getElementById('statWagered');
+        const so = document.getElementById('statWon');
+        if (sg) sg.textContent = fmt(d.stats?.games || 0);
+        if (sw) sw.textContent = fmt(d.stats?.wagered || 0);
+        if (so) so.textContent = fmt(d.stats?.won || 0);
 
         const disc = document.getElementById('discountInfo');
-        if (disc) {
-            disc.innerHTML = d.discount > 0 ? `🎁 <b>Скидка ${d.discount}%</b> на пополнение` : '';
-        }
+        if (disc) disc.innerHTML = d.discount > 0 ? `🎁 <b>Скидка ${d.discount}%</b> на пополнение` : '';
+
         const adminBtn = document.getElementById('adminBtn');
         if (adminBtn && d.is_admin) adminBtn.classList.remove('hidden');
     } catch (e) {
         console.error('Profile load error:', e);
-        toast('Ошибка загрузки профиля: ' + e.message, 'error');
     }
 }
 
@@ -154,7 +149,7 @@ async function loadProfile() {
 function openGame(game) {
     haptic();
     const content = document.getElementById('content-' + game);
-    if (!content) { console.error('Game not found: ' + game); toast('Игра не найдена', 'error'); return; }
+    if (!content) { console.error('Game not found: ' + game); return; }
     document.querySelectorAll('.game-content').forEach(c => c.classList.add('hidden'));
     content.classList.remove('hidden');
 
@@ -172,9 +167,10 @@ function openGame(game) {
 
     if (game === 'slots') {
         document.getElementById('slotsBets').classList.remove('hidden');
-        [0,1,2].forEach(i => document.getElementById('slot'+i).textContent = '❓');
-        document.getElementById('slotsResult').textContent = 'Выберите ставку';
-        document.getElementById('slotsResult').className = 'game-result';
+        [0, 1, 2].forEach(i => document.getElementById('slot' + i).textContent = '❓');
+        const sr = document.getElementById('slotsResult');
+        sr.textContent = 'Выберите ставку';
+        sr.className = 'game-result';
         renderBets('slotsBets', spinSlots);
     }
     if (game === 'mines') {
@@ -190,11 +186,14 @@ function openGame(game) {
         renderRocketHistory();
         document.getElementById('rocketBets').classList.remove('hidden');
         document.getElementById('rocketDisplay').classList.add('hidden');
+        document.getElementById('rocketDisplay').classList.remove('crashed');
+        document.getElementById('rocketMult').classList.remove('crashed');
         renderBets('rocketBets', rocketStart);
     }
     if (game === 'dice') {
         document.getElementById('diceBets').classList.remove('hidden');
         document.getElementById('diceDisplay').classList.add('hidden');
+        document.getElementById('diceChoices').classList.remove('disabled');
         renderBets('diceBets', diceStart);
     }
     if (game === 'rr') {
@@ -204,6 +203,7 @@ function openGame(game) {
     }
     if (game === 'plinko') {
         document.getElementById('plinkoBets').classList.remove('hidden');
+        document.getElementById('plinkoBall').style.display = 'none';
         initPlinko();
     }
     if (game === 'penalti') {
@@ -250,15 +250,15 @@ function renderBets(containerId, onPick) {
 async function spinSlots(bet) {
     haptic();
     document.querySelectorAll('#slotsBets button').forEach(b => b.disabled = true);
-    const reels = [0,1,2].map(i => document.getElementById('slot'+i));
+    const reels = [0, 1, 2].map(i => document.getElementById('slot' + i));
     reels.forEach(el => el.classList.add('spinning'));
     const res = document.getElementById('slotsResult');
     res.textContent = 'Крутим...';
     res.className = 'game-result';
 
-    const fake = ['🍒','🍋','🍊','💎','🤑','7️⃣'];
+    const fake = ['🍒', '🍋', '🍊', '💎', '🤑', '7️⃣'];
     const int = setInterval(() => {
-        reels.forEach(el => el.textContent = fake[Math.floor(Math.random()*6)]);
+        reels.forEach(el => el.textContent = fake[Math.floor(Math.random() * 6)]);
     }, 80);
 
     try {
@@ -272,13 +272,281 @@ async function spinSlots(bet) {
 
         setTimeout(() => {
             if (d.jackpot) {
-                showResult({ icon:'💥', title:'ДЖЕКПОТ!', titleClass:'jackpot',
-                    amount:`+${fmt(d.win)} 🪙`, details:`Ставка: ${fmt(bet)} 🪙<br>Множитель: ×10`,
-                    game:'slots', bet });
+                showResult({ icon: '💥', title: 'ДЖЕКПОТ!', titleClass: 'jackpot',
+                    amount: `+${fmt(d.win)} 🪙`, details: `Ставка: ${fmt(bet)} 🪙<br>Множитель: ×10`,
+                    game: 'slots', bet });
             } else if (d.win > 0) {
-                showResult({ icon:'🎉', title:'Выигрыш!', titleClass:'win',
-                    amount:`+${fmt(d.win)} 🪙`, details:`Ставка: ${fmt(bet)} 🪙<br>Баланс: ${fmt(d.balance)} 🪙`,
-                    game:'slots', bet });
+                showResult({ icon: '🎉', title: 'Выигрыш!', titleClass: 'win',
+                    amount: `+${fmt(d.win)} 🪙`, details: `Ставка: ${fmt(bet)} 🪙<br>Баланс: ${fmt(d.balance)} 🪙`,
+                    game: 'slots', bet });
+            } else {
+                showResult({ icon: '😢', title: 'Проигрыш', titleClass: 'lose',
+                    amount: `−${fmt(bet)} 🪙`, details: `Баланс: ${fmt(d.balance)} 🪙`,
+                    game: 'slots', bet });
+            }
+        }, 300);
+    } catch (e) {
+        clearInterval(int);
+        reels.forEach(el => el.classList.remove('spinning'));
+        toast(e.message, 'error');
+        renderBets('slotsBets', spinSlots);
+    }
+}
+
+/* ═══ GOLD MINE ═══ */
+
+async function minesStart(bet) {
+    haptic();
+    try {
+        const d = await api('/api/mines/start', { bet });
+        minesState = { field: 5, bet, opened: new Set() };
+        lastBet = bet;
+        document.getElementById('minesBets').classList.add('hidden');
+        document.getElementById('minesInfo').classList.remove('hidden');
+        document.getElementById('minesGrid').classList.remove('hidden');
+        updateBalance(d.balance);
+        renderMinesGrid(5);
+        loadProfile();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderMinesGrid(field) {
+    const grid = document.getElementById('minesGrid');
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = `repeat(${field}, 1fr)`;
+    for (let i = 0; i < field * field; i++) {
+        const cell = document.createElement('button');
+        cell.className = 'mine-cell';
+        cell.textContent = '🌑';
+        cell.onclick = () => minesOpen(i, cell);
+        grid.appendChild(cell);
+    }
+    document.getElementById('minesOpened').textContent = 0;
+    document.getElementById('minesPrize').textContent = 0;
+    document.getElementById('minesCashout').classList.add('hidden');
+}
+
+async function minesOpen(idx, cell) {
+    haptic();
+    if (!minesState || cell.classList.contains('opened')) return;
+    cell.disabled = true;
+    try {
+        const d = await api('/api/mines/open', { idx });
+        updateBalance(d.balance);
+
+        if (d.hit_mine) {
+            cell.textContent = '💥';
+            cell.classList.add('mine');
+            minesState = null;
+            loadProfile();
+            setTimeout(() => {
+                showResult({ icon: '💥', title: 'ВЗРЫВ!', titleClass: 'lose',
+                    amount: `−${fmt(d.bet || lastBet)} 🪙`, details: 'Вы наткнулись на бомбу',
+                    game: 'mines', bet: d.bet || lastBet });
+            }, 800);
+            return;
+        }
+        if (d.won) {
+            cell.textContent = '💎';
+            cell.classList.add('opened');
+            minesState = null;
+            loadProfile();
+            setTimeout(() => {
+                showResult({ icon: '🏆', title: 'Всё золото собрано!', titleClass: 'win',
+                    amount: `+${fmt(d.win)} 🪙`, details: 'Все безопасные клетки открыты<br>Множитель: ×2.5',
+                    game: 'mines', bet: lastBet });
+            }, 800);
+            return;
+        }
+        cell.textContent = '💰';
+        cell.classList.add('opened');
+        minesState.opened.add(idx);
+        document.getElementById('minesOpened').textContent = d.opened.length;
+        document.getElementById('minesPrize').textContent = fmt(d.current_prize);
+        document.getElementById('minesCashout').classList.remove('hidden');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function minesCashout() {
+    haptic();
+    try {
+        const d = await api('/api/mines/cashout');
+        updateBalance(d.balance);
+        minesState = null;
+        loadProfile();
+        setTimeout(() => {
+            showResult({ icon: '💎', title: 'Продано!', titleClass: 'win',
+                amount: `+${fmt(d.prize)} 🪙`, details: 'Вы продали золото',
+                game: 'mines', bet: d.bet || lastBet });
+        }, 500);
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ═══ РАКЕТКА ═══ */
+
+function renderRocketHistory() {
+    const el = document.getElementById('rocketHistory');
+    if (!el) return;
+    el.innerHTML = '';
+    rocketHistoryArr.slice(0, 15).forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'rocket-hist-item ' + (m >= 10 ? 'orange' : m >= 2 ? 'purple' : 'blue');
+        div.textContent = '×' + m.toFixed(2);
+        el.appendChild(div);
+    });
+}
+
+async function rocketStart(bet) {
+    haptic();
+    try {
+        const d = await api('/api/rocket/start', { bet });
+        updateBalance(d.balance);
+        lastBet = bet;
+        document.getElementById('rocketBets').classList.add('hidden');
+        document.getElementById('rocketDisplay').classList.remove('hidden');
+        document.getElementById('rocketDisplay').classList.remove('crashed');
+        document.getElementById('rocketMult').classList.remove('crashed');
+
+        const emoji = document.getElementById('rocketEmoji');
+        const flame = document.getElementById('rocketFlame');
+        emoji.style.left = '30px';
+        emoji.style.bottom = '30px';
+        emoji.style.opacity = '1';
+        flame.style.left = '30px';
+        flame.style.bottom = '30px';
+        flame.style.opacity = '0.95';
+
+        startRocketCanvas();
+        pollRocket();
+        loadProfile();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function startRocketCanvas() {
+    const canvas = document.getElementById('rocketCanvas');
+    const field = document.getElementById('rocketField');
+    if (!canvas || !field) return;
+    canvas.width = field.clientWidth;
+    canvas.height = field.clientHeight;
+    rocketCanvasCtx = canvas.getContext('2d');
+    rocketPoints = [{ x: 30, y: canvas.height - 30 }];
+
+    function draw() {
+        if (!rocketCanvasCtx) return;
+        const ctx = rocketCanvasCtx;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (rocketPoints.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
+            for (let i = 1; i < rocketPoints.length; i++) {
+                ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
+            }
+            ctx.strokeStyle = 'rgba(255, 193, 7, 0.15)';
+            ctx.lineWidth = 24;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
+            for (let i = 1; i < rocketPoints.length; i++) {
+                ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
+            }
+            ctx.strokeStyle = '#ffc107';
+            ctx.lineWidth = 4;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.shadowColor = '#ffc107';
+            ctx.shadowBlur = 20;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        if (rocketPoints.length > 0) {
+            const last = rocketPoints[rocketPoints.length - 1];
+            ctx.beginPath();
+            ctx.arc(last.x, last.y, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffc107';
+            ctx.shadowColor = '#ffc107';
+            ctx.shadowBlur = 30;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+        rocketAnimationId = requestAnimationFrame(draw);
+    }
+    draw();
+}
+
+function stopRocketCanvas() {
+    if (rocketAnimationId) {
+        cancelAnimationFrame(rocketAnimationId);
+        rocketAnimationId = null;
+    }
+    rocketCanvasCtx = null;
+}
+
+function pollRocket() {
+    if (rocketInterval) clearInterval(rocketInterval);
+
+    rocketInterval = setInterval(async () => {
+        try {
+            const d = await api('/api/rocket/status');
+            const mult = document.getElementById('rocketMult');
+            const prize = document.getElementById('rocketPrize');
+
+            if (d.crashed) {
+                clearInterval(rocketInterval);
+                rocketInterval = null;
+                document.getElementById('rocketDisplay').classList.add('crashed');
+                mult.textContent = `×${d.mult.toFixed(2)}`;
+                mult.classList.add('crashed');
+                prize.textContent = '💥 Взрыв!';
+
+                if (rocketCanvasCtx) {
+                    const canvas = document.getElementById('rocketCanvas');
+                    const ctx = rocketCanvasCtx;
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    if (rocketPoints.length > 1) {
+                        ctx.beginPath();
+                        ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
+                        for (let i = 1; i < rocketPoints.length; i++) {
+                            ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
+                        }
+                        ctx.strokeStyle = 'rgba(255, 71, 87, 0.25)';
+                        ctx.lineWidth = 28;
+                        ctx.lineJoin = 'round';
+                        ctx.lineCap = 'round';
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
+                        for (let i = 1; i < rocketPoints.length; i++) {
+                            ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
+                        }
+                        ctx.strokeStyle = '#ff4757';
+                        ctx.lineWidth = 5;
+                        ctx.lineJoin = 'round';
+                        ctx.lineCap = 'round';
+                        ctx.shadowColor = '#ff4757';
+                        ctx.shadowBlur = 30;
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+                    }
+                }
+                stopRocketCanvas();
+
+                updateBalance(d.balance);
+                loadProfile();
+
+                rocketHistoryArr.unshift(d.mult);
+                rocketHistoryArr = rocketHistoryArr.slice(0, 15);
+                renderRocketHistory();
+
+                setTimeout(() => {
+                    showResult({ icon: '💥', title: 'Взрыв!', titleClass: 'lose',
+                        amount: `−${fmt(d.bet || lastBet)} 🪙`,
+                        details: `Ракета взорвалась н            game:'slots', bet });
             } else {
                 showResult({ icon:'😢', title:'Проигрыш', titleClass:'lose',
                     amount:`−${fmt(bet)} 🪙`, details:`Баланс: ${fmt(d.balance)} 🪙`,
