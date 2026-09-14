@@ -569,7 +569,7 @@ async function spinSlots2(bet) {
     }
 }
 
-/* ═══ MINES 2.0 ═══ */
+/* ═══ MINES ═══ */
 const MINES_OPTIONS = [3, 5, 8, 12, 24];
 
 function renderMinesOptions() {
@@ -727,7 +727,6 @@ async function crashStart(bet) {
             autoInline.classList.remove('hidden');
             autoInline.textContent = auto > 1 ? `Авто-кэшаут: ×${auto.toFixed(2)}` : '';
         }
-
         gameLocked = false;
         startCrashCanvas();
         pollCrash();
@@ -748,7 +747,6 @@ function startCrashCanvas() {
         if (!crashCanvasCtx) return;
         const ctx = crashCanvasCtx;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
         if (crashPoints.length > 1) {
             ctx.beginPath();
             ctx.moveTo(crashPoints[0].x, canvas.height);
@@ -1339,7 +1337,6 @@ async function penaltiKick(zone) {
             resetPenaltiField();
             gameLocked = false;
         }, 1200);
-
     } catch (e) {
         toast(e.message, 'error');
         document.querySelectorAll('.goal-zone').forEach(z => z.disabled = false);
@@ -1407,7 +1404,6 @@ async function flipCoin(side) {
     try {
         const d = await gameApi('/api/coin/flip', { bet: coinBet, side });
         face.classList.remove('flipping');
-
         face.textContent = d.result === 'heads' ? '👑' : '🔢';
         updateBalance(d.balance);
         loadProfile();
@@ -1735,12 +1731,16 @@ async function loadCases() {
         const homeEl = document.getElementById('homeCasesGrid');
 
         const cardHtml = (c) => `
-            <button class="case-card" onclick="openCaseById('${c.id}')">
+            <div class="case-card">
                 <div class="case-emoji">${c.emoji}</div>
                 <div class="case-name">${c.name}</div>
                 <div class="case-price">${c.price_stars} ⭐ · ${fmt(c.price_coins)} 🪙</div>
                 <div class="case-desc">${c.desc}</div>
-            </button>
+                <div class="case-actions">
+                    <button class="case-open-btn" onclick="openCaseById('${c.id}')">Открыть</button>
+                    <button class="case-x10-btn" onclick="openCaseById('${c.id}', 10)">×10</button>
+                </div>
+            </div>
         `;
 
         if (el) el.innerHTML = d.cases.map(cardHtml).join('');
@@ -1748,18 +1748,20 @@ async function loadCases() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-function openCaseById(id) {
+function openCaseById(id, count = 1) {
     const c = casesCache.find(x => x.id === id);
     if (!c) { toast('Кейс не найден', 'error'); return; }
-    openCase(c);
+    openCase(c, count);
 }
 
 /* ═══ CASE ROULETTE ═══ */
-async function openCase(c) {
+async function openCase(c, count = 1) {
     if (caseRouletteBusy) return;
     haptic('medium');
-    if (profile.balance < c.price_coins) {
-        toast(`Нужно ${fmt(c.price_coins)} 🪙`, 'error');
+
+    const totalCost = c.price_coins * count;
+    if (profile.balance < totalCost) {
+        toast(`Нужно ${fmt(totalCost)} 🪙`, 'error');
         return;
     }
 
@@ -1768,10 +1770,13 @@ async function openCase(c) {
     const track = document.getElementById('crTrack');
     const title = document.getElementById('crTitle');
     const status = document.getElementById('crStatus');
+    const multi = document.getElementById('crMulti');
 
-    title.textContent = `${c.emoji} ${c.name}`;
+    title.textContent = `${c.emoji} ${c.name}` + (count > 1 ? ` · ×${count}` : '');
     status.textContent = 'Крутим...';
     status.className = 'cr-status';
+    multi.classList.add('hidden');
+    multi.innerHTML = '';
     track.style.transition = 'none';
     track.style.transform = 'translateX(0)';
     track.innerHTML = '';
@@ -1779,7 +1784,11 @@ async function openCase(c) {
 
     let data;
     try {
-        data = await api('/api/cases/spin', { case_id: c.id });
+        const url = count > 1 ? '/api/cases/spin_multi' : '/api/cases/spin';
+        const body = count > 1
+            ? { case_id: c.id, count }
+            : { case_id: c.id };
+        data = await api(url, body);
     } catch (e) {
         overlay.classList.add('hidden');
         caseRouletteBusy = false;
@@ -1797,33 +1806,30 @@ async function openCase(c) {
 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-    const ITEM_W = 110;
-    const GAP = 12;
-    const ITEM_TOTAL = ITEM_W + GAP;
+    const firstItem = track.querySelector('.cr-item');
+    const ITEM_W = firstItem ? firstItem.offsetWidth : 110;
+    const ITEM_GAP = parseFloat(getComputedStyle(track).gap) || 12;
+    const ITEM_TOTAL = ITEM_W + ITEM_GAP;
     const viewportW = overlay.querySelector('.cr-viewport').clientWidth;
-    const centerOffset = viewportW / 2 - ITEM_W / 2;
 
-    const winCenter = data.win_pos * ITEM_TOTAL + ITEM_W / 2;
-    const finalX = centerOffset - winCenter;
+    const viewportCenter = viewportW / 2;
+    const winCenterInTrack = data.win_pos * ITEM_TOTAL + ITEM_W / 2;
+    const finalX = viewportCenter - winCenterInTrack;
 
-    const jitter = (Math.random() - 0.5) * (ITEM_W * 0.55);
+    const jitter = (Math.random() - 0.5) * (ITEM_W * 0.5);
     const targetX = finalX + jitter;
 
     const DURATION = 5000;
     const start = performance.now();
-    const startX = 0;
-
     let lastTick = 0;
 
-    function easeOutQuint(t) {
-        return 1 - Math.pow(1 - t, 5);
-    }
+    function easeOutQuint(t) { return 1 - Math.pow(1 - t, 5); }
 
     function animate(now) {
         const elapsed = now - start;
         const t = Math.min(elapsed / DURATION, 1);
         const eased = easeOutQuint(t);
-        const x = startX + (targetX - startX) * eased;
+        const x = targetX * eased;
 
         track.style.transform = `translateX(${x}px)`;
 
@@ -1837,21 +1843,22 @@ async function openCase(c) {
 
         if (t < 1) {
             requestAnimationFrame(animate);
-        } else {
-            const items = track.querySelectorAll('.cr-item');
-            const winnerEl = items[data.win_pos];
-            if (winnerEl) winnerEl.classList.add('winner');
+            return;
+        }
 
+        const items = track.querySelectorAll('.cr-item');
+        const winnerEl = items[data.win_pos];
+        if (winnerEl) winnerEl.classList.add('winner');
+
+        if (count === 1) {
             const r = data.result;
 
             if (r.rarity === 'mythic' || r.rarity === 'legendary') {
-                SFX.jackpot();
-                confettiJackpot();
+                SFX.jackpot(); confettiJackpot();
                 status.textContent = `🎉 ${r.name} · ${fmt(r.value)} 🪙`;
                 status.className = 'cr-status win';
             } else if (r.rarity === 'epic') {
-                SFX.win();
-                confettiBurst('#7c5cff');
+                SFX.win(); confettiBurst('#7c5cff');
                 status.textContent = `✨ ${r.name} · ${fmt(r.value)} 🪙`;
                 status.className = 'cr-status win';
             } else {
@@ -1869,6 +1876,41 @@ async function openCase(c) {
                 overlay.classList.add('hidden');
                 caseRouletteBusy = false;
             }, 2500);
+
+        } else {
+            const results = data.results;
+            const best = data.best;
+            const totalWin = results.reduce((s, r) => s + r.value, 0);
+
+            if (best.rarity === 'mythic' || best.rarity === 'legendary') {
+                SFX.jackpot(); confettiJackpot();
+            } else if (best.rarity === 'epic') {
+                SFX.win(); confettiBurst('#7c5cff');
+            } else {
+                SFX.cashout();
+            }
+            haptic('success');
+
+            status.textContent = `🏆 Лучший: ${best.emoji} ${best.name} · ${fmt(best.value)} 🪙`;
+            status.className = 'cr-status win';
+
+            multi.innerHTML = results.map(r => `
+                <div class="cr-multi-item" data-rarity="${r.rarity}">
+                    <span class="cr-multi-emoji">${r.emoji}</span>
+                    <span>${r.name}</span>
+                    <span class="cr-multi-val">+${fmt(r.value)}</span>
+                </div>
+            `).join('');
+            multi.classList.remove('hidden');
+
+            updateBalance(data.balance);
+            loadProfile();
+            addHistory('case', totalCost, totalWin);
+
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                caseRouletteBusy = false;
+            }, 4000);
         }
     }
 
