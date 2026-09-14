@@ -36,6 +36,7 @@ let duelPolling = null;
 let gameLocked = false;
 let freeCaseTimer = null;
 let casesCache = [];
+let caseRouletteBusy = false;
 
 /* ═══ SOUND ═══ */
 let audioCtx = null;
@@ -1622,7 +1623,6 @@ function renderWithdraw() {
         el.appendChild(btn);
     });
 
-    // 125 🪙 = 1 ⭐ (совпадает с бэком)
     const max = Math.floor(profile.balance / 125);
     if (max >= 15) {
         const all = document.createElement('button');
@@ -1754,55 +1754,133 @@ function openCaseById(id) {
     openCase(c);
 }
 
+/* ═══ CASE ROULETTE ═══ */
 async function openCase(c) {
+    if (caseRouletteBusy) return;
     haptic('medium');
     if (profile.balance < c.price_coins) {
         toast(`Нужно ${fmt(c.price_coins)} 🪙`, 'error');
         return;
     }
 
-    const overlay = document.createElement('div');
-    overlay.className = 'case-opening';
-    overlay.innerHTML = `<div class="spin">${c.emoji}</div><div style="color:#8b95a5;font-size:13px;">Открываем...</div>`;
-    document.body.appendChild(overlay);
+    caseRouletteBusy = true;
+    const overlay = document.getElementById('caseRoulette');
+    const track = document.getElementById('crTrack');
+    const title = document.getElementById('crTitle');
+    const status = document.getElementById('crStatus');
 
-    await new Promise(r => setTimeout(r, 900));
+    title.textContent = `${c.emoji} ${c.name}`;
+    status.textContent = 'Крутим...';
+    status.className = 'cr-status';
+    track.style.transition = 'none';
+    track.style.transform = 'translateX(0)';
+    track.innerHTML = '';
+    overlay.classList.remove('hidden');
 
+    let data;
     try {
-        const d = await api('/api/cases/open', { case_id: c.id });
-        SFX.cashout();
-        haptic('success');
-        updateBalance(d.balance);
-        loadProfile();
-        addHistory('case', c.price_coins, d.value);
-
-        const rarityColors = {
-            common: '#8b95a5', uncommon: '#00d68f', rare: '#4a9eff',
-            epic: '#7c5cff', legendary: '#ffc107', mythic: '#ff4757',
-        };
-        const color = rarityColors[d.rarity] || '#fff';
-        const kindLabel = d.kind === 'nft' ? '🎨 NFT-подарок' : '🎁 Подарок';
-
-        overlay.innerHTML = `
-            <div class="case-result">
-                <div class="case-result-emoji" style="color:${color}">${d.emoji}</div>
-                <div class="case-result-rarity" style="color:${color}">${d.rarity_emoji} ${d.rarity_name}</div>
-                <div class="case-result-name">${d.name}</div>
-                <div class="case-result-kind">${kindLabel}</div>
-                <div class="case-result-value">💰 ${fmt(d.value)} 🪙</div>
-            </div>
-        `;
-
-        if (d.rarity === 'mythic' || d.rarity === 'legendary') confettiJackpot();
-        else if (d.rarity === 'epic') confettiBurst(color);
-
-        setTimeout(() => { overlay.remove(); }, 2800);
+        data = await api('/api/cases/spin', { case_id: c.id });
     } catch (e) {
-        overlay.remove();
+        overlay.classList.add('hidden');
+        caseRouletteBusy = false;
         toast(e.message, 'error');
+        return;
     }
+
+    track.innerHTML = data.track.map(item => `
+        <div class="cr-item" data-rarity="${item.rarity}">
+            <div class="cr-emoji">${item.emoji}</div>
+            <div class="cr-name">${item.name}</div>
+            <div class="cr-price">${fmt(item.value)}</div>
+        </div>
+    `).join('');
+
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    const ITEM_W = 110;
+    const GAP = 12;
+    const ITEM_TOTAL = ITEM_W + GAP;
+    const viewportW = overlay.querySelector('.cr-viewport').clientWidth;
+    const centerOffset = viewportW / 2 - ITEM_W / 2;
+
+    const winCenter = data.win_pos * ITEM_TOTAL + ITEM_W / 2;
+    const finalX = centerOffset - winCenter;
+
+    const jitter = (Math.random() - 0.5) * (ITEM_W * 0.55);
+    const targetX = finalX + jitter;
+
+    const DURATION = 5000;
+    const start = performance.now();
+    const startX = 0;
+
+    let lastTick = 0;
+
+    function easeOutQuint(t) {
+        return 1 - Math.pow(1 - t, 5);
+    }
+
+    function animate(now) {
+        const elapsed = now - start;
+        const t = Math.min(elapsed / DURATION, 1);
+        const eased = easeOutQuint(t);
+        const x = startX + (targetX - startX) * eased;
+
+        track.style.transform = `translateX(${x}px)`;
+
+        const passedItems = Math.floor(Math.abs(x) / ITEM_TOTAL);
+        if (passedItems > lastTick) {
+            lastTick = passedItems;
+            if (elapsed < DURATION - 800) {
+                playTone(1200 + Math.random() * 200, 0.02, 'square', 0.02);
+            }
+        }
+
+        if (t < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            const items = track.querySelectorAll('.cr-item');
+            const winnerEl = items[data.win_pos];
+            if (winnerEl) winnerEl.classList.add('winner');
+
+            const r = data.result;
+
+            if (r.rarity === 'mythic' || r.rarity === 'legendary') {
+                SFX.jackpot();
+                confettiJackpot();
+                status.textContent = `🎉 ${r.name} · ${fmt(r.value)} 🪙`;
+                status.className = 'cr-status win';
+            } else if (r.rarity === 'epic') {
+                SFX.win();
+                confettiBurst('#7c5cff');
+                status.textContent = `✨ ${r.name} · ${fmt(r.value)} 🪙`;
+                status.className = 'cr-status win';
+            } else {
+                SFX.cashout();
+                status.textContent = `${r.emoji} ${r.name} · ${fmt(r.value)} 🪙`;
+                status.className = 'cr-status win';
+            }
+
+            haptic('success');
+            updateBalance(data.balance);
+            loadProfile();
+            addHistory('case', c.price_coins, r.value);
+
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                caseRouletteBusy = false;
+            }, 2500);
+        }
+    }
+
+    requestAnimationFrame(animate);
 }
 
+function closeCaseRoulette() {
+    if (caseRouletteBusy) return;
+    document.getElementById('caseRoulette').classList.add('hidden');
+}
+
+/* ═══ INVENTORY ═══ */
 async function loadInventory() {
     try {
         const d = await api('/api/cases/inventory');
