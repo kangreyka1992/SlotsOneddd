@@ -31,7 +31,7 @@ let plinkoRisk = 'low';
 let soundEnabled = true;
 let gameHistory = [];
 let minesMinesCount = 5;
-let slots2Lines = 10;
+let slots2Lines = 5;
 let duelPolling = null;
 
 /* ═══ SOUND ═══ */
@@ -319,7 +319,6 @@ async function loadProfile() {
         if (lf) lf.style.width = progress + '%';
         if (lt) lt.textContent = `Уровень ${level} · ${games} игр`;
 
-        // Показать кнопку админки
         const adminBtn = document.getElementById('adminBtn');
         if (adminBtn && d.is_admin) adminBtn.classList.remove('hidden');
     } catch (e) {
@@ -348,13 +347,15 @@ function openGame(game) {
         renderSlots2Field();
         renderSlots2Lines();
         document.getElementById('slots2Result').textContent = 'Выберите ставку';
-        renderBets('slots2Bets', spinSlots2);
+        renderBets('slots2Bets', spinSlots2, slots2Lines);
     }
     if (game === 'crash') {
         if (crashInterval) { clearInterval(crashInterval); crashInterval = null; }
         stopCrashCanvas();
         renderCrashHistory();
         document.getElementById('crashBets').classList.remove('hidden');
+        document.getElementById('crashAutoBlock').classList.remove('hidden');
+        document.getElementById('crashAutoInline').classList.add('hidden');
         document.getElementById('crashDisplay').classList.add('hidden');
         document.getElementById('crashDisplay').classList.remove('crashed');
         document.getElementById('crashMult').classList.remove('crashed');
@@ -411,23 +412,27 @@ function closeGame() {
     showScreen('home');
 }
 
-function renderBets(containerId, onPick) {
+function renderBets(containerId, onPick, multiplier = 1) {
     const el = document.getElementById(containerId);
     if (!el) return;
     el.innerHTML = '';
     BETS.forEach(b => {
+        const cost = b * multiplier;
         const btn = document.createElement('button');
         btn.className = 'bet-btn';
-        btn.textContent = fmt(b) + ' 🪙';
-        if (b > profile.balance) btn.disabled = true;
+        btn.textContent = fmt(b) + ' 🪙' + (multiplier > 1 ? ` (${fmt(cost)})` : '');
+        if (cost > profile.balance) btn.disabled = true;
         btn.onclick = () => { SFX.click(); haptic(); onPick(b); };
         el.appendChild(btn);
     });
     const all = document.createElement('button');
     all.className = 'bet-btn allin';
-    all.textContent = '💯 Весь баланс';
-    if (profile.balance <= 0) all.disabled = true;
-    all.onclick = () => { SFX.click(); haptic('medium'); onPick(profile.balance); };
+    const maxBet = Math.floor(profile.balance / multiplier);
+    all.textContent = multiplier > 1
+        ? `💯 Макс (${fmt(maxBet)} × ${multiplier})`
+        : '💯 Весь баланс';
+    if (maxBet <= 0) all.disabled = true;
+    all.onclick = () => { SFX.click(); haptic('medium'); onPick(maxBet); };
     el.appendChild(all);
 }
 
@@ -441,6 +446,7 @@ function renderSlots2Lines() {
 function setSlotsLines(n) {
     slots2Lines = n;
     renderSlots2Lines();
+    renderBets('slots2Bets', spinSlots2, slots2Lines);
     haptic();
 }
 
@@ -509,7 +515,7 @@ async function spinSlots2(bet) {
         clearInterval(spinInt);
         document.querySelectorAll('#slots2Field .slot2-cell').forEach(c => c.classList.remove('spinning'));
         toast(e.message, 'error');
-        renderBets('slots2Bets', spinSlots2);
+        renderBets('slots2Bets', spinSlots2, slots2Lines);
     }
 }
 
@@ -660,9 +666,15 @@ async function crashStart(bet) {
         updateBalance(d.balance);
         lastBet = bet;
         document.getElementById('crashBets').classList.add('hidden');
+        document.getElementById('crashAutoBlock').classList.add('hidden');
         document.getElementById('crashDisplay').classList.remove('hidden');
         document.getElementById('crashDisplay').classList.remove('crashed');
         document.getElementById('crashMult').classList.remove('crashed');
+        const autoInline = document.getElementById('crashAutoInline');
+        if (autoInline) {
+            autoInline.classList.remove('hidden');
+            autoInline.textContent = auto > 1 ? `Авто-кэшаут: ×${auto.toFixed(2)}` : '';
+        }
 
         startCrashCanvas();
         pollCrash();
