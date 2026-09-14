@@ -617,3 +617,53 @@ select.input { text-align: left; letter-spacing: 0; }
 .skeleton { background: var(--bg-elevated); border-radius: var(--radius-sm); animation: skeletonPulse 1.5s infinite; }
 
 .screen::-webkit-scrollbar { width: 0; }
+/* ═══════════ CRASH AUTO (до старта) ═══════════ */
+.crash-auto-block {
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,193,7,0.15);
+}
+.crash-auto-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.crash-auto-label input {
+  width: 90px;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: var(--gold);
+  font-family: var(--font-num);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  transition: border 0.15s;
+}
+.crash-auto-label input:focus { border-color: var(--gold); }
+.crash-auto-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.crash-auto-inline {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  background: rgba(124,92,255,0.2);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--purple);
+}
