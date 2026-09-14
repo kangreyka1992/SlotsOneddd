@@ -111,6 +111,17 @@ async def init_db():
         await db.commit()
 
 
+async def has_deposited(user_id: int, min_stars: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT SUM(stars) FROM payments WHERE user_id = ?",
+            (user_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            total_stars = row[0] if row and row[0] else 0
+            return total_stars >= min_stars
+
+
 # ═══════════ БАЗОВОЕ ═══════════
 
 async def ensure_user(user_id: int, username: str = None):
