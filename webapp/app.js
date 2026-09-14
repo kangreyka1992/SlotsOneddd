@@ -1165,15 +1165,23 @@ async function plinkoPlay(bet) {
     }, 800);
 }
 
-/* ═══ PENALTI ═══ */
+/* ═══ PENALTI (вратарь всегда в центре) ═══ */
 function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
+}
+
+function getZoneCoordsFixed(zone) {
+    const col = zone % 3;
+    const row = Math.floor(zone / 3);
+    const lefts = [22, 50, 78];
+    const tops  = [22, 50, 78];
+    return { left: lefts[col], top: tops[row] };
 }
 
 async function penaltiStart(bet) {
     try {
         const d = await gameApi('/api/penalti/start', { bet });
-        penaltiState = { bet, step: 0, keeperZone: d.keeper_zone };
+        penaltiState = { bet, step: 0 };
         lastBet = bet;
         updateBalance(d.balance);
         document.getElementById('penaltiBets').classList.add('hidden');
@@ -1182,38 +1190,25 @@ async function penaltiStart(bet) {
         document.getElementById('penaltiPrize').textContent = '0 🪙';
         document.getElementById('penaltiGoals').textContent = '0';
         document.getElementById('penaltiCashoutBtn').style.display = 'none';
-        document.getElementById('penaltiHint').textContent = '👇 Вратарь в зоне — туда нельзя';
+        document.getElementById('penaltiHint').textContent = '👇 Выбери, куда бить';
         document.getElementById('penaltiHint').className = 'penalti-hint';
 
-        resetPenaltiField(d.keeper_zone);
+        resetPenaltiField();
         loadProfile();
         gameLocked = false;
     } catch (e) { toast(e.message, 'error'); gameLocked = false; }
 }
 
-function resetPenaltiField(keeperZone) {
+function resetPenaltiField() {
     document.querySelectorAll('.goal-zone').forEach(z => {
         z.disabled = false;
-        z.classList.remove('keeper-here', 'scored', 'missed');
+        z.classList.remove('scored', 'missed');
     });
 
     const keeper = document.getElementById('keeper');
-    if (keeperZone !== null && keeperZone !== undefined) {
-        const kCoords = getZoneCoords(keeperZone);
-        keeper.style.left = kCoords.left + '%';
-        keeper.style.top = kCoords.top + '%';
-        keeper.classList.add('idle');
-
-        const keeperZoneEl = document.querySelector(`.goal-zone[data-zone="${keeperZone}"]`);
-        if (keeperZoneEl) {
-            keeperZoneEl.disabled = true;
-            keeperZoneEl.classList.add('keeper-here');
-        }
-    } else {
-        keeper.style.left = '50%';
-        keeper.style.top = '50%';
-        keeper.classList.add('idle');
-    }
+    keeper.style.left = '50%';
+    keeper.style.top = '50%';
+    keeper.classList.add('idle');
 
     const ball = document.getElementById('ballAnim');
     ball.style.opacity = '0';
@@ -1225,30 +1220,17 @@ function resetPenaltiField(keeperZone) {
     ball.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
 }
 
-function getZoneCoords(zone) {
-    const col = zone % 3;
-    const row = Math.floor(zone / 3);
-    const lefts  = [22, 50, 78];
-    const tops   = [22, 50, 78];
-    return { left: lefts[col], top: tops[row] };
-}
-
 async function penaltiKick(zone) {
     haptic();
     if (!penaltiState) return;
     if (gameLocked) { toast('⏳ Дождись окончания', 'error'); return; }
-
-    if (zone === penaltiState.keeperZone) {
-        toast('🧤 Вратарь здесь — выбери другую зону', 'error');
-        return;
-    }
 
     document.querySelectorAll('.goal-zone').forEach(z => z.disabled = true);
     document.getElementById('penaltiHint').textContent = '⚽ Удар...';
     document.getElementById('penaltiHint').className = 'penalti-hint';
 
     const ball = document.getElementById('ballAnim');
-    const target = getZoneCoords(zone);
+    const target = getZoneCoordsFixed(zone);
     ball.style.opacity = '1';
     ball.style.left = '50%';
     ball.style.bottom = '0';
@@ -1267,20 +1249,14 @@ async function penaltiKick(zone) {
 
         const keeper = document.getElementById('keeper');
         keeper.classList.remove('idle');
-
-        const diveZone = d.keeper_dive_zone !== undefined ? d.keeper_dive_zone : d.keeper_zone;
-        const kDive = getZoneCoords(diveZone);
-        keeper.style.left = kDive.left + '%';
-        keeper.style.top = kDive.top + '%';
+        keeper.style.left = target.left + '%';
+        keeper.style.top = target.top + '%';
 
         const zoneEl = document.querySelector(`.goal-zone[data-zone="${zone}"]`);
 
         if (d.save) {
             if (zoneEl) zoneEl.classList.add('missed');
-            const diveEl = document.querySelector(`.goal-zone[data-zone="${diveZone}"]`);
-            if (diveEl && !diveEl.disabled) diveEl.classList.add('keeper-here');
-
-            document.getElementById('penaltiHint').textContent = '🧤 Вратарь допрыгнул!';
+            document.getElementById('penaltiHint').textContent = '🧤 Вратарь отбил!';
             document.getElementById('penaltiHint').className = 'penalti-hint fail';
             document.getElementById('penaltiField').classList.add('save-flash');
             SFX.lose();
@@ -1291,7 +1267,7 @@ async function penaltiKick(zone) {
 
             setTimeout(() => {
                 document.getElementById('penaltiField').classList.remove('save-flash');
-                showResult({ icon: '🧤', title: 'ВРАТАРЬ ПОЙМАЛ!', titleClass: 'lose',
+                showResult({ icon: '🧤', title: 'ВРАТАРЬ ОТБИЛ!', titleClass: 'lose',
                     amount: `−${fmt(lastBet)} 🪙`,
                     details: `Голов забито: ${d.step}`,
                     game: 'penalti', bet: lastBet });
@@ -1326,11 +1302,10 @@ async function penaltiKick(zone) {
         document.getElementById('penaltiHint').className = 'penalti-hint success';
         document.getElementById('penaltiCashoutBtn').style.display = 'block';
         penaltiState.step = d.step;
-        penaltiState.keeperZone = d.next_keeper_zone;
 
         setTimeout(() => {
             document.getElementById('penaltiField').classList.remove('goal-flash');
-            resetPenaltiField(d.next_keeper_zone);
+            resetPenaltiField();
             ball.style.opacity = '0';
             gameLocked = false;
         }, 1200);
@@ -1338,13 +1313,6 @@ async function penaltiKick(zone) {
     } catch (e) {
         toast(e.message, 'error');
         document.querySelectorAll('.goal-zone').forEach(z => z.disabled = false);
-        if (penaltiState && penaltiState.keeperZone !== null) {
-            const keeperZoneEl = document.querySelector(`.goal-zone[data-zone="${penaltiState.keeperZone}"]`);
-            if (keeperZoneEl) {
-                keeperZoneEl.disabled = true;
-                keeperZoneEl.classList.add('keeper-here');
-            }
-        }
         gameLocked = false;
     }
 }
