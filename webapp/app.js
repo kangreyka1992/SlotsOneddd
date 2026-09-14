@@ -1187,8 +1187,7 @@ async function plinkoPlay(bet) {
 
 /* ═══ PENALTI ═══ */
 function initPenalti() {
-    const maxBet = Math.max(100, Math.floor(profile.balance * 0.1));
-    renderBets('penaltiBets', penaltiStart, 1, maxBet);
+    renderBets('penaltiBets', penaltiStart);
 }
 
 async function penaltiStart(bet) {
