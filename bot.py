@@ -72,17 +72,14 @@ async def cmd_start(message: types.Message):
     ])
 
     text = (
-        "╔══════════════════════════╗\n"
-        "║   🎰  <b>ДОБРО ПОЖАЛОВАТЬ</b>  🎰   ║\n"
-        "║        <b>В КАЗИНО</b>              ║\n"
-        "╚══════════════════════════╝\n"
+        "🎰 <b>ДОБРО ПОЖАЛОВАТЬ В КАЗИНО</b> 🎰\n"
         "\n"
-        "✨ <b>Добро пожаловать в мир азарта!</b>\n"
+        "✨ <b>Мир азарта ждёт тебя!</b>\n"
         "\n"
-        "🪙 Здесь тебя ждут:\n"
+        "🪙 <b>Доступные игры:</b>\n"
         "🎰 Слоты  ·  📈 Crash  ·  ⛏ Mines\n"
         "🎯 Plinko  ·  🎲 Кости  ·  ⚔️ Дуэли\n"
-        "и ещё много азартных игр\n"
+        "🪙 Монетка  ·  ⚽ Penalti  ·  🔫 Рулетка\n"
         "\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "🎁 <b>Бонус новичка</b> — забери прямо сейчас\n"
@@ -95,7 +92,20 @@ async def cmd_start(message: types.Message):
         "🔥 <i>Удачи и крупных выигрышей!</i> 🔥"
     )
 
-    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+    # ⚠️ ЗАМЕНИ НА СВОЙ URL ИЛИ FILE_ID
+    BANNER = "AgACAgIAAxkBAAIBVWqn3lOgAAEeJ77pG0LSOCrbNexvKwAC2yRrGxk3QEkvmpH1MmpOGAEAAwIAA3kAAz0E"
+    # BANNER = "AgACAgIAAxkBAAIC...file_id..."
+
+    try:
+        await message.answer_photo(
+            photo=BANNER,
+            caption=text,
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
+    except Exception:
+        # Если картинка не загрузилась — отправляем просто текст
+        await message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data == "noop")
