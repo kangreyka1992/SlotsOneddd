@@ -141,7 +141,7 @@ async def api_top(request: Request):
     }
 
 
-# ═══════════ СЛОТЫ ═══════════
+# ═══════════ СЛОТЫ 3×3 (старые) ═══════════
 
 @app.post("/api/slots/spin")
 async def api_slots(request: Request):
@@ -197,9 +197,135 @@ async def api_slots(request: Request):
     return {"result": result, "win": win, "jackpot": jackpot, "balance": nb}
 
 
-# ═══════════ GOLD MINE (сапёр) ═══════════
+# ═══════════ СЛОТЫ 5×3 С ЛИНИЯМИ ═══════════
+
+SLOT_LINES = [
+    [(0,0),(0,1),(0,2),(0,3),(0,4)],
+    [(1,0),(1,1),(1,2),(1,3),(1,4)],
+    [(2,0),(2,1),(2,2),(2,3),(2,4)],
+    [(0,0),(1,1),(2,2),(1,3),(0,4)],
+    [(2,0),(1,1),(0,2),(1,3),(2,4)],
+    [(1,0),(0,1),(0,2),(0,3),(1,4)],
+    [(1,0),(2,1),(2,2),(2,3),(1,4)],
+    [(0,0),(1,1),(1,2),(1,3),(0,4)],
+    [(2,0),(1,1),(1,2),(1,3),(2,4)],
+    [(0,0),(0,1),(1,2),(2,3),(2,4)],
+    [(2,0),(2,1),(1,2),(0,3),(0,4)],
+    [(1,0),(1,1),(0,2),(1,3),(1,4)],
+    [(1,0),(1,1),(2,2),(1,3),(1,4)],
+    [(0,0),(1,1),(2,2),(2,3),(2,4)],
+    [(2,0),(1,1),(0,2),(0,3),(0,4)],
+    [(1,0),(0,1),(0,2),(1,3),(2,4)],
+    [(1,0),(2,1),(2,2),(1,3),(0,4)],
+    [(0,0),(1,1),(2,2),(1,3),(2,4)],
+    [(0,0),(0,1),(0,2),(1,3),(2,4)],
+    [(2,0),(2,1),(2,2),(1,3),(0,4)],
+]
+
+SLOT_SYMBOLS = [
+    ("🍒", 30, 5, 20, 50),
+    ("🍋", 25, 5, 25, 60),
+    ("🍊", 20, 8, 30, 80),
+    ("🍇", 15, 10, 50, 120),
+    ("💎", 8, 20, 100, 300),
+    ("7️⃣", 1.5, 50, 250, 1000),
+    ("🤑", 0.5, 100, 500, 5000),
+]
+
+_SYM_EMOJI = [s[0] for s in SLOT_SYMBOLS]
+_SYM_WEIGHTS = [s[1] for s in SLOT_SYMBOLS]
+
+
+def _slot_spin(bet: int, lines_count: int):
+    field = [[random.choices(_SYM_EMOJI, weights=_SYM_WEIGHTS, k=1)[0] for _ in range(3)] for _ in range(5)]
+    total_win = 0
+    line_wins = []
+
+    for line_idx in range(lines_count):
+        line = SLOT_LINES[line_idx]
+        symbols = [field[c][r] for (r, c) in line]
+        first = symbols[0]
+        count = 1
+        for s in symbols[1:]:
+            if s == first:
+                count += 1
+            else:
+                break
+
+        if count >= 3:
+            for emoji, _w, p3, p4, p5 in SLOT_SYMBOLS:
+                if emoji == first:
+                    if count == 3:
+                        win = bet * p3 // 100
+                    elif count == 4:
+                        win = bet * p4 // 100
+                    else:
+                        win = bet * p5 // 100
+                    if win > 0:
+                        total_win += win
+                        line_wins.append({"line": line_idx, "count": count, "symbol": first, "win": win})
+                    break
+
+    return field, total_win, line_wins
+
+
+@app.post("/api/slots2/spin")
+async def api_slots2_spin(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    bet = int(data.get("bet", 0))
+    lines_count = int(data.get("lines", 10))
+
+    if bet <= 0 or bet > 10000000:
+        raise HTTPException(400, "invalid_bet")
+    if lines_count not in (1, 5, 10, 20):
+        raise HTTPException(400, "invalid_lines")
+
+    total_bet = bet * lines_count
+    balance = await get_balance(uid)
+    if balance < total_bet:
+        raise HTTPException(400, "not_enough_coins")
+
+    await add_balance(uid, -total_bet)
+
+    field, total_win, line_wins = _slot_spin(bet, lines_count)
+
+    if total_win > 0:
+        await add_balance(uid, total_win)
+
+    await log_game(uid, total_bet, total_win)
+    nb = await get_balance(uid)
+
+    await unlock_achievement(uid, "first_bet")
+    if total_win > 0:
+        await unlock_achievement(uid, "first_win")
+    if total_win >= total_bet * 10:
+        await unlock_achievement(uid, "jackpot")
+    if total_win >= 100000:
+        await unlock_achievement(uid, "big_win")
+
+    return {
+        "field": field,
+        "win": total_win,
+        "bet": total_bet,
+        "lines": lines_count,
+        "line_wins": line_wins,
+        "balance": nb,
+    }
+
+
+# ═══════════ MINES 2.0 (7×7) ═══════════
 
 mines_games: dict[int, dict] = {}
+MINES_FIELD = 7
+MINES_MULT = {
+    3:  0.10,
+    5:  0.15,
+    8:  0.22,
+    12: 0.32,
+    24: 0.55,
+}
 
 
 @app.post("/api/mines/start")
@@ -208,11 +334,14 @@ async def api_mines_start(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
     bet = int(data.get("bet", 0))
+    mines_count = int(data.get("mines", 5))
 
     if uid in mines_games:
         raise HTTPException(400, "already_playing")
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
+    if mines_count not in MINES_MULT:
+        raise HTTPException(400, "invalid_mines")
 
     balance = await get_balance(uid)
     if balance < bet:
@@ -220,13 +349,20 @@ async def api_mines_start(request: Request):
 
     await add_balance(uid, -bet)
 
+    total = MINES_FIELD * MINES_FIELD
     mines_games[uid] = {
         "bet": bet,
-        "mines": set(random.sample(list(range(25)), 5)),
+        "mines_count": mines_count,
+        "mines": set(random.sample(list(range(total)), mines_count)),
         "opened": set(),
     }
 
-    return {"field": 5, "mines_count": 5, "bet": bet, "balance": await get_balance(uid)}
+    return {
+        "field": MINES_FIELD,
+        "mines_count": mines_count,
+        "bet": bet,
+        "balance": await get_balance(uid),
+    }
 
 
 @app.post("/api/mines/open")
@@ -240,7 +376,8 @@ async def api_mines_open(request: Request):
     if not game or idx in game["opened"]:
         raise HTTPException(400, "invalid")
 
-    field = 5
+    field = MINES_FIELD
+    total = field * field
 
     def around(i):
         r, c = divmod(i, field)
@@ -259,24 +396,42 @@ async def api_mines_open(request: Request):
         bet = game["bet"]
         del mines_games[uid]
         await log_game(uid, bet, 0)
-        return {"hit_mine": True, "idx": idx, "bet": bet, "balance": await get_balance(uid)}
+        return {
+            "hit_mine": True,
+            "idx": idx,
+            "bet": bet,
+            "mines": list(game["mines"]),
+            "balance": await get_balance(uid),
+        }
 
     game["opened"].add(idx)
-    safe = 25 - 5
+    safe = total - game["mines_count"]
 
     if len(game["opened"]) >= safe:
-        win = int(game["bet"] * 2.5)
+        step_mult = MINES_MULT[game["mines_count"]]
+        win = int(game["bet"] * (1 + step_mult * safe))
         await add_balance(uid, win)
         await log_game(uid, game["bet"], win)
         del mines_games[uid]
         await unlock_achievement(uid, "first_bet")
         await unlock_achievement(uid, "first_win")
-        return {"hit_mine": False, "won": True, "win": win, "balance": await get_balance(uid)}
+        return {
+            "hit_mine": False,
+            "won": True,
+            "win": win,
+            "balance": await get_balance(uid),
+        }
+
+    step_mult = MINES_MULT[game["mines_count"]]
+    current_prize = int(game["bet"] * (1 + step_mult * len(game["opened"])))
 
     return {
-        "hit_mine": False, "won": False, "idx": idx, "around": around(idx),
+        "hit_mine": False,
+        "won": False,
+        "idx": idx,
+        "around": around(idx),
         "opened": list(game["opened"]),
-        "current_prize": int(game["bet"] * (1 + 0.3 * len(game["opened"]))),
+        "current_prize": current_prize,
         "balance": await get_balance(uid),
     }
 
@@ -290,7 +445,8 @@ async def api_mines_cashout(request: Request):
     if not game or not game["opened"]:
         raise HTTPException(400, "nothing_to_cashout")
 
-    prize = int(game["bet"] * (1 + 0.3 * len(game["opened"])))
+    step_mult = MINES_MULT[game["mines_count"]]
+    prize = int(game["bet"] * (1 + step_mult * len(game["opened"])))
     bet = game["bet"]
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
@@ -310,19 +466,20 @@ async def api_mines_cancel(request: Request):
     return {"balance": await get_balance(uid)}
 
 
-# ═══════════ РАКЕТКА ═══════════
+# ═══════════ CRASH ═══════════
 
-rockets: dict[int, dict] = {}
+crash_games: dict[int, dict] = {}
 
 
-@app.post("/api/rocket/start")
-async def api_rocket_start(request: Request):
+@app.post("/api/crash/start")
+async def api_crash_start(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
     bet = int(data.get("bet", 0))
+    auto_cashout = float(data.get("auto_cashout", 0))
 
-    if uid in rockets:
+    if uid in crash_games:
         raise HTTPException(400, "already_playing")
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
@@ -332,56 +489,101 @@ async def api_rocket_start(request: Request):
         raise HTTPException(400, "not_enough_coins")
 
     await add_balance(uid, -bet)
-    r = random.random() * 98
-    rockets[uid] = {
+
+    r = random.random()
+    if r < 0.05:
+        crash_at = 1.00
+    else:
+        crash_at = min(100.0, max(1.01, 0.95 / (1 - r)))
+
+    crash_games[uid] = {
         "bet": bet,
-        "crash_at": max(1.0, 99 / (100 - r)),
+        "crash_at": crash_at,
         "started": time.time(),
+        "auto_cashout": auto_cashout if auto_cashout > 1.0 else 0,
+        "cashed": False,
     }
-    return {"balance": await get_balance(uid)}
+
+    return {
+        "balance": await get_balance(uid),
+        "bet": bet,
+        "started_at": crash_games[uid]["started"],
+    }
 
 
-@app.post("/api/rocket/status")
-async def api_rocket_status(request: Request):
+@app.post("/api/crash/status")
+async def api_crash_status(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
-    game = rockets.get(uid)
+    game = crash_games.get(uid)
     if not game:
         raise HTTPException(400, "no_game")
 
     elapsed = time.time() - game["started"]
-    mult = max(1.0, 1.0 + elapsed * 0.4)
+    mult = 1.0 + (elapsed ** 1.4) * 0.35
+    mult = round(mult, 2)
+
+    if game["auto_cashout"] and mult >= game["auto_cashout"] and not game["cashed"]:
+        game["cashed"] = True
+        prize = int(game["bet"] * game["auto_cashout"])
+        await add_balance(uid, prize)
+        await log_game(uid, game["bet"], prize)
+        await unlock_achievement(uid, "first_bet")
+        if prize > game["bet"]:
+            await unlock_achievement(uid, "first_win")
+        del crash_games[uid]
+        return {
+            "crashed": False,
+            "cashed": True,
+            "mult": game["auto_cashout"],
+            "prize": prize,
+            "bet": game["bet"],
+            "balance": await get_balance(uid),
+        }
 
     if mult >= game["crash_at"]:
-        del rockets[uid]
-        await log_game(uid, game["bet"], 0)
-        return {"crashed": True, "mult": game["crash_at"], "bet": game["bet"], "balance": await get_balance(uid)}
+        bet = game["bet"]
+        del crash_games[uid]
+        await log_game(uid, bet, 0)
+        return {
+            "crashed": True,
+            "mult": game["crash_at"],
+            "bet": bet,
+            "balance": await get_balance(uid),
+        }
 
-    return {"crashed": False, "mult": mult, "prize": int(game["bet"] * mult),
-            "bet": game["bet"], "balance": await get_balance(uid)}
+    return {
+        "crashed": False,
+        "cashed": False,
+        "mult": mult,
+        "prize": int(game["bet"] * mult),
+        "bet": game["bet"],
+        "balance": await get_balance(uid),
+    }
 
 
-@app.post("/api/rocket/cashout")
-async def api_rocket_cashout(request: Request):
+@app.post("/api/crash/cashout")
+async def api_crash_cashout(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
-    game = rockets.get(uid)
+    game = crash_games.get(uid)
     if not game:
         raise HTTPException(400, "no_game")
 
     elapsed = time.time() - game["started"]
-    mult = max(1.01, 1.0 + elapsed * 0.4)
+    mult = round(1.0 + (elapsed ** 1.4) * 0.35, 2)
 
     if mult >= game["crash_at"]:
-        del rockets[uid]
-        await log_game(uid, game["bet"], 0)
+        bet = game["bet"]
+        del crash_games[uid]
+        await log_game(uid, bet, 0)
         raise HTTPException(400, "crashed")
 
     prize = int(game["bet"] * mult)
     bet = game["bet"]
-    del rockets[uid]
+    del crash_games[uid]
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
     await unlock_achievement(uid, "first_bet")
@@ -413,7 +615,6 @@ async def api_dice(request: Request):
     win = 0
     mult = 0
 
-    # Поддерживаем оба варианта: "low/high/exact" и "range_3_6/range_4_6/range_6_6"
     if choice in ("low", "range_3_6") and roll >= 3:
         mult = 1.95
         win = int(bet * mult)
@@ -555,8 +756,6 @@ async def api_plinko(request: Request):
 
     mults = PLINKO_MULTS[risk]
     n = len(mults) - 1
-
-    # Биномиальное распределение
     probs = [math.comb(n, k) * (0.5 ** n) for k in range(n + 1)]
 
     r = random.random()
@@ -678,7 +877,7 @@ async def api_coin_flip(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
     bet = int(data.get("bet", 0))
-    side = data.get("side")  # "heads" или "tails"
+    side = data.get("side")
 
     if side not in ("heads", "tails"):
         raise HTTPException(400, "invalid_side")
@@ -706,6 +905,137 @@ async def api_coin_flip(request: Request):
         await unlock_achievement(uid, "first_win")
 
     return {"result": result, "win": win, "mult": mult, "balance": nb}
+
+
+# ═══════════ PVP ДУЭЛЬ ═══════════
+
+duel_queue: list[dict] = []
+duel_active: dict[str, dict] = {}
+
+
+@app.post("/api/duel/join")
+async def api_duel_join(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    bet = int(data.get("bet", 0))
+
+    if bet <= 0 or bet > 10000000:
+        raise HTTPException(400, "invalid_bet")
+
+    for q in duel_queue:
+        if q["uid"] == uid:
+            raise HTTPException(400, "already_in_queue")
+
+    for did, g in duel_active.items():
+        if uid in (g["p1"], g["p2"]):
+            raise HTTPException(400, "already_in_duel")
+
+    balance = await get_balance(uid)
+    if balance < bet:
+        raise HTTPException(400, "not_enough_coins")
+
+    opponent = None
+    for i, q in enumerate(duel_queue):
+        if q["bet"] == bet and q["uid"] != uid:
+            opponent = duel_queue.pop(i)
+            break
+
+    if not opponent:
+        duel_queue.append({"uid": uid, "bet": bet, "joined": time.time()})
+        return {"status": "waiting", "queue_size": len(duel_queue)}
+
+    await add_balance(uid, -bet)
+    await add_balance(opponent["uid"], -bet)
+
+    winner = random.choice([uid, opponent["uid"]])
+    prize = int(bet * 2 * 0.98)
+
+    duel_id = f"duel_{int(time.time())}_{random.randint(1000,9999)}"
+    duel_active[duel_id] = {
+        "p1": uid,
+        "p2": opponent["uid"],
+        "bet": bet,
+        "winner": winner,
+        "prize": prize,
+        "created": time.time(),
+        "claimed": set(),
+    }
+
+    await add_balance(winner, prize)
+    await log_game(uid, bet, prize if winner == uid else 0)
+    await log_game(opponent["uid"], bet, prize if winner == opponent["uid"] else 0)
+    await unlock_achievement(uid, "first_bet")
+    await unlock_achievement(opponent["uid"], "first_bet")
+    if winner == uid:
+        await unlock_achievement(uid, "first_win")
+    else:
+        await unlock_achievement(opponent["uid"], "first_win")
+
+    for player_uid, is_winner in [(uid, winner == uid), (opponent["uid"], winner == opponent["uid"])]:
+        try:
+            if is_winner:
+                await bot.send_message(
+                    player_uid,
+                    f"🏆 <b>Победа в дуэли!</b>\n\nСтавка: <b>{bet}</b> 🪙\nВыигрыш: <b>+{prize}</b> 🪙",
+                    parse_mode="HTML",
+                )
+            else:
+                await bot.send_message(
+                    player_uid,
+                    f"😢 <b>Поражение в дуэли</b>\n\nСтавка: <b>{bet}</b> 🪙 сгорела",
+                    parse_mode="HTML",
+                )
+        except Exception:
+            pass
+
+    return {
+        "status": "matched",
+        "duel_id": duel_id,
+        "winner": winner,
+        "you_win": winner == uid,
+        "prize": prize,
+        "opponent_id": opponent["uid"],
+        "balance": await get_balance(uid),
+    }
+
+
+@app.post("/api/duel/status")
+async def api_duel_status(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    for did, g in list(duel_active.items()):
+        if uid in (g["p1"], g["p2"]) and uid not in g["claimed"]:
+            g["claimed"].add(uid)
+            return {
+                "status": "matched",
+                "duel_id": did,
+                "you_win": g["winner"] == uid,
+                "prize": g["prize"] if g["winner"] == uid else 0,
+                "bet": g["bet"],
+                "opponent_id": g["p2"] if g["p1"] == uid else g["p1"],
+                "balance": await get_balance(uid),
+            }
+
+    for q in duel_queue:
+        if q["uid"] == uid:
+            return {"status": "waiting", "queue_size": len(duel_queue)}
+
+    return {"status": "idle"}
+
+
+@app.post("/api/duel/leave")
+async def api_duel_leave(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    for i, q in enumerate(duel_queue):
+        if q["uid"] == uid:
+            duel_queue.pop(i)
+            return {"status": "left"}
+    return {"status": "not_in_queue"}
 
 
 # ═══════════ ВЫВОД ═══════════
