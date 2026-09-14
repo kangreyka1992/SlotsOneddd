@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=30">
+<link rel="stylesheet" href="style.css?v=35">
 </head>
 <body>
 <div id="app">
@@ -86,32 +86,45 @@
     </section>
 
     <section class="screen" id="screen-upgrader">
-      <h3 class="section-title">⚡ Апгрейдер</h3>
-
-      <div class="upg-panel">
-        <div class="upg-side upg-left">
-          <div class="upg-side-label">Твои предметы</div>
-          <div class="upg-items" id="upgItems"></div>
-          <div class="upg-total" id="upgTotal">0 🪙</div>
+      <div class="upg-top">
+        <div class="upg-side-card" id="upgMyItem">
+          <div class="upg-side-empty">Выбери предмет</div>
         </div>
 
-        <div class="upg-arrow">→</div>
-
-        <div class="upg-side upg-right">
-          <div class="upg-side-label">Цель</div>
-          <div class="upg-target" id="upgTarget">
-            <div class="upg-target-empty">Выбери цель ↓</div>
+        <div class="upg-circle-wrap">
+          <svg class="upg-circle" viewBox="0 0 200 200">
+            <circle class="upg-circle-bg" cx="100" cy="100" r="85" />
+            <circle class="upg-circle-fill" id="upgCircleFill" cx="100" cy="100" r="85" />
+          </svg>
+          <div class="upg-circle-center">
+            <div class="upg-percent" id="upgPercent">0%</div>
+            <div class="upg-percent-label">шанс</div>
           </div>
-          <div class="upg-target-price" id="upgTargetPrice">—</div>
+        </div>
+
+        <div class="upg-side-card upg-target-card" id="upgTargetCard">
+          <button class="upg-nav upg-nav-prev" onclick="upgraderNav(-1)">‹</button>
+          <div class="upg-side-empty">Выбери цель</div>
+          <button class="upg-nav upg-nav-next" onclick="upgraderNav(1)">›</button>
         </div>
       </div>
 
-      <div class="upg-chance" id="upgChance">Шанс: —</div>
+      <div class="upg-quick-row">
+        <button class="upg-quick" onclick="upgraderQuickMult(2)">×2</button>
+        <button class="upg-quick" onclick="upgraderQuickMult(4)">×4</button>
+        <button class="upg-quick" onclick="upgraderQuickMult(8)">×8</button>
+        <button class="upg-quick" onclick="upgraderQuickChance(35)">35%</button>
+        <button class="upg-quick" onclick="upgraderQuickChance(55)">55%</button>
+        <button class="upg-quick" onclick="upgraderQuickChance(75)">75%</button>
+        <button class="upg-quick upg-quick-shuffle" onclick="upgraderRandomTarget()">🎲</button>
+      </div>
 
-      <button class="btn-primary upg-go" onclick="upgraderPlay()" id="upgGoBtn">⚡ Апгрейд</button>
+      <button class="btn-primary upg-go-big" onclick="upgraderPlay()" id="upgGoBtn">
+        ⚡ Прокачать
+      </button>
 
-      <h4 class="admin-subtitle">Выбери цель</h4>
-      <div class="upg-targets" id="upgTargets"></div>
+      <h4 class="admin-subtitle" style="margin-top: 16px;">Твой инвентарь</h4>
+      <div class="upg-inv-list" id="upgInvList"></div>
     </section>
 
     <section class="screen" id="screen-profile">
@@ -468,7 +481,6 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<!-- ═══ CASE INFO ═══ -->
 <div id="caseInfo" class="case-info hidden">
   <div class="ci-header">
     <div class="ci-title" id="ciTitle">Кейс</div>
@@ -483,7 +495,6 @@
   </div>
 </div>
 
-<!-- ═══ CASE ROULETTE ═══ -->
 <div id="caseRoulette" class="case-roulette hidden">
   <div class="cr-header">
     <div class="cr-title" id="crTitle">Кейс</div>
@@ -500,6 +511,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=30"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>
