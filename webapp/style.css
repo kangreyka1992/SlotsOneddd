@@ -938,4 +938,169 @@ select.input { text-align: left; letter-spacing: 0; }
   50% { opacity: 0.7; }
 }
 
+/* ═══════════ FREE CASE ═══════════ */
+.free-case-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(255,193,7,0.18), rgba(255,143,0,0.10));
+  border: 2px solid rgba(255,193,7,0.4);
+  box-shadow: 0 0 20px rgba(255,193,7,0.15);
+  transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+  text-align: left;
+}
+.free-case-btn:active:not(:disabled) {
+  transform: scale(0.97);
+  box-shadow: 0 0 30px rgba(255,193,7,0.4);
+}
+.free-case-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: rgba(255,255,255,0.1);
+  background: var(--bg-card);
+  box-shadow: none;
+}
+.free-case-btn:disabled .free-case-icon {
+  filter: grayscale(1);
+}
+.free-case-icon {
+  font-size: 36px;
+  animation: freeCasePulse 2s ease-in-out infinite;
+}
+@keyframes freeCasePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+.free-case-btn:disabled .free-case-icon { animation: none; }
+.free-case-info { flex: 1; }
+.free-case-title { font-size: 15px; font-weight: 800; color: var(--gold); }
+.free-case-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: var(--font-num);
+}
+.free-case-streak {
+  padding: 4px 10px;
+  background: rgba(255,193,7,0.15);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold);
+  font-family: var(--font-num);
+}
+.free-case-streak.hidden { display: none; }
+
+/* ═══════════ CASES ═══════════ */
+.cases-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.case-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  transition: transform 0.15s, background 0.15s;
+  border: 2px solid rgba(255,255,255,0.05);
+}
+.case-card:active { transform: scale(0.96); background: var(--bg-elevated); }
+.case-emoji { font-size: 40px; }
+.case-name { font-size: 13px; font-weight: 700; }
+.case-price { font-size: 11px; color: var(--gold); font-family: var(--font-num); }
+.case-desc { font-size: 10px; color: var(--text-muted); }
+
+/* Анимация открытия */
+.case-opening {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.9);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2000;
+  flex-direction: column; gap: 20px;
+  padding: 20px;
+}
+.case-opening .spin {
+  font-size: 90px;
+  animation: caseSpin 0.4s linear infinite;
+}
+@keyframes caseSpin { 100% { transform: rotate(360deg); } }
+
+.case-result {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-align: center;
+}
+.case-result-emoji {
+  font-size: 110px;
+  filter: drop-shadow(0 0 30px currentColor);
+  animation: resultFloat 2s ease-in-out infinite;
+}
+@keyframes resultFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.case-result-name { font-size: 24px; font-weight: 900; }
+.case-result-rarity {
+  font-size: 14px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 2px;
+}
+.case-result-value {
+  font-size: 28px; font-weight: 900;
+  font-family: var(--font-num); color: var(--gold);
+  text-shadow: var(--shadow-glow-gold);
+}
+.case-result-kind {
+  font-size: 12px; color: var(--text-muted);
+  padding: 4px 12px; background: rgba(124,92,255,0.2);
+  border-radius: 20px;
+}
+
+/* Инвентарь */
+.inventory-stats {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; margin-bottom: 12px;
+}
+.inv-stat {
+  padding: 12px; background: var(--bg-card);
+  border-radius: var(--radius-sm); text-align: center;
+}
+.inv-stat-val {
+  font-size: 18px; font-weight: 800;
+  font-family: var(--font-num); color: var(--gold);
+}
+.inv-stat-lbl { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+.inventory-list { display: flex; flex-direction: column; gap: 8px; }
+.inventory-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; background: var(--bg-card);
+  border-radius: var(--radius-sm); border-left: 3px solid var(--text-dim);
+}
+.inventory-item[data-rarity="uncommon"]  { border-left-color: var(--green); }
+.inventory-item[data-rarity="rare"]      { border-left-color: var(--blue); }
+.inventory-item[data-rarity="epic"]      { border-left-color: var(--purple); }
+.inventory-item[data-rarity="legendary"] { border-left-color: var(--gold); }
+.inventory-item[data-rarity="mythic"]    { border-left-color: var(--red); }
+.inv-emoji { font-size: 30px; }
+.inv-info { flex: 1; }
+.inv-name { font-size: 13px; font-weight: 700; }
+.inv-rarity { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
+.inv-value { font-size: 13px; font-weight: 700; font-family: var(--font-num); color: var(--gold); }
+.inv-sell-btn {
+  padding: 8px 12px; background: var(--green); color: #000;
+  border-radius: 8px; font-size: 12px; font-weight: 800;
+  transition: transform 0.15s;
+}
+.inv-sell-btn:active { transform: scale(0.9); }
+
 .screen::-webkit-scrollbar { width: 0; }
