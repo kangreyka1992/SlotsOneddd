@@ -1,8 +1,8 @@
 const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
-tg.setHeaderColor('#0f1721');
-tg.setBackgroundColor('#0f1721');
+tg.setHeaderColor('#0a0e14');
+tg.setBackgroundColor('#0a0e14');
 
 const initData = tg.initData;
 const BOT_USERNAME = "SlotsGameFast_bot";
@@ -20,6 +20,9 @@ let rocketPoints = [];
 let rocketHistoryArr = [1.24, 3.5, 1.08, 8.2, 1.5, 2.1, 12.4, 1.02, 2.8, 1.7];
 let rrState = null;
 let diceBet = null;
+let penaltiState = null;
+let coinBet = null;
+let coinHistory = [];
 let lastGame = null;
 let lastBet = 0;
 let withdrawAllowed = false;
@@ -109,7 +112,7 @@ function showScreen(name) {
 function updateBalance(b) {
     profile.balance = b;
     document.getElementById('headerBalance').textContent = fmt(b);
-    document.getElementById('homeBalance').textContent = fmt(b);
+    document.getElementById('profileBalance').textContent = fmt(b);
     document.getElementById('gameBalance').textContent = fmt(b);
     document.getElementById('withdrawBalance').textContent = fmt(b);
 }
@@ -120,7 +123,6 @@ async function loadProfile() {
     try {
         const d = await api('/api/profile');
         profile = d;
-        document.getElementById('headerUsername').textContent = d.username;
         updateBalance(d.balance);
         document.getElementById('statGames').textContent = fmt(d.stats.games);
         document.getElementById('statWagered').textContent = fmt(d.stats.wagered);
@@ -148,8 +150,9 @@ function openGame(game) {
     document.querySelectorAll('.game-content').forEach(c => c.classList.add('hidden'));
     document.getElementById('content-' + game).classList.remove('hidden');
     const titles = {
-        slots: '🎰 Слоты', mines: '💣 Сапёр',
+        slots: '🎰 Слоты', mines: '⛏ Gold Mine',
         rocket: '🚀 Ракетка', dice: '🎲 Кости', rr: '🔫 Русская рулетка',
+        plinko: '🎯 Plinko', penalti: '⚽ Penalti', coin: '🪙 Монетка',
     };
     document.getElementById('gameTitle').textContent = titles[game];
     showScreen('game');
@@ -157,6 +160,8 @@ function openGame(game) {
     minesState = null;
     rrState = null;
     diceBet = null;
+    penaltiState = null;
+    coinBet = null;
 
     if (game === 'slots') {
         document.getElementById('slotsBets').classList.remove('hidden');
@@ -192,6 +197,21 @@ function openGame(game) {
         document.getElementById('rrBets').classList.remove('hidden');
         document.getElementById('rrDisplay').classList.add('hidden');
         renderBets('rrBets', rrStart);
+    }
+    if (game === 'plinko') {
+        document.getElementById('plinkoBets').classList.remove('hidden');
+        document.getElementById('plinkoBall').style.display = 'none';
+        initPlinko();
+    }
+    if (game === 'penalti') {
+        document.getElementById('penaltiBets').classList.remove('hidden');
+        document.getElementById('penaltiDisplay').classList.add('hidden');
+        initPenalti();
+    }
+    if (game === 'coin') {
+        document.getElementById('coinBets').classList.remove('hidden');
+        document.getElementById('coinDisplay').classList.add('hidden');
+        initCoin();
     }
 }
 
@@ -287,7 +307,7 @@ async function spinSlots(bet) {
     }
 }
 
-/* ═══ САПЁР ═══ */
+/* ═══ GOLD MINE ═══ */
 
 function initMines() {
     if (minesState) return;
@@ -299,6 +319,277 @@ async function minesStart(bet) {
     try {
         const d = await api('/api/mines/start', { bet });
         minesState = { field: 5, bet, opened: new Set() };
+        lastBet = bet;
+        document.getElementById('minesBets').classList.add('hidden');
+        document.getElementById('minesInfo').classList.remove('hidden');
+        document.getElementById('minesGrid').classList.remove('hidden');
+        updateBalance(d.balance);
+        renderMinesGrid(5);
+        loadProfile();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+function renderMinesGrid(field) {
+    const grid = document.getElementById('minesGrid');
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = `repeat(${field}, 1fr)`;
+    for (let i = 0; i < field * field; i++) {
+        const cell = document.createElement('button');
+        cell.className = 'mine-cell';
+        cell.textContent = '🌑';
+        cell.onclick = () => minesOpen(i, cell);
+        grid.appendChild(cell);
+    }
+    document.getElementById('minesOpened').textContent = 0;
+    document.getElementById('minesPrize').textContent = 0;
+    document.getElementById('minesCashout').classList.add('hidden');
+}
+
+async function minesOpen(idx, cell) {
+    haptic();
+    if (!minesState || cell.classList.contains('opened')) return;
+    cell.disabled = true;
+
+    try {
+        const d = await api('/api/mines/open', { idx });
+        updateBalance(d.balance);
+
+        if (d.hit_mine) {
+            cell.textContent = '💥';
+            cell.classList.add('mine');
+            minesState = null;
+            loadProfile();
+            setTimeout(() => {
+                showResult({
+                    icon: '💥',
+                    title: 'ВЗРЫВ!',
+                    titleClass: 'lose',
+                    amount: `−${fmt(d.bet || lastBet)} 🪙`,
+                    details: 'Вы наткнулись на бомбу',
+                    game: 'mines',
+                    bet: d.bet || lastBet,
+                });
+            }, 800);
+            return;
+        }
+
+        if (d.won) {
+            cell.textContent = '💎';
+            cell.classList.add('opened');
+            minesState = null;
+            loadProfile();
+            setTimeout(() => {
+                showResult({
+                    icon: '🏆',
+                    title: 'Всё золото собрано!',
+                    titleClass: 'win',
+                    amount: `+${fmt(d.win)} 🪙`,
+                    details: 'Все безопасные клетки открыты<br>Множитель: ×2.5',
+                    game: 'mines',
+                    bet: lastBet,
+                });
+            }, 800);
+            return;
+        }
+
+        cell.textContent = '💰';
+        cell.classList.add('opened');
+        minesState.opened.add(idx);
+        document.getElementById('minesOpened').textContent = d.opened.length;
+        document.getElementById('minesPrize').textContent = fmt(d.current_prize);
+        document.getElementById('minesCashout').classList.remove('hidden');
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+async function minesCashout() {
+    haptic();
+    try {
+        const d = await api('/api/mines/cashout');
+        updateBalance(d.balance);
+        minesState = null;
+        loadProfile();
+        setTimeout(() => {
+            showResult({
+                icon: '💎',
+                title: 'Продано!',
+                titleClass: 'win',
+                amount: `+${fmt(d.prize)} 🪙`,
+                details: `Вы продали золото`,
+                game: 'mines',
+                bet: d.bet || lastBet,
+            });
+        }, 500);
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+/* ═══ РАКЕТКА ═══ */
+
+function initRocket() {
+    if (rocketInterval) return;
+    renderRocketHistory();
+    renderBets('rocketBets', rocketStart);
+}
+
+function renderRocketHistory() {
+    const el = document.getElementById('rocketHistory');
+    el.innerHTML = '';
+    rocketHistoryArr.slice(0, 15).forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'rocket-hist-item ' + (
+            m >= 10 ? 'orange' : m >= 2 ? 'purple' : 'blue'
+        );
+        div.textContent = '×' + m.toFixed(2);
+        el.appendChild(div);
+    });
+}
+
+async function rocketStart(bet) {
+    haptic();
+    try {
+        const d = await api('/api/rocket/start', { bet });
+        updateBalance(d.balance);
+        lastBet = bet;
+
+        document.getElementById('rocketBets').classList.add('hidden');
+        document.getElementById('rocketDisplay').classList.remove('hidden');
+        document.getElementById('rocketDisplay').classList.remove('crashed');
+        document.getElementById('rocketMult').classList.remove('crashed');
+
+        const emoji = document.getElementById('rocketEmoji');
+        const flame = document.getElementById('rocketFlame');
+
+        emoji.style.left = '30px';
+        emoji.style.bottom = '30px';
+        emoji.style.opacity = '1';
+        flame.style.left = '30px';
+        flame.style.bottom = '30px';
+        flame.style.opacity = '0.95';
+
+        startRocketCanvas();
+        pollRocket();
+        loadProfile();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+function startRocketCanvas() {
+    const canvas = document.getElementById('rocketCanvas');
+    const field = document.getElementById('rocketField');
+    canvas.width = field.clientWidth;
+    canvas.height = field.clientHeight;
+    rocketCanvasCtx = canvas.getContext('2d');
+    rocketPoints = [{ x: 30, y: canvas.height - 30 }];
+
+    function draw() {
+        if (!rocketCanvasCtx) return;
+        const ctx = rocketCanvasCtx;
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (rocketPoints.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
+            for (let i = 1; i < rocketPoints.length; i++) {
+                ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
+            }
+            ctx.strokeStyle = 'rgba(255, 193, 7, 0.15)';
+            ctx.lineWidth = 24;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
+            for (let i = 1; i < rocketPoints.length; i++) {
+                ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
+            }
+            ctx.strokeStyle = '#ffc107';
+            ctx.lineWidth = 4;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.shadowColor = '#ffc107';
+            ctx.shadowBlur = 20;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        if (rocketPoints.length > 0) {
+            const last = rocketPoints[rocketPoints.length - 1];
+            ctx.beginPath();
+            ctx.arc(last.x, last.y, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffc107';
+            ctx.shadowColor = '#ffc107';
+            ctx.shadowBlur = 30;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        rocketAnimationId = requestAnimationFrame(draw);
+    }
+    draw();
+}
+
+function stopRocketCanvas() {
+    if (rocketAnimationId) {
+        cancelAnimationFrame(rocketAnimationId);
+        rocketAnimationId = null;
+    }
+    rocketCanvasCtx = null;
+}
+
+function pollRocket() {
+    if (rocketInterval) clearInterval(rocketInterval);
+
+    rocketInterval = setInterval(async () => {
+        try {
+            const d = await api('/api/rocket/status');
+
+            if (d.crashed) {
+                clearInterval(rocketInterval);
+                rocketInterval = null;
+
+                const display = document.getElementById('rocketDisplay');
+                display.classList.add('crashed');
+                document.getElementById('rocketMult').textContent = `×${d.mult.toFixed(2)}`;
+                document.getElementById('rocketMult').classList.add('crashed');
+                document.getElementById('rocketPrize').textContent = '💥 Взрыв!';
+
+                if (rocketCanvasCtx) {
+                    const canvas = document.getElementById('rocketCanvas');
+                    const ctx = rocketCanvasCtx;
+                    const w = canvas.width;
+                    const h = canvas.height;
+                    ctx.clearRect(0, 0, w, h);
+                    if (rocketPoints.length > 1) {
+                        ctx.beginPath();
+                        ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
+                        for (let i = 1; i < rocketPoints.length; i++) {
+                            ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
+                        }
+                        ctx.strokeStyle = 'rgba(255, 71, 87, 0.25)';
+                        ctx.lineWidth = 28;
+                        ctx.lineJoin = 'round';
+                        ctx.lineCap = 'round';
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.moveTo(rocketPoints[0].x, rocketPoints[0].y);
+                        for (let i = 1; i < rocketPoints.length; i++) {
+                            ctx.lineTo(rocketPoints[i].x, rocketPoints[i].y);
+                        }
+                        ctx.strokeStyle = '#ff4757';
+                        ctx.lineWidth = 5;
+                        ctx.lineJoin = 'round';
+                        ctx.lineCap = 'round';
+                        ctx.shadowColor = '#ff4757'; { field: 5, bet, opened: new Set() };
         lastBet = bet;
         document.getElementById('minesBets').classList.add('hidden');
         document.getElementById('minesInfo').classList.remove('hidden');
