@@ -1191,10 +1191,8 @@ select.input { text-align: left; letter-spacing: 0; }
   border-radius: 20px;
 }
 
-/* ═══════════ UPGRADER (в стиле ggstand) ═══════════ */
-#screen-upgrader {
-  padding-bottom: 90px;
-}
+/* ═══════════ UPGRADER ═══════════ */
+#screen-upgrader { padding-bottom: 90px; }
 
 .upg-top {
   display: grid;
@@ -1212,7 +1210,7 @@ select.input { text-align: left; letter-spacing: 0; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 130px;
+  min-height: 150px;
   position: relative;
   border: 1px solid rgba(255,255,255,0.05);
   text-align: center;
@@ -1246,10 +1244,7 @@ select.input { text-align: left; letter-spacing: 0; }
   color: var(--gold);
   margin-top: 2px;
 }
-
-.upg-target-card {
-  border-color: rgba(255,193,7,0.2);
-}
+.upg-target-card { border-color: rgba(255,193,7,0.2); }
 .upg-nav {
   position: absolute;
   top: 50%;
@@ -1272,11 +1267,12 @@ select.input { text-align: left; letter-spacing: 0; }
 .upg-nav-prev { left: 4px; }
 .upg-nav-next { right: 4px; }
 
+/* Круг с шансом */
 .upg-circle-wrap {
   position: relative;
   width: 100%;
   aspect-ratio: 1;
-  max-width: 190px;
+  max-width: 200px;
   margin: 0 auto;
 }
 .upg-circle {
@@ -1286,22 +1282,52 @@ select.input { text-align: left; letter-spacing: 0; }
 }
 .upg-circle-bg {
   fill: none;
-  stroke: rgba(255,255,255,0.06);
+  stroke: rgba(255,255,255,0.05);
   stroke-width: 12;
 }
-.upg-circle-fill {
+.upg-circle-success {
   fill: none;
   stroke: #00d68f;
   stroke-width: 12;
-  stroke-linecap: round;
   stroke-dasharray: 534;
   stroke-dashoffset: 534;
-  transition: stroke-dashoffset 0.5s ease, stroke 0.3s;
-  filter: drop-shadow(0 0 8px currentColor);
+  transition: stroke-dashoffset 0.4s ease;
+  filter: drop-shadow(0 0 6px rgba(0,214,143,0.55));
 }
-.upg-circle-fill.green { stroke: #00d68f; color: #00d68f; }
-.upg-circle-fill.yellow { stroke: #ffc107; color: #ffc107; }
-.upg-circle-fill.red { stroke: #ff4757; color: #ff4757; }
+.upg-circle-fail {
+  fill: none;
+  stroke: #ff4757;
+  stroke-width: 12;
+  stroke-dasharray: 534;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.4s ease;
+  opacity: 0.55;
+}
+
+/* Стрелка — обёртка, которая вращается */
+.upg-arrow-spin {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: rotate(0deg);
+  will-change: transform;
+}
+.upg-arrow-spin::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 18px solid var(--gold);
+  filter: drop-shadow(0 0 8px var(--gold)) drop-shadow(0 0 16px var(--gold));
+}
+.upg-arrow-spin.animate {
+  transition: transform 3s cubic-bezier(0.15, 0.9, 0.15, 1);
+}
 
 .upg-circle-center {
   position: absolute;
@@ -1318,7 +1344,11 @@ select.input { text-align: left; letter-spacing: 0; }
   font-family: var(--font-num);
   color: var(--text-main);
   text-shadow: 0 0 12px rgba(255,255,255,0.15);
+  transition: color 0.3s;
 }
+.upg-percent.green { color: #00d68f; text-shadow: 0 0 16px rgba(0,214,143,0.6); }
+.upg-percent.yellow { color: #ffc107; text-shadow: 0 0 16px rgba(255,193,7,0.6); }
+.upg-percent.red { color: #ff4757; text-shadow: 0 0 16px rgba(255,71,87,0.6); }
 .upg-percent-label {
   font-size: 10px;
   color: var(--text-muted);
@@ -1326,6 +1356,7 @@ select.input { text-align: left; letter-spacing: 0; }
   margin-top: 2px;
 }
 
+/* Быстрые кнопки */
 .upg-quick-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -1352,6 +1383,7 @@ select.input { text-align: left; letter-spacing: 0; }
   color: #fff;
 }
 
+/* Кнопка «Прокачать» */
 .upg-go-big {
   width: 100%;
   padding: 18px;
@@ -1371,6 +1403,7 @@ select.input { text-align: left; letter-spacing: 0; }
   box-shadow: none;
 }
 
+/* Список инвентаря */
 .upg-inv-list {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1418,6 +1451,7 @@ select.input { text-align: left; letter-spacing: 0; }
   font-size: 12px;
 }
 
+/* Оверлей результата */
 .upg-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.92);
@@ -1429,19 +1463,6 @@ select.input { text-align: left; letter-spacing: 0; }
   backdrop-filter: blur(8px);
 }
 .upg-overlay.hidden { display: none; }
-
-.upg-roll {
-  font-size: 64px;
-  font-weight: 900;
-  font-family: var(--font-num);
-  color: var(--gold);
-  text-shadow: 0 0 30px var(--gold);
-}
-.upg-roll.rolling { animation: upgRoll 0.15s linear infinite; }
-@keyframes upgRoll {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
-}
 .upg-result-icon {
   font-size: 100px;
   animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
