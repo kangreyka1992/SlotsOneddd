@@ -673,7 +673,7 @@ async def api_coin_flip(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
     bet = int(data.get("bet", 0))
-    side = data.get(
+    side = data.get("side")
 
 def validate_init_data(init_data: str) -> dict:
     if not init_data:
