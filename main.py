@@ -80,6 +80,11 @@ async def root():
     return FileResponse("webapp/index.html")
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 # ═══════════ ПРОФИЛЬ ═══════════
 
 @app.post("/api/profile")
@@ -197,8 +202,9 @@ async def api_slots(request: Request):
     return {"result": result, "win": win, "jackpot": jackpot, "balance": nb}
 
 
-# ═══════════ СЛОТЫ 5×3 С ЛИНИЯМИ ═══════════
+# ═══════════ СЛОТЫ 5×3 С ЛИНИЯМИ (ИСПРАВЛЕНО) ═══════════
 
+# 20 линий на поле 5×3 (формат: [[row, col], ...])
 SLOT_LINES = [
     [(0,0),(0,1),(0,2),(0,3),(0,4)],
     [(1,0),(1,1),(1,2),(1,3),(1,4)],
@@ -222,14 +228,16 @@ SLOT_LINES = [
     [(2,0),(2,1),(2,2),(1,3),(0,4)],
 ]
 
+# Символы: (эмодзи, вес, множитель_за_3, множитель_за_4, множитель_за_5)
+# Множители — от ОБЩЕЙ ставки на спин (bet × lines)
 SLOT_SYMBOLS = [
-    ("🍒", 30, 5, 20, 50),
-    ("🍋", 25, 5, 25, 60),
-    ("🍊", 20, 8, 30, 80),
-    ("🍇", 15, 10, 50, 120),
-    ("💎", 8, 20, 100, 300),
-    ("7️⃣", 1.5, 50, 250, 1000),
-    ("🤑", 0.5, 100, 500, 5000),
+    ("🍒", 30, 0.3, 1.2, 4),
+    ("🍋", 25, 0.4, 1.5, 5),
+    ("🍊", 20, 0.5, 2, 7),
+    ("🍇", 15, 0.8, 3, 12),
+    ("💎", 8, 2, 8, 25),
+    ("7️⃣", 1.5, 5, 20, 100),
+    ("🤑", 0.5, 10, 50, 500),
 ]
 
 _SYM_EMOJI = [s[0] for s in SLOT_SYMBOLS]
@@ -237,13 +245,18 @@ _SYM_WEIGHTS = [s[1] for s in SLOT_SYMBOLS]
 
 
 def _slot_spin(bet: int, lines_count: int):
+    # bet — ставка НА ОДНУ ЛИНИЮ. Общая ставка = bet * lines_count
+    total_bet = bet * lines_count
+
     field = [[random.choices(_SYM_EMOJI, weights=_SYM_WEIGHTS, k=1)[0] for _ in range(3)] for _ in range(5)]
+
     total_win = 0
     line_wins = []
 
     for line_idx in range(lines_count):
         line = SLOT_LINES[line_idx]
         symbols = [field[c][r] for (r, c) in line]
+
         first = symbols[0]
         count = 1
         for s in symbols[1:]:
@@ -256,14 +269,20 @@ def _slot_spin(bet: int, lines_count: int):
             for emoji, _w, p3, p4, p5 in SLOT_SYMBOLS:
                 if emoji == first:
                     if count == 3:
-                        win = bet * p3 // 100
+                        mult = p3
                     elif count == 4:
-                        win = bet * p4 // 100
+                        mult = p4
                     else:
-                        win = bet * p5 // 100
+                        mult = p5
+                    win = int(total_bet * mult)
                     if win > 0:
                         total_win += win
-                        line_wins.append({"line": line_idx, "count": count, "symbol": first, "win": win})
+                        line_wins.append({
+                            "line": line_idx,
+                            "count": count,
+                            "symbol": first,
+                            "win": win,
+                        })
                     break
 
     return field, total_win, line_wins
@@ -275,7 +294,7 @@ async def api_slots2_spin(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
     bet = int(data.get("bet", 0))
-    lines_count = int(data.get("lines", 10))
+    lines_count = int(data.get("lines", 5))
 
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
