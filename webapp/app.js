@@ -464,6 +464,7 @@ function renderBets(containerId, onPick, multiplier = 1) {
         };
         el.appendChild(btn);
     });
+
     const all = document.createElement('button');
     all.className = 'bet-btn allin';
     const maxBet = Math.floor(profile.balance / multiplier);
@@ -476,27 +477,6 @@ function renderBets(containerId, onPick, multiplier = 1) {
         SFX.click(); haptic('medium'); onPick(maxBet);
     };
     el.appendChild(all);
-}
-    if (maxBetLimit === 0) {
-        const all = document.createElement('button');
-        all.className = 'bet-btn allin';
-        const maxBet = Math.floor(profile.balance / multiplier);
-        all.textContent = multiplier > 1
-            ? `💯 Макс (${fmt(maxBet)} × ${multiplier})`
-            : '💯 Весь баланс';
-        if (maxBet <= 0 || gameLocked) all.disabled = true;
-        all.onclick = () => {
-            if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
-            SFX.click(); haptic('medium'); onPick(maxBet);
-        };
-        el.appendChild(all);
-    } else {
-        const hint = document.createElement('div');
-        hint.className = 'bet-limit-hint';
-        hint.textContent = `⚠️ Максимум: ${fmt(maxBetLimit)} 🪙 (10% от баланса)`;
-        hint.style.gridColumn = 'span 3';
-        el.appendChild(hint);
-    }
 }
 
 /* ═══ СЛОТЫ 5×3 ═══ */
