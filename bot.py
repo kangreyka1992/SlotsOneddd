@@ -128,6 +128,11 @@ async def cmd_webapp(message: types.Message):
 async def pre_checkout(q: PreCheckoutQuery):
     await q.answer(ok=True)
 
+@router.message(F.photo)
+async def debug_photo(message: types.Message):
+    # Берём самое большое разрешение
+    file_id = message.photo[-1].file_id
+    await message.answer(f"<code>{file_id}</code>", parse_mode="HTML")
 
 @router.message(F.successful_payment)
 async def on_payment(message: types.Message):
