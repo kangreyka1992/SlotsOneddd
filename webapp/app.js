@@ -2903,6 +2903,9 @@ async function adminBroadcast() {
 }
 
 function bootstrap() {
+    console.log('INIT at start:', tg.initData?.length);
+    setTimeout(() => console.log('INIT 1s:', tg.initData?.length), 1000);
+    setTimeout(() => console.log('INIT 3s:', tg.initData?.length), 3000);
     renderGamesGrid();
     renderHistory();
     loadProfile();
