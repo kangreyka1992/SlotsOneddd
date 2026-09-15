@@ -307,10 +307,12 @@ function renderGamesGrid() {
     const el = document.getElementById('gamesGrid');
     if (!el) return;
     el.innerHTML = Object.entries(GAMES_META).map(([key, m]) => `
-        <div class="game-card" onclick="openGame('${key}')">
-            <div class="game-card-icon">${m.icon}</div>
-            <div class="game-card-name">${m.name}</div>
-            <div class="game-card-desc">${m.desc}</div>
+        <div class="game-card-cs" onclick="openGame('${key}')">
+            <div class="game-card-cs-icon">${m.icon}</div>
+            <div class="game-card-cs-body">
+                <div class="game-card-cs-name">${m.name}</div>
+                <div class="game-card-cs-desc">${m.desc}</div>
+            </div>
         </div>
     `).join('');
 }
