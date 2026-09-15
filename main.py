@@ -833,26 +833,23 @@ async def api_plinko(request: Request):
     return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
-# ═══════════ PENALTI ═══════════
+# ═══════════ PENALTI (переделано) ═══════════
 
 penalti_games: dict = {}
 PENALTI_TIMEOUT = 300
 PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
 
-PENALTI_KEEPER_WEIGHTS = [3, 5, 3, 5, 8, 5, 3, 5, 3]
-PENALTI_SMARTNESS = [0.20, 0.30, 0.45, 0.60, 0.75]
+PENALTI_KEEPER_WEIGHTS = [
+    1, 2, 1,
+    2, 4, 2,
+    1, 2, 1,
+]
+
+PENALTI_SAVE_CHANCE = [0.20, 0.32, 0.45, 0.55, 0.65]
 
 
 def _keeper_pick_zone(step: int) -> int:
-    smart = PENALTI_SMARTNESS[min(step, len(PENALTI_SMARTNESS) - 1)]
-    weights = []
-    for i, w in enumerate(PENALTI_KEEPER_WEIGHTS):
-        if w >= 4:
-            weights.append(w * (1 + smart * 2))
-        elif w <= 3:
-            weights.append(w * (1 - smart * 0.5))
-        else:
-            weights.append(w)
+    weights = list(PENALTI_KEEPER_WEIGHTS)
     total = sum(weights)
     r = random.random() * total
     cum = 0
@@ -861,6 +858,26 @@ def _keeper_pick_zone(step: int) -> int:
         if r <= cum:
             return i
     return 4
+
+
+def _keeper_dive_target(keeper_zone: int, player_zone: int) -> int:
+    if keeper_zone == player_zone:
+        return keeper_zone
+    kr, kc = divmod(keeper_zone, 3)
+    pr, pc = divmod(player_zone, 3)
+    if abs(kr - pr) <= 1 and abs(kc - pc) <= 1:
+        return keeper_zone
+    neighbors = []
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            if dr == 0 and dc == 0:
+                continue
+            nr, nc = kr + dr, kc + dc
+            if 0 <= nr < 3 and 0 <= nc < 3:
+                neighbors.append(nr * 3 + nc)
+    if neighbors:
+        return random.choice(neighbors)
+    return keeper_zone
 
 
 def cleanup_penalti():
@@ -883,12 +900,11 @@ async def api_penalti_start(request: Request):
     cleanup_penalti()
 
     existing = penalti_games.get(uid)
-    if existing and existing.get("step", 0) == 0:
-        await add_balance(uid, existing["bet"])
+    if existing:
+        if existing.get("step", 0) == 0:
+            await add_balance(uid, existing["bet"])
         del penalti_games[uid]
 
-    if uid in penalti_games:
-        raise HTTPException(400, "already_playing")
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
 
@@ -903,7 +919,12 @@ async def api_penalti_start(request: Request):
         "history": [],
         "started": time.time(),
     }
-    return {"balance": await get_balance(uid), "bet": bet}
+    return {
+        "balance": await get_balance(uid),
+        "bet": bet,
+        "step": 0,
+        "goal": 0,
+    }
 
 
 @app.post("/api/penalti/kick")
@@ -924,8 +945,13 @@ async def api_penalti_kick(request: Request):
     if step >= 5:
         raise HTTPException(400, "already_max")
 
+    save_chance = PENALTI_SAVE_CHANCE[step]
     keeper_zone = _keeper_pick_zone(step)
-    is_save = (keeper_zone == zone)
+    dive_zone = _keeper_dive_target(keeper_zone, zone)
+
+    is_save = random.random() < save_chance
+    if is_save:
+        dive_zone = zone
 
     if is_save:
         bet = game["bet"]
@@ -933,9 +959,13 @@ async def api_penalti_kick(request: Request):
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
         return {
-            "goal": False, "save": True,
-            "zone": zone, "keeper_zone": keeper_zone,
-            "step": step, "bet": bet,
+            "goal": False,
+            "save": True,
+            "zone": zone,
+            "keeper_zone": keeper_zone,
+            "keeper_dive_zone": dive_zone,
+            "step": step,
+            "bet": bet,
             "balance": await get_balance(uid),
         }
 
@@ -956,18 +986,28 @@ async def api_penalti_kick(request: Request):
         if prize >= 100000:
             await unlock_achievement(uid, "big_win")
         return {
-            "goal": True, "save": False,
-            "zone": zone, "keeper_zone": keeper_zone,
-            "step": step, "maxed": True,
-            "mult": mult, "prize": prize,
+            "goal": True,
+            "save": False,
+            "zone": zone,
+            "keeper_zone": keeper_zone,
+            "keeper_dive_zone": dive_zone,
+            "step": step,
+            "maxed": True,
+            "mult": mult,
+            "prize": prize,
             "balance": await get_balance(uid),
         }
 
     return {
-        "goal": True, "save": False,
-        "zone": zone, "keeper_zone": keeper_zone,
-        "step": step, "maxed": False,
-        "mult": mult, "prize": prize,
+        "goal": True,
+        "save": False,
+        "zone": zone,
+        "keeper_zone": keeper_zone,
+        "keeper_dive_zone": dive_zone,
+        "step": step,
+        "maxed": False,
+        "mult": mult,
+        "prize": prize,
         "balance": await get_balance(uid),
     }
 
@@ -999,9 +1039,9 @@ async def api_penalti_reset(request: Request):
     uid = user["id"]
     game = penalti_games.pop(uid, None)
     if game:
-        await add_balance(uid, game["bet"])
+        if game.get("step", 0) == 0:
+            await add_balance(uid, game["bet"])
     return {"balance": await get_balance(uid)}
-
 
 
 # ═══════════ МОНЕТКА ═══════════
@@ -1209,7 +1249,6 @@ RARITY_TABLE = [
 ]
 
 
-# У каждого кейса — свой пул предметов по редкостям.
 CASE_ITEMS = {
     "starter": {
         "common":    [("cherry","🍒","Вишня"),("lemon","🍋","Лимон"),("orange","🍊","Апельсин"),("grape","🍇","Виноград"),("coin","🪙","Монетка")],
