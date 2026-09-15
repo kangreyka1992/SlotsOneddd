@@ -124,7 +124,10 @@ async function api(url, body = {}) {
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData, ...body }),
+        body: JSON.stringify({
+            initData: tg.initData || "",   ← читаем каждый раз
+            ...body,
+        }),
     });
     if (!res.ok) {
         let msg = 'Ошибка';
@@ -2899,8 +2902,16 @@ async function adminBroadcast() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ═══ СТАРТ ═══ */
 function bootstrap() {
+    console.log('=== BOOTSTRAP ===');
+    console.log('tg.initData.length at start:', tg.initData?.length);
+    setTimeout(() => {
+        console.log('tg.initData.length after 1s:', tg.initData?.length);
+    }, 1000);
+    setTimeout(() => {
+        console.log('tg.initData.length after 3s:', tg.initData?.length);
+    }, 3000);
+
     renderGamesGrid();
     renderHistory();
     loadProfile();
