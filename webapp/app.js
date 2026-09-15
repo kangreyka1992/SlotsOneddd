@@ -2154,6 +2154,40 @@ async function loadInventory() {
             `;
         }
 
+        if (!listEl) return;
+        if (!d.items.length) {
+            listEl.innerHTML = '<div class="history-item"><span class="h-game">Инвентарь пуст</span></div>';
+            return;
+        }
+
+        const rarityColors = {
+            common: '#8b95a5', uncommon: '#00d68f', rare: '#4a9eff',
+            epic: '#7c5cff', legendary: '#ffc107', mythic: '#ff4757',
+        };
+
+        listEl.innerHTML = d.items.map(i => `
+            <div class="inventory-item" data-rarity="${i.rarity}">
+                <div class="inv-emoji">${i.emoji}</div>
+                <div class="inv-info">
+                    <div class="inv-name">${i.name} ${i.kind === 'nft' ? '🎨' : ''}</div>
+                    <div class="inv-rarity" style="color:${rarityColors[i.rarity]}">${i.rarity}</div>
+                </div>
+                <button class="inv-sell-btn" onclick="sellItem(${i.id})">+${fmt(i.value)}</button>
+            </div>
+        `).join('');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function renderHomeInventoryPreview() {
+    const el = document.getElementById('homeInventoryPreview');
+    if (!el) return;
+    try {
+        const d = await api('/api/cases/inventory');
+        const items = (d.items || []).slice(0, 8);
+        if (!items.length) {
+            el.innerHTML = '<div class="inv-preview-empty">Пока пусто — открой первый кейс 🎁</div>';
+            return;
+        }
         el.innerHTML = items.map(i => `
             <div class="inv-preview-item" data-rarity="${i.rarity}" title="${i.name}">
                 <span>${i.emoji}</span>
