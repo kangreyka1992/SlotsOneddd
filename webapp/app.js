@@ -1228,10 +1228,30 @@ async function penaltiStart(bet) {
         penaltiState = {
             bet,
             step: d.step || 0,
-            usedZones: new Set(),
+            usedZones: new Set(d.history || []),
         };
         lastBet = bet;
         updateBalance(d.balance);
+
+        document.getElementById('penaltiBets').classList.add('hidden');
+        document.getElementById('penaltiDisplay').classList.remove('hidden');
+        document.getElementById('penaltiMult').textContent = '×1.00';
+        document.getElementById('penaltiPrize').textContent = '0 🪙';
+        document.getElementById('penaltiGoals').textContent = '0';
+        document.getElementById('penaltiCashoutBtn').style.display = 'none';
+        document.getElementById('penaltiHint').textContent = '👇 Выбери, куда бить';
+        document.getElementById('penaltiHint').className = 'penalti-hint';
+
+        resetPenaltiField();
+        loadProfile();
+        penaltiBusy = false;
+        gameLocked = false;
+    } catch (e) {
+        penaltiBusy = false;
+        gameLocked = false;
+        toast(e.message, 'error');
+    }
+}
 
         document.getElementById('penaltiBets').classList.add('hidden');
         document.getElementById('penaltiDisplay').classList.remove('hidden');
