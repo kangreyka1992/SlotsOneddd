@@ -64,11 +64,12 @@ async def cmd_start(message: types.Message):
         except (ValueError, IndexError):
             pass
 
- InlineKeyboardButton(
-    text="🎰  ИГРАТЬ  🎰",
-    url=f"{WEBAPP_URL}/webapp",
-)
-
+     kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="🎰  ИГРАТЬ  🎰",
+            url=f"{WEBAPP_URL}/webapp",
+        )],
+    ])
     text = (
         "🎰 <b>ДОБРО ПОЖАЛОВАТЬ В SlotsGame</b> 🎰\n"
         "\n"
