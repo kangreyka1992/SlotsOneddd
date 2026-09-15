@@ -848,36 +848,39 @@ PENALTI_KEEPER_WEIGHTS = [
 PENALTI_SAVE_CHANCE = [0.20, 0.32, 0.45, 0.55, 0.65]
 
 
-def _keeper_pick_zone(step: int) -> int:
+def _free_zones(used_zones: set) -> list:
+    return [z for z in range(9) if z not in used_zones]
+
+
+def _keeper_pick_zone(step: int, used_zones: set) -> int:
     weights = list(PENALTI_KEEPER_WEIGHTS)
     total = sum(weights)
     r = random.random() * total
     cum = 0
+    picked = 4
     for i, w in enumerate(weights):
         cum += w
         if r <= cum:
-            return i
-    return 4
+            picked = i
+            break
+    if picked in used_zones:
+        free = _free_zones(used_zones)
+        if free:
+            picked = random.choice(free)
+    return picked
 
 
-def _keeper_dive_target(keeper_zone: int, player_zone: int) -> int:
-    if keeper_zone == player_zone:
-        return keeper_zone
-    kr, kc = divmod(keeper_zone, 3)
-    pr, pc = divmod(player_zone, 3)
-    if abs(kr - pr) <= 1 and abs(kc - pc) <= 1:
-        return keeper_zone
-    neighbors = []
-    for dr in (-1, 0, 1):
-        for dc in (-1, 0, 1):
-            if dr == 0 and dc == 0:
-                continue
-            nr, nc = kr + dr, kc + dc
-            if 0 <= nr < 3 and 0 <= nc < 3:
-                neighbors.append(nr * 3 + nc)
-    if neighbors:
-        return random.choice(neighbors)
-    return keeper_zone
+def _keeper_dive_target(keeper_zone: int, player_zone: int,
+                        is_save: bool, used_zones: set) -> int:
+    if is_save:
+        return player_zone
+    candidates = [z for z in range(9)
+                  if z != player_zone and z not in used_zones]
+    if not candidates:
+        candidates = [z for z in range(9) if z != player_zone]
+    if candidates:
+        return random.choice(candidates)
+    return (player_zone + 1) % 9
 
 
 def cleanup_penalti():
@@ -924,6 +927,7 @@ async def api_penalti_start(request: Request):
         "bet": bet,
         "step": 0,
         "goal": 0,
+        "history": [],
     }
 
 
@@ -941,17 +945,21 @@ async def api_penalti_kick(request: Request):
     if not game:
         raise HTTPException(400, "no_game")
 
+    if zone in game["history"]:
+        raise HTTPException(400, "zone_already_used")
+
     step = game["step"]
     if step >= 5:
         raise HTTPException(400, "already_max")
 
-    save_chance = PENALTI_SAVE_CHANCE[step]
-    keeper_zone = _keeper_pick_zone(step)
-    dive_zone = _keeper_dive_target(keeper_zone, zone)
+    used_zones = set(game["history"])
 
-    is_save = random.random() < save_chance
-    if is_save:
-        dive_zone = zone
+    keeper_zone = _keeper_pick_zone(step, used_zones)
+
+    base_chance = PENALTI_SAVE_CHANCE[step]
+    is_save = random.random() < base_chance
+
+    dive_zone = _keeper_dive_target(keeper_zone, zone, is_save, used_zones)
 
     if is_save:
         bet = game["bet"]
@@ -966,12 +974,13 @@ async def api_penalti_kick(request: Request):
             "keeper_dive_zone": dive_zone,
             "step": step,
             "bet": bet,
+            "history": game["history"],
             "balance": await get_balance(uid),
         }
 
+    game["history"].append(zone)
     step += 1
     game["step"] = step
-    game["history"].append(zone)
     mult = PENALTI_MULTS[step - 1]
     prize = int(game["bet"] * mult)
 
@@ -995,6 +1004,7 @@ async def api_penalti_kick(request: Request):
             "maxed": True,
             "mult": mult,
             "prize": prize,
+            "history": game["history"],
             "balance": await get_balance(uid),
         }
 
@@ -1008,6 +1018,7 @@ async def api_penalti_kick(request: Request):
         "maxed": False,
         "mult": mult,
         "prize": prize,
+        "history": game["history"],
         "balance": await get_balance(uid),
     }
 
@@ -1042,6 +1053,7 @@ async def api_penalti_reset(request: Request):
         if game.get("step", 0) == 0:
             await add_balance(uid, game["bet"])
     return {"balance": await get_balance(uid)}
+
 
 
 # ═══════════ МОНЕТКА ═══════════
