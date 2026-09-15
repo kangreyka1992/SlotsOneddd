@@ -2177,26 +2177,6 @@ async function loadInventory() {
         `).join('');
     } catch (e) { toast(e.message, 'error'); }
 }
-
-async function renderHomeInventoryPreview() {
-    const el = document.getElementById('homeInventoryPreview');
-    if (!el) return;
-    try {
-        const d = await api('/api/cases/inventory');
-        const items = (d.items || []).slice(0, 8);
-        if (!items.length) {
-            el.innerHTML = '<div class="inv-preview-empty">Пока пусто — открой первый кейс 🎁</div>';
-            return;
-        }
-        el.innerHTML = items.map(i => `
-            <div class="inv-preview-item" data-rarity="${i.rarity}" title="${i.name}">
-                <span>${i.emoji}</span>
-            </div>
-        `).join('');
-    } catch (e) {
-        el.innerHTML = '<div class="inv-preview-empty">Пока пусто</div>';
-    }
-}
 async function renderHomeInventoryPreview() {
     const el = document.getElementById('homeInventoryPreview');
     if (!el) return;
