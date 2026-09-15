@@ -1841,12 +1841,26 @@ async function loadCases() {
         const el = document.getElementById('casesGrid');
         const homeEl = document.getElementById('homeCasesGrid');
 
+        // сопоставляем цену с редкостью → цвет полоски
+        const rarityFromPrice = (coins) => {
+            if (coins >= 500000) return 'mythic';
+            if (coins >= 100000) return 'legendary';
+            if (coins >= 25000)  return 'epic';
+            if (coins >= 5000)   return 'rare';
+            if (coins >= 1000)   return 'uncommon';
+            return 'common';
+        };
+
         const cardHtml = (c) => `
             <div class="case-card" onclick="openCaseInfo('${c.id}')">
-                <div class="case-emoji">${c.emoji}</div>
-                <div class="case-name">${c.name}</div>
-                <div class="case-price">${c.price_stars} ⭐ · ${fmt(c.price_coins)} 🪙</div>
-                <div class="case-desc">${c.desc}</div>
+                <div class="case-image">
+                    <div class="case-emoji">${c.emoji}</div>
+                </div>
+                <div class="case-rarity-bar" data-rarity="${rarityFromPrice(c.price_coins)}"></div>
+                <div class="case-info">
+                    <div class="case-name">${c.name}</div>
+                    <div class="case-price">${fmt(c.price_coins)} 🪙</div>
+                </div>
             </div>
         `;
 
@@ -2078,7 +2092,25 @@ async function loadInventory() {
                 </div>
             `;
         }
-
+async function renderHomeInventoryPreview() {
+    const el = document.getElementById('homeInventoryPreview');
+    if (!el) return;
+    try {
+        const d = await api('/api/cases/inventory');
+        const items = (d.items || []).slice(0, 8);
+        if (!items.length) {
+            el.innerHTML = '<div class="inv-preview-empty">Пока пусто — открой первый кейс 🎁</div>';
+            return;
+        }
+        el.innerHTML = items.map(i => `
+            <div class="inv-preview-item" data-rarity="${i.rarity}" title="${i.name}">
+                <span>${i.emoji}</span>
+            </div>
+        `).join('');
+    } catch (e) {
+        el.innerHTML = '<div class="inv-preview-empty">Пока пусто</div>';
+    }
+}
         if (!listEl) return;
         if (!d.items.length) {
             listEl.innerHTML = '<div class="history-item"><span class="h-game">Инвентарь пуст</span></div>';
