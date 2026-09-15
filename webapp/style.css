@@ -1,23 +1,30 @@
 /* ═══════════ БАЗА ═══════════ */
 :root {
-  --bg-main: #0a0e14;
-  --bg-card: #131820;
-  --bg-elevated: #1a2129;
-  --bg-glass: rgba(26, 33, 41, 0.72);
-  --gold: #ffc107;
-  --green: #00d68f;
-  --red: #ff4757;
-  --purple: #7c5cff;
+  --bg-main: #0e1015;
+  --bg-card: #1a1d24;
+  --bg-elevated: #232732;
+  --bg-glass: rgba(26, 29, 36, 0.85);
+
+  --accent: #ff9b26;
+  --accent-2: #ffb84d;
+  --accent-glow: rgba(255, 155, 38, 0.35);
+
+  --green: #3dd68c;
+  --red: #ef4444;
   --blue: #4a9eff;
-  --text-main: #ffffff;
-  --text-muted: #8b95a5;
+  --purple: #a855f7;
+
+  --text-main: #e8eaed;
+  --text-muted: #8a92a3;
   --text-dim: #5a6373;
-  --radius: 16px;
-  --radius-sm: 12px;
-  --radius-lg: 24px;
-  --shadow-glow-gold: 0 0 24px rgba(255, 193, 7, 0.35);
-  --shadow-glow-green: 0 0 24px rgba(0, 214, 143, 0.35);
-  --shadow-glow-red: 0 0 24px rgba(255, 71, 87, 0.35);
+
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 155, 38, 0.4);
+
+  --radius: 10px;
+  --radius-sm: 8px;
+  --radius-lg: 14px;
+
   --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-num: 'Orbitron', 'Inter', monospace;
 }
@@ -1592,4 +1599,298 @@ select.input { text-align: left; letter-spacing: 0; }
   font-size: 18px;
   color: rgba(255,255,255,0.25);
   pointer-events: none;
+}
+/* ═══════════ CS:GO STYLE — НОВЫЙ ДИЗАЙН ═══════════ */
+
+/* ХЕДЕР */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.app-header-left { display: flex; align-items: center; gap: 10px; }
+.app-logo {
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  font-size: 22px;
+  background: linear-gradient(135deg, var(--accent), #e07a00);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px var(--accent-glow);
+}
+.app-brand-name {
+  font-size: 14px; font-weight: 900; letter-spacing: 0.5px;
+  color: var(--text-main);
+}
+.app-brand-name span { color: var(--accent); }
+.app-brand-sub {
+  font-size: 9px; color: var(--text-dim);
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.app-header-right { display: flex; align-items: center; gap: 8px; }
+
+.app-balance-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent);
+}
+.app-balance-chip .app-balance-icon { font-size: 14px; }
+
+.app-user-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px 5px 5px;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+}
+.app-user-avatar {
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--accent), #e07a00);
+  border-radius: 6px;
+  font-size: 12px; font-weight: 800; color: #000;
+}
+.app-user-name {
+  font-size: 12px; font-weight: 700; color: var(--text-main);
+  max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* БАННЕР */
+.hero-banner {
+  position: relative;
+  height: 160px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 16px;
+  background:
+    radial-gradient(ellipse at right, rgba(255, 155, 38, 0.35) 0%, transparent 60%),
+    linear-gradient(135deg, #1a1d24 0%, #0e1015 100%);
+  border: 1px solid var(--border);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.hero-banner-content { position: relative; z-index: 2; }
+.hero-banner-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  background: rgba(255, 155, 38, 0.15);
+  color: var(--accent);
+  border-radius: 20px;
+  font-size: 10px; font-weight: 800;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.hero-banner-title {
+  font-size: 26px; font-weight: 900;
+  color: #fff;
+  margin-bottom: 4px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.hero-banner-sub {
+  font-size: 12px; color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.hero-banner-btn {
+  padding: 9px 18px;
+  background: linear-gradient(135deg, var(--accent), #e07a00);
+  color: #000; font-weight: 800; font-size: 12px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+.hero-banner-btn:active { transform: scale(0.95); }
+.hero-banner-timer {
+  position: absolute;
+  top: 14px; right: 16px;
+  padding: 5px 12px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 20px;
+  font-family: var(--font-num);
+  font-size: 11px; font-weight: 700;
+  color: var(--accent);
+  z-index: 2;
+}
+
+/* ТУЛБАР */
+.toolbar {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 14px;
+}
+.toolbar-tabs {
+  flex: 1;
+  display: flex; gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.toolbar-tabs::-webkit-scrollbar { display: none; }
+.toolbar-tab {
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px; font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.toolbar-tab.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+.toolbar-search {
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* БЕСПЛАТНЫЙ КЕЙС */
+.free-case-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(255,155,38,0.12), rgba(224,122,0,0.04));
+  border: 1px solid rgba(255, 155, 38, 0.3);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.free-case-banner:active { transform: scale(0.98); border-color: var(--accent); }
+.free-case-banner-left { display: flex; align-items: center; gap: 12px; }
+.free-case-banner-icon {
+  font-size: 34px;
+  animation: freePulse 2s ease-in-out infinite;
+}
+@keyframes freePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+.free-case-banner-title {
+  font-size: 14px; font-weight: 800; color: var(--accent);
+}
+.free-case-banner-sub {
+  font-size: 11px; color: var(--text-muted); margin-top: 2px;
+  font-family: var(--font-num);
+}
+.free-case-banner-streak {
+  padding: 4px 10px;
+  background: rgba(255,155,38,0.15);
+  border-radius: 20px;
+  font-size: 11px; font-weight: 700;
+  color: var(--accent);
+  font-family: var(--font-num);
+}
+
+/* ЗАГОЛОВКИ СЕКЦИЙ */
+.section-title-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 20px 0 12px;
+}
+.section-title-row .section-title { margin: 0; }
+.section-link {
+  font-size: 11px; font-weight: 700;
+  color: var(--accent);
+}
+
+/* СЕТКА КЕЙСОВ — CS:GO стиль */
+.cases-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+@media (max-width: 480px) {
+  .cases-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.case-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+  display: flex;
+  flex-direction: column;
+}
+.case-card:active { transform: scale(0.97); border-color: var(--border-hover); }
+
+.case-image {
+  aspect-ratio: 1;
+  display: grid; place-items: center;
+  background:
+    radial-gradient(circle at center, rgba(255,155,38,0.08) 0%, transparent 70%),
+    var(--bg-elevated);
+  position: relative;
+}
+.case-image::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.4) 100%);
+  pointer-events: none;
+}
+.case-emoji {
+  font-size: 48px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.6));
+  z-index: 1;
+}
+
+.case-info {
+  padding: 8px 10px 10px;
+}
+.case-name {
+  font-size: 11px; font-weight: 700;
+  color: var(--text-main);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.case-price {
+  font-size: 10px;
+  font-family: var(--font-num);
+  color: var(--accent);
+  margin-top: 3px;
+  font-weight: 700;
+}
+
+.case-rarity-bar {
+  height: 3px;
+  width: 100%;
+  background: #8b95a5;
+  position: relative;
+}
+.case-rarity-bar[data-rarity="common"]    { background: #8b95a5; }
+.case-rarity-bar[data-rarity="uncommon"]  { background: #3dd68c; }
+.case-rarity-bar[data-rarity="rare"]      { background: #4a9eff; }
+.case-rarity-bar[data-rarity="epic"]      { background: #a855f7; }
+.case-rarity-bar[data-rarity="legendary"] { background: #ff9b26; }
+.case-rarity-bar[data-rarity="mythic"]    { background: #ef4444; }
+
+/* Превью инвентаря на главной */
+.inventory-preview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 20px;
+}
+.inv-preview-empty {
+  grid-column: 1 / -1;
+  padding: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
 }
