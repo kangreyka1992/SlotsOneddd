@@ -1894,3 +1894,18 @@ select.input { text-align: left; letter-spacing: 0; }
   border: 1px dashed var(--border);
   border-radius: var(--radius);
 }
+.inv-preview-item {
+  aspect-ratio: 1;
+  display: grid; place-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 24px;
+  border-bottom: 3px solid var(--text-dim);
+}
+.inv-preview-item[data-rarity="common"]    { border-bottom-color: #8b95a5; }
+.inv-preview-item[data-rarity="uncommon"]  { border-bottom-color: #3dd68c; }
+.inv-preview-item[data-rarity="rare"]      { border-bottom-color: #4a9eff; }
+.inv-preview-item[data-rarity="epic"]      { border-bottom-color: #a855f7; }
+.inv-preview-item[data-rarity="legendary"] { border-bottom-color: #ff9b26; }
+.inv-preview-item[data-rarity="mythic"]    { border-bottom-color: #ef4444; }
