@@ -404,7 +404,8 @@ async function loadProfile() {
 
         const nameEl = document.getElementById('headerName');
         const profileNameEl = document.getElementById('profileName');
-        const avatarEl = document.getElementById('profileAvatar');
+        const headerAvatar = document.getElementById('headerAvatar');
+        if (headerAvatar) headerAvatar.textContent = (d.username || 'И')[0].toUpperCase()
         const displayName = d.username ? '@' + d.username : 'Игрок';
         if (nameEl) nameEl.textContent = displayName;
         if (profileNameEl) profileNameEl.textContent = displayName;
@@ -2900,14 +2901,16 @@ async function adminBroadcast() {
 
 /* ═══ СТАРТ ═══ */
 function bootstrap() {
-    renderCarousel();
     renderGamesGrid();
     renderHistory();
     loadProfile();
-    loadCases();
+    loadCases().then(() => renderHomeInventoryPreview());
     loadFreeCaseStatus();
+    startHeroTimer();
+    initToolbarFilters();
     pushFeed();
     setInterval(pushFeed, 5000);
+    setInterval(renderHomeInventoryPreview, 30000);
 
     api('/api/penalti/reset').catch(() => {});
     api('/api/duel/cancel').catch(() => {});
@@ -2922,6 +2925,7 @@ function bootstrap() {
         if (diff > 120 && screen && screen.scrollTop === 0 && !gameLocked) {
             loadProfile();
             loadFreeCaseStatus();
+            renderHomeInventoryPreview();
             toast('🔄 Обновлено');
         }
     }, { passive: true });
