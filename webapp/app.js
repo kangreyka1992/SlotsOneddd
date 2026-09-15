@@ -1222,12 +1222,16 @@ function zoneToScene(zone) {
 }
 
 async function penaltiStart(bet) {
-    } catch (e) {
-        penaltiBusy = false;
-        gameLocked = false;
-        toast(e.message, 'error');
-    }
-}
+    if (penaltiBusy) return;
+    try {
+        const d = await gameApi('/api/penalti/start', { bet });
+        penaltiState = {
+            bet,
+            step: d.step || 0,
+            usedZones: new Set(d.history || []),
+        };
+        lastBet = bet;
+        updateBalance(d.balance);
 
         document.getElementById('penaltiBets').classList.add('hidden');
         document.getElementById('penaltiDisplay').classList.remove('hidden');
@@ -1261,10 +1265,13 @@ function resetPenaltiField() {
 
     const keeper = document.getElementById('keeper');
     const center = zoneToScene(4);
+    keeper.style.transition = 'none';
     keeper.style.left = center.left + '%';
     keeper.style.top  = center.top  + '%';
     keeper.classList.remove('diving');
     keeper.classList.add('idle');
+    void keeper.offsetWidth;
+    keeper.style.transition = '';
 
     const ball = document.getElementById('ballAnim');
     ball.style.opacity = '0';
@@ -1412,38 +1419,6 @@ async function penaltiKick(zone) {
     }
 }
 
-async function penaltiCashout() {
-    if (penaltiBusy) return;
-    if (!penaltiState || penaltiState.step <= 0) {
-        toast('Сначала забей гол', 'error');
-        return;
-    }
-    penaltiBusy = true;
-    haptic();
-    try {
-        const d = await api('/api/penalti/cashout');
-        updateBalance(d.balance);
-        SFX.cashout();
-        penaltiState = null;
-        loadProfile();
-        addHistory('penalti', lastBet, d.prize);
-        setTimeout(() => {
-            penaltiBusy = false;
-            showResult({
-                icon: '💰',
-                title: 'Забрано!',
-                titleClass: 'win',
-                amount: `+${fmt(d.prize)} 🪙`,
-                details: `Множитель: ×${d.mult}`,
-                game: 'penalti',
-                bet: lastBet,
-            });
-        }, 500);
-    } catch (e) {
-        penaltiBusy = false;
-        toast(e.message, 'error');
-    }
-}
 
 /* ═══ МОНЕТКА ═══ */
 function initCoin() {
