@@ -11,59 +11,91 @@
 <body>
 <div id="app">
 
-  <header class="header">
-    <div class="header-left">
-      <div class="logo">🎰</div>
-      <div class="header-user">
-        <div class="header-name" id="headerName">Игрок</div>
-        <div class="header-balance"><span id="headerBalance">0</span> 🪙</div>
-      </div>
+<header class="app-header">
+  <div class="app-header-left">
+    <div class="app-logo">🎰</div>
+    <div class="app-brand">
+      <div class="app-brand-name">SLOTS<span>GAMING</span></div>
+      <div class="app-brand-sub">кейсы · игры · скины</div>
     </div>
-    <button class="icon-btn" id="soundToggle" onclick="toggleSound()">🔊</button>
-  </header>
+  </div>
+  <div class="app-header-right">
+    <div class="app-balance-chip">
+      <span class="app-balance-icon">🪙</span>
+      <span id="headerBalance">0</span>
+    </div>
+    <button class="app-user-chip" onclick="showScreen('profile')">
+      <span class="app-user-avatar" id="headerAvatar">И</span>
+      <span class="app-user-name" id="headerName">Игрок</span>
+    </button>
+  </div>
+</header>
 
   <div class="live-feed" id="liveFeed"></div>
 
   <main class="screens">
 
-    <section class="screen active" id="screen-home">
-      <div class="carousel" id="gameCarousel"></div>
-      <div class="quick-actions">
-        <button class="qa-btn" onclick="claimDaily()">
-          <div class="qa-icon">🎁</div>
-          <div class="qa-text">Бонус</div>
-        </button>
-        <button class="qa-btn" onclick="showScreen('pay')">
-          <div class="qa-icon">⭐</div>
-          <div class="qa-text">Пополнить</div>
-        </button>
-        <button class="qa-btn" onclick="showScreen('withdraw')">
-          <div class="qa-icon">💸</div>
-          <div class="qa-text">Вывести</div>
-        </button>
-        <button class="qa-btn" onclick="showScreen('promo')">
-          <div class="qa-icon">🎟</div>
-          <div class="qa-text">Промо</div>
-        </button>
+   <section class="screen active" id="screen-home">
+
+  <!-- Баннер -->
+  <div class="hero-banner">
+    <div class="hero-banner-content">
+      <div class="hero-banner-tag">🔥 АКЦИЯ НЕДЕЛИ</div>
+      <div class="hero-banner-title">Safari Skin Hunt</div>
+      <div class="hero-banner-sub">Особые кейсы · удвоенный шанс на мифик</div>
+      <button class="hero-banner-btn" onclick="showScreen('cases')">
+        К кейсам →
+      </button>
+    </div>
+    <div class="hero-banner-timer" id="heroTimer">--:--:--</div>
+  </div>
+
+  <!-- Тулбар -->
+  <div class="toolbar">
+    <div class="toolbar-tabs">
+      <button class="toolbar-tab active" data-filter="all">Все</button>
+      <button class="toolbar-tab" data-filter="cheap">Дешёвые</button>
+      <button class="toolbar-tab" data-filter="mid">Средние</button>
+      <button class="toolbar-tab" data-filter="top">Дорогие</button>
+    </div>
+    <button class="toolbar-search" onclick="toast('Поиск в разработке')">🔍</button>
+  </div>
+
+  <!-- Бесплатный кейс -->
+  <div class="free-case-banner" id="freeCaseBtn" onclick="openFreeCase()">
+    <div class="free-case-banner-left">
+      <div class="free-case-banner-icon">🎁</div>
+      <div>
+        <div class="free-case-banner-title">Бесплатный кейс</div>
+        <div class="free-case-banner-sub" id="freeCaseSub">Проверяем...</div>
       </div>
-      <button class="qa-btn hidden" id="adminBtn" onclick="showScreen('admin')" style="margin-top: 12px; width: 100%; flex-direction: row; justify-content: center; gap: 8px;">
-        <div class="qa-icon">⚙️</div>
-        <div class="qa-text" style="font-size: 13px;">Админ-панель</div>
-      </button>
-      <h3 class="section-title">📦 Кейсы</h3>
-      <button class="free-case-btn" id="freeCaseBtn" onclick="openFreeCase()">
-        <div class="free-case-icon">🎁</div>
-        <div class="free-case-info">
-          <div class="free-case-title">Бесплатный кейс</div>
-          <div class="free-case-sub" id="freeCaseSub">Проверяем...</div>
-        </div>
-        <div class="free-case-streak hidden" id="freeCaseStreak"></div>
-      </button>
-      <div class="cases-grid" id="homeCasesGrid"></div>
-      <button class="btn-secondary" onclick="showScreen('cases')" style="margin-top: 12px;">📦 Все кейсы</button>
-      <h3 class="section-title">🔥 Все игры</h3>
-      <div class="games-grid" id="gamesGrid"></div>
-    </section>
+    </div>
+    <div class="free-case-banner-streak hidden" id="freeCaseStreak"></div>
+  </div>
+
+  <!-- Сетка кейсов -->
+  <div class="section-title-row">
+    <h3 class="section-title">🎰 Кейсы</h3>
+    <button class="section-link" onclick="showScreen('cases')">Все кейсы →</button>
+  </div>
+  <div class="cases-grid" id="homeCasesGrid"></div>
+
+  <!-- Игры -->
+  <div class="section-title-row">
+    <h3 class="section-title">🔥 Игры</h3>
+  </div>
+  <div class="games-grid" id="gamesGrid"></div>
+
+  <!-- Инвентарь быстрый доступ -->
+  <div class="section-title-row">
+    <h3 class="section-title">🎒 Мой инвентарь</h3>
+    <button class="section-link" onclick="showScreen('inventory')">Открыть →</button>
+  </div>
+  <div class="inventory-preview" id="homeInventoryPreview">
+    <div class="inv-preview-empty">Пока пусто</div>
+  </div>
+
+</section>
 
     <section class="screen" id="screen-cases">
       <h3 class="section-title">📦 Кейсы</h3>
