@@ -1578,3 +1578,18 @@ select.input { text-align: left; letter-spacing: 0; }
   z-index: 100;
   box-shadow: 0 0 60px currentColor;
 }
+.goal-zone.used {
+  background: rgba(90, 99, 115, 0.25) !important;
+  border-color: rgba(90, 99, 115, 0.4) !important;
+  cursor: not-allowed;
+  position: relative;
+}
+.goal-zone.used::after {
+  content: '✕';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
+  color: rgba(255,255,255,0.25);
+  pointer-events: none;
+}
