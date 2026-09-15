@@ -1903,7 +1903,6 @@ async function loadCases() {
         const el = document.getElementById('casesGrid');
         const homeEl = document.getElementById('homeCasesGrid');
 
-        // сопоставляем цену с редкостью → цвет полоски
         const rarityFromPrice = (coins) => {
             if (coins >= 500000) return 'mythic';
             if (coins >= 100000) return 'legendary';
