@@ -1222,30 +1222,6 @@ function zoneToScene(zone) {
 }
 
 async function penaltiStart(bet) {
-    if (penaltiBusy) return;
-    try {
-        const d = await gameApi('/api/penalti/start', { bet });
-        penaltiState = {
-            bet,
-            step: d.step || 0,
-            usedZones: new Set(d.history || []),
-        };
-        lastBet = bet;
-        updateBalance(d.balance);
-
-        document.getElementById('penaltiBets').classList.add('hidden');
-        document.getElementById('penaltiDisplay').classList.remove('hidden');
-        document.getElementById('penaltiMult').textContent = '×1.00';
-        document.getElementById('penaltiPrize').textContent = '0 🪙';
-        document.getElementById('penaltiGoals').textContent = '0';
-        document.getElementById('penaltiCashoutBtn').style.display = 'none';
-        document.getElementById('penaltiHint').textContent = '👇 Выбери, куда бить';
-        document.getElementById('penaltiHint').className = 'penalti-hint';
-
-        resetPenaltiField();
-        loadProfile();
-        penaltiBusy = false;
-        gameLocked = false;
     } catch (e) {
         penaltiBusy = false;
         gameLocked = false;
@@ -1282,26 +1258,6 @@ function resetPenaltiField() {
         if (used) z.classList.add('used');
         else z.classList.remove('used');
     });
-
-    const keeper = document.getElementById('keeper');
-    const center = zoneToScene(4);
-    keeper.style.transition = 'none';
-    keeper.style.left = center.left + '%';
-    keeper.style.top  = center.top  + '%';
-    keeper.classList.remove('diving');
-    keeper.classList.add('idle');
-    void keeper.offsetWidth;
-    keeper.style.transition = '';
-
-    const ball = document.getElementById('ballAnim');
-    ball.style.opacity = '0';
-    ball.style.left = '50%';
-    ball.style.bottom = '6%';
-    ball.style.top = 'auto';
-    ball.style.transition = 'none';
-    void ball.offsetWidth;
-    ball.style.transition = 'left 0.5s cubic-bezier(0.3, 0, 0.7, 1), top 0.5s cubic-bezier(0.3, 0, 0.7, 1), bottom 0.5s cubic-bezier(0.3, 0, 0.7, 1), opacity 0.2s';
-}
 
     const keeper = document.getElementById('keeper');
     const center = zoneToScene(4);
