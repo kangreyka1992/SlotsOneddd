@@ -560,7 +560,15 @@
     <div class="cr-multi hidden" id="crMulti"></div>
   </div>
 </div>
-
+<script>
+  window.onerror = function(message, source, lineno, colno, error) {
+    document.body.innerHTML = '<div style="color:#ff6b6b; padding:20px; font-size:13px; background:#000; font-family:monospace; line-height:1.5; word-break:break-all;">' +
+      '<b>ОШИБКА:</b><br>' + message + '<br><br>' +
+      '<b>Файл:</b> ' + (source || '').split('/').pop() + '<br>' +
+      '<b>Строка:</b> ' + lineno + ':' + colno +
+      '</div>';
+  };
+</script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 <script src="app.js?v=112"></script>
 </body>
