@@ -21,6 +21,7 @@ let crashHistoryArr = [1.24, 3.5, 1.08, 8.2, 1.5, 2.1, 12.4, 1.02, 2.8, 1.7];
 let rrState = null;
 let diceBet = null;
 let penaltiState = null;
+let penaltiBusy = false;
 let coinBet = null;
 let coinHistory = [];
 let lastGame = null;
@@ -389,6 +390,7 @@ function openGame(game) {
     updateBalance(profile.balance);
 
     minesState = null; rrState = null; diceBet = null; penaltiState = null; coinBet = null;
+    penaltiBusy = false;
 
     if (game === 'slots2') {
         document.getElementById('slots2Bets').classList.remove('hidden');
@@ -1184,7 +1186,7 @@ async function plinkoPlay(bet) {
     }, 800);
 }
 
-/* ═══ PENALTI ═══ */
+/* ═══ PENALTI (переделано) ═══ */
 function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
 }
@@ -1220,11 +1222,17 @@ function zoneToScene(zone) {
 }
 
 async function penaltiStart(bet) {
+    if (penaltiBusy) return;
     try {
         const d = await gameApi('/api/penalti/start', { bet });
-        penaltiState = { bet, step: 0 };
+        penaltiState = {
+            bet,
+            step: d.step || 0,
+            usedZones: new Set(),
+        };
         lastBet = bet;
         updateBalance(d.balance);
+
         document.getElementById('penaltiBets').classList.add('hidden');
         document.getElementById('penaltiDisplay').classList.remove('hidden');
         document.getElementById('penaltiMult').textContent = '×1.00';
@@ -1236,14 +1244,23 @@ async function penaltiStart(bet) {
 
         resetPenaltiField();
         loadProfile();
+        penaltiBusy = false;
         gameLocked = false;
-    } catch (e) { toast(e.message, 'error'); gameLocked = false; }
+    } catch (e) {
+        penaltiBusy = false;
+        gameLocked = false;
+        toast(e.message, 'error');
+    }
 }
 
 function resetPenaltiField() {
     document.querySelectorAll('.goal-zone').forEach(z => {
-        z.disabled = false;
-        z.classList.remove('scored', 'missed', 'used');
+        const zn = parseInt(z.dataset.zone);
+        const used = penaltiState && penaltiState.usedZones && penaltiState.usedZones.has(zn);
+        z.disabled = !!used;
+        z.classList.remove('scored', 'missed');
+        if (used) z.classList.add('used');
+        else z.classList.remove('used');
     });
 
     const keeper = document.getElementById('keeper');
@@ -1260,13 +1277,21 @@ function resetPenaltiField() {
     ball.style.top = 'auto';
     ball.style.transition = 'none';
     void ball.offsetWidth;
-    ball.style.transition = 'left 0.45s cubic-bezier(0.3, 0, 0.7, 1), top 0.45s cubic-bezier(0.3, 0, 0.7, 1), bottom 0.45s cubic-bezier(0.3, 0, 0.7, 1), opacity 0.2s';
+    ball.style.transition = 'left 0.5s cubic-bezier(0.3, 0, 0.7, 1), top 0.5s cubic-bezier(0.3, 0, 0.7, 1), bottom 0.5s cubic-bezier(0.3, 0, 0.7, 1), opacity 0.2s';
 }
 
 async function penaltiKick(zone) {
-    haptic();
+    if (penaltiBusy) return;
     if (!penaltiState) return;
-    if (gameLocked) { toast('⏳ Дождись окончания', 'error'); return; }
+    if (gameLocked) return;
+
+    if (penaltiState.usedZones && penaltiState.usedZones.has(zone)) {
+        toast('Эта зона уже использована', 'error');
+        return;
+    }
+
+    penaltiBusy = true;
+    haptic();
 
     document.querySelectorAll('.goal-zone').forEach(z => z.disabled = true);
     document.getElementById('penaltiHint').textContent = '⚽ Удар...';
@@ -1279,10 +1304,12 @@ async function penaltiKick(zone) {
     ball.style.bottom = '6%';
     ball.style.top = 'auto';
 
-    await new Promise(r => setTimeout(r, 40));
+    await new Promise(r => setTimeout(r, 30));
     ball.style.top = target.top + '%';
     ball.style.bottom = 'auto';
     ball.style.left = target.left + '%';
+
+    await new Promise(r => setTimeout(r, 500));
 
     try {
         const d = await gameApi('/api/penalti/kick', { zone });
@@ -1290,13 +1317,14 @@ async function penaltiKick(zone) {
         const keeper = document.getElementById('keeper');
         keeper.classList.remove('idle');
         keeper.classList.add('diving');
-        const keeperPos = zoneToScene(d.keeper_zone);
+        const keeperPos = zoneToScene(d.keeper_dive_zone !== undefined ? d.keeper_dive_zone : d.keeper_zone);
         keeper.style.left = keeperPos.left + '%';
         keeper.style.top  = keeperPos.top  + '%';
 
-        await new Promise(r => setTimeout(r, 450));
+        await new Promise(r => setTimeout(r, 400));
 
         updateBalance(d.balance);
+
         const zoneEl = document.querySelector(`.goal-zone[data-zone="${zone}"]`);
 
         if (d.save) {
@@ -1312,10 +1340,16 @@ async function penaltiKick(zone) {
 
             setTimeout(() => {
                 document.getElementById('penaltiScene').classList.remove('save-flash');
-                showResult({ icon: '🧤', title: 'ВРАТАРЬ ОТБИЛ!', titleClass: 'lose',
+                penaltiBusy = false;
+                showResult({
+                    icon: '🧤',
+                    title: 'ВРАТАРЬ ОТБИЛ!',
+                    titleClass: 'lose',
                     amount: `−${fmt(lastBet)} 🪙`,
                     details: `Голов забито: ${d.step}`,
-                    game: 'penalti', bet: lastBet });
+                    game: 'penalti',
+                    bet: lastBet,
+                });
             }, 1400);
             return;
         }
@@ -1329,44 +1363,62 @@ async function penaltiKick(zone) {
         document.getElementById('penaltiMult').textContent = `×${d.mult}`;
         document.getElementById('penaltiPrize').textContent = `${fmt(d.prize)} 🪙`;
 
+        if (penaltiState) {
+            penaltiState.step = d.step;
+            penaltiState.usedZones.add(zone);
+        }
+
         if (d.maxed) {
             penaltiState = null;
             loadProfile();
             addHistory('penalti', lastBet, d.prize);
+
             setTimeout(() => {
                 document.getElementById('penaltiScene').classList.remove('goal-flash');
-                showResult({ icon: '🏆', title: 'МАКСИМУМ!', titleClass: 'win',
+                penaltiBusy = false;
+                showResult({
+                    icon: '🏆',
+                    title: 'МАКСИМУМ!',
+                    titleClass: 'win',
                     amount: `+${fmt(d.prize)} 🪙`,
                     details: `5 голов · Множитель ×${d.mult}`,
-                    game: 'penalti', bet: lastBet });
+                    game: 'penalti',
+                    bet: lastBet,
+                });
             }, 1200);
             return;
         }
 
-        penaltiState.step = d.step;
-
-        document.getElementById('penaltiHint').textContent = `⚽ Гол! Бей ещё или забери`;
+        document.getElementById('penaltiHint').textContent = '⚽ Гол! Бей ещё или забери';
         document.getElementById('penaltiHint').className = 'penalti-hint success';
         document.getElementById('penaltiCashoutBtn').style.display = 'block';
 
         setTimeout(() => {
             document.getElementById('penaltiScene').classList.remove('goal-flash');
             resetPenaltiField();
+            penaltiBusy = false;
             gameLocked = false;
         }, 1200);
     } catch (e) {
         toast(e.message, 'error');
-        document.querySelectorAll('.goal-zone').forEach(z => z.disabled = false);
+        document.querySelectorAll('.goal-zone').forEach(z => {
+            const zn = parseInt(z.dataset.zone);
+            const used = penaltiState && penaltiState.usedZones && penaltiState.usedZones.has(zn);
+            z.disabled = !!used;
+        });
+        penaltiBusy = false;
         gameLocked = false;
     }
 }
 
 async function penaltiCashout() {
-    haptic();
+    if (penaltiBusy) return;
     if (!penaltiState || penaltiState.step <= 0) {
         toast('Сначала забей гол', 'error');
         return;
     }
+    penaltiBusy = true;
+    haptic();
     try {
         const d = await api('/api/penalti/cashout');
         updateBalance(d.balance);
@@ -1375,11 +1427,21 @@ async function penaltiCashout() {
         loadProfile();
         addHistory('penalti', lastBet, d.prize);
         setTimeout(() => {
-            showResult({ icon: '💰', title: 'Забрано!', titleClass: 'win',
-                amount: `+${fmt(d.prize)} 🪙`, details: `Множитель: ×${d.mult}`,
-                game: 'penalti', bet: lastBet });
+            penaltiBusy = false;
+            showResult({
+                icon: '💰',
+                title: 'Забрано!',
+                titleClass: 'win',
+                amount: `+${fmt(d.prize)} 🪙`,
+                details: `Множитель: ×${d.mult}`,
+                game: 'penalti',
+                bet: lastBet,
+            });
         }, 500);
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+        penaltiBusy = false;
+        toast(e.message, 'error');
+    }
 }
 
 /* ═══ МОНЕТКА ═══ */
@@ -1828,7 +1890,7 @@ function ciOpen(count) {
     openCase(c, count);
 }
 
-/* ═══ CASE ROULETTE (CS:GO style) ═══ */
+/* ═══ CASE ROULETTE ═══ */
 async function openCase(c, count = 1) {
     if (caseRouletteBusy) return;
     haptic('medium');
@@ -2243,7 +2305,7 @@ function upgraderQuickMult(mult) {
     let bestIdx = -1;
     let bestDiff = Infinity;
     upgraderTargets.forEach((t, i) => {
-        if (t.price_coins <= total) return;  // пропускаем невалидные цели
+        if (t.price_coins <= total) return;
         const diff = Math.abs(t.price_coins - desiredValue);
         if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
     });
@@ -2288,7 +2350,6 @@ async function upgraderPlay() {
     const target = upgraderTargets[upgraderTargetIdx];
     const total = getSelectedTotal();
 
-    // ⚠️ ЗАЩИТА ОТ АПГРЕЙДА В ДЕШЕВЫЙ ПРЕДМЕТ
     if (target.price_coins <= total) {
         toast('⚠️ Цель дешевле ставки — так нельзя', 'error');
         return;
@@ -2326,7 +2387,6 @@ async function upgraderPlay() {
         finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
     }
 
-    // Медленнее — 6 секунд, 6–7 оборотов
     const baseTurns = 6 + Math.floor(Math.random() * 2);
     const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
 
@@ -2517,9 +2577,7 @@ function switchAdminTab(tab) {
     }
     if (tab === 'wd') loadAdminWd();
     if (tab === 'promo') loadAdminPromos();
-    if (tab === 'inv') {
-        // Ничего не грузим, пока не нажмут "Показать"
-    }
+    if (tab === 'inv') {}
     if (tab === 'logs') loadAdminLogs();
 }
 
