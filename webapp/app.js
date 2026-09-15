@@ -333,7 +333,68 @@ function pushFeed() {
     el.prepend(item);
     while (el.children.length > 8) el.lastChild.remove();
 }
+function startHeroTimer() {
+    const el = document.getElementById('heroTimer');
+    if (!el) return;
+    // 7 дней от сегодняшней полуночи
+    const target = new Date();
+    target.setHours(23, 59, 59, 0);
+    target.setDate(target.getDate() + 7);
 
+    function tick() {
+        const now = Date.now();
+        const diff = target.getTime() - now;
+        if (diff <= 0) { el.textContent = '--:--:--'; return; }
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        el.textContent = `⏰ ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+    tick();
+    setInterval(tick, 1000);
+}
+function initToolbarFilters() {
+    document.querySelectorAll('.toolbar-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.toolbar-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const filter = tab.dataset.filter;
+            applyCasesFilter(filter);
+        });
+    });
+}
+
+function applyCasesFilter(filter) {
+    const grid = document.getElementById('homeCasesGrid');
+    if (!grid || !casesCache.length) return;
+
+    let filtered = casesCache;
+    if (filter === 'cheap')      filtered = casesCache.filter(c => c.price_stars <= 30);
+    else if (filter === 'mid')   filtered = casesCache.filter(c => c.price_stars > 30 && c.price_stars <= 300);
+    else if (filter === 'top')   filtered = casesCache.filter(c => c.price_stars > 300);
+
+    const rarityFromPrice = (coins) => {
+        if (coins >= 500000) return 'mythic';
+        if (coins >= 100000) return 'legendary';
+        if (coins >= 25000)  return 'epic';
+        if (coins >= 5000)   return 'rare';
+        if (coins >= 1000)   return 'uncommon';
+        return 'common';
+    };
+
+    grid.innerHTML = filtered.slice(0, 12).map(c => `
+        <div class="case-card" onclick="openCaseInfo('${c.id}')">
+            <div class="case-image">
+                <div class="case-emoji">${c.emoji}</div>
+            </div>
+            <div class="case-rarity-bar" data-rarity="${rarityFromPrice(c.price_coins)}"></div>
+            <div class="case-info">
+                <div class="case-name">${c.name}</div>
+                <div class="case-price">${fmt(c.price_coins)} 🪙</div>
+            </div>
+        </div>
+    `).join('');
+}
 /* ═══ PROFILE ═══ */
 async function loadProfile() {
     try {
