@@ -961,41 +961,6 @@ select.input { text-align: left; letter-spacing: 0; }
 }
 .free-case-streak.hidden { display: none; }
 
-/* ═══════════ CASES ═══════════ */
-.cases-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
-}
-.case-card {
-  background: var(--bg-card); border-radius: var(--radius);
-  padding: 16px 12px;
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  text-align: center; transition: transform 0.15s, background 0.15s;
-  border: 2px solid rgba(255,255,255,0.05); cursor: pointer;
-}
-.case-card:active { transform: scale(0.96); background: var(--bg-elevated); }
-.case-emoji { font-size: 40px; }
-.case-name { font-size: 13px; font-weight: 700; }
-.case-price { font-size: 11px; color: var(--gold); font-family: var(--font-num); }
-.case-desc { font-size: 10px; color: var(--text-muted); }
-.case-actions {
-  display: grid; grid-template-columns: 1fr auto; gap: 6px;
-  margin-top: 8px; width: 100%;
-}
-.case-open-btn {
-  padding: 8px 12px;
-  background: linear-gradient(135deg, var(--gold), #ff8f00);
-  color: #000; border-radius: 8px;
-  font-size: 12px; font-weight: 800; transition: transform 0.15s;
-}
-.case-open-btn:active { transform: scale(0.94); }
-.case-x10-btn {
-  padding: 8px 10px;
-  background: linear-gradient(135deg, var(--purple), var(--blue));
-  color: #fff; border-radius: 8px;
-  font-size: 12px; font-weight: 800; transition: transform 0.15s;
-}
-.case-x10-btn:active { transform: scale(0.94); }
-
 /* ═══════════ INVENTORY ═══════════ */
 .inventory-stats {
   display: grid; grid-template-columns: 1fr 1fr;
