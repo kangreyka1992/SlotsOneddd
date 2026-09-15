@@ -124,10 +124,7 @@ async function api(url, body = {}) {
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            initData: tg.initData || "",
-            ...body,
-        }),
+        body: JSON.stringify({ initData, ...body }),
     });
     if (!res.ok) {
         let msg = 'Ошибка';
