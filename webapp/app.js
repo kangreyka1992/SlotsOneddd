@@ -4,7 +4,7 @@ tg.expand();
 tg.setHeaderColor('#0a0e14');
 tg.setBackgroundColor('#0a0e14');
 
-const initData = tg.initData;
+const initData = tg.initData || "";
 const BOT_USERNAME = "SlotsGameFast_bot";
 
 const BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000];
