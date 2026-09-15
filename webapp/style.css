@@ -1938,3 +1938,21 @@ select.input { text-align: left; letter-spacing: 0; }
 .game-card-cs-desc {
   font-size: 11px; color: var(--text-muted); margin-top: 2px;
 }
+.admin-access-btn {
+  width: 100%;
+  margin: 16px 0;
+  padding: 14px;
+  background: linear-gradient(135deg, #232732, #1a1d24);
+  border: 1px solid rgba(255,155,38,0.3);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  transition: all 0.15s;
+}
+.admin-access-btn:active {
+  transform: scale(0.98);
+  border-color: var(--accent);
+  box-shadow: 0 0 20px var(--accent-glow);
+}
