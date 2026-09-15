@@ -1285,6 +1285,26 @@ function resetPenaltiField() {
 
     const keeper = document.getElementById('keeper');
     const center = zoneToScene(4);
+    keeper.style.transition = 'none';
+    keeper.style.left = center.left + '%';
+    keeper.style.top  = center.top  + '%';
+    keeper.classList.remove('diving');
+    keeper.classList.add('idle');
+    void keeper.offsetWidth;
+    keeper.style.transition = '';
+
+    const ball = document.getElementById('ballAnim');
+    ball.style.opacity = '0';
+    ball.style.left = '50%';
+    ball.style.bottom = '6%';
+    ball.style.top = 'auto';
+    ball.style.transition = 'none';
+    void ball.offsetWidth;
+    ball.style.transition = 'left 0.5s cubic-bezier(0.3, 0, 0.7, 1), top 0.5s cubic-bezier(0.3, 0, 0.7, 1), bottom 0.5s cubic-bezier(0.3, 0, 0.7, 1), opacity 0.2s';
+}
+
+    const keeper = document.getElementById('keeper');
+    const center = zoneToScene(4);
     keeper.style.left = center.left + '%';
     keeper.style.top  = center.top  + '%';
     keeper.classList.remove('diving');
@@ -1337,7 +1357,12 @@ async function penaltiKick(zone) {
         const keeper = document.getElementById('keeper');
         keeper.classList.remove('idle');
         keeper.classList.add('diving');
-        const keeperPos = zoneToScene(d.keeper_dive_zone !== undefined ? d.keeper_dive_zone : d.keeper_zone);
+
+        const diveZone = (d.keeper_dive_zone !== undefined && d.keeper_dive_zone !== null)
+            ? d.keeper_dive_zone
+            : d.keeper_zone;
+
+        const keeperPos = zoneToScene(diveZone);
         keeper.style.left = keeperPos.left + '%';
         keeper.style.top  = keeperPos.top  + '%';
 
@@ -1385,7 +1410,7 @@ async function penaltiKick(zone) {
 
         if (penaltiState) {
             penaltiState.step = d.step;
-            penaltiState.usedZones.add(zone);
+            penaltiState.usedZones = new Set(d.history || []);
         }
 
         if (d.maxed) {
