@@ -698,7 +698,7 @@ async def api_mines_open(request: Request):
             "balance": await get_balance(uid),
         }
 
-        game["opened"].add(idx)
+    game["opened"].add(idx)
     safe = total - game["mines_count"]
 
     if len(game["opened"]) >= safe:
@@ -1136,6 +1136,42 @@ async def api_plinko(request: Request):
 
     mult = mults[slot]
     base_win = int(bet * mult)
+
+    # подкрутка
+    base_win_bool = base_win > bet
+    final_win_bool = await _apply_winrate(uid, base_win_bool)
+    if final_win_bool and not base_win_bool:
+        win = int(bet * 1.5)
+        mult = 1.5
+    elif not final_win_bool and base_win_bool:
+        win = int(bet * 0.5)
+        mult = 0.5
+    else:
+        win = base_win
+    win = await _apply_payout(uid, win)
+
+    if win > 0:
+        await add_balance(uid, win)
+
+    await log_game(uid, bet, win)
+    await add_battle_pass_xp(uid, bet // 10)
+    await log_house_flow(wagered=bet, paid=win)
+    if win >= 1000:
+        username = user.get("username") or "Игрок"
+        await log_live_win(uid, username, "Plinko", win)
+    nb = await get_balance(uid)
+    await update_quest_progress(uid, "bets_count", 1)
+    await update_quest_progress(uid, "wagered", bet)
+    if win > bet:
+        await update_quest_progress(uid, "wins", 1)
+
+    await unlock_achievement(uid, "first_bet")
+    if win > bet:
+        await unlock_achievement(uid, "first_win")
+    if win >= 100000:
+        await unlock_achievement(uid, "big_win")
+
+    return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
 
