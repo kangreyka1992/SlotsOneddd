@@ -3043,6 +3043,7 @@ function switchAdminTab(tab) {
     if (tab === 'promo') loadAdminPromos();
     if (tab === 'inv') {}
     if (tab === 'logs') loadAdminLogs();
+    if (tab === 'winrate') loadAdminWinrates();
 }
 
 async function loadAdminStats() {
@@ -3420,6 +3421,67 @@ async function claimQuest(questId) {
     } catch (e) {
         toast(e.message, 'error');
     }
+}
+/* ═══ ПОДКРУТКА ШАНСОВ ═══ */
+async function adminSetWinrate() {
+    haptic();
+    const target = document.getElementById('wrTarget').value.trim();
+    const winrate = parseFloat(document.getElementById('wrPercent').value);
+    const payout = parseFloat(document.getElementById('wrPayout').value) || 1.0;
+
+    if (isNaN(winrate)) { toast('Введи винрейт', 'error'); return; }
+    if (winrate < 0 || winrate > 100) { toast('Винрейт 0-100', 'error'); return; }
+
+    try {
+        await api('/api/admin/winrate/set', { target, winrate, payout_mult: payout });
+        toast(`✅ ${winrate}% применён${target ? ' к ' + target : ' глобально'}`, 'success');
+        document.getElementById('wrTarget').value = '';
+        document.getElementById('wrPercent').value = '';
+        document.getElementById('wrPayout').value = '';
+        loadAdminWinrates();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function adminClearWinrate() {
+    haptic();
+    const target = document.getElementById('wrTarget').value.trim();
+    if (!confirm(target ? `Сбросить подкрутку для ${target}?` : 'Сбросить ГЛОБАЛЬНУЮ подкрутку?')) return;
+    try {
+        await api('/api/admin/winrate/clear', { target });
+        toast('✅ Сброшено', 'success');
+        loadAdminWinrates();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadAdminWinrates() {
+    try {
+        const d = await api('/api/admin/winrate/list');
+        const el = document.getElementById('admWinrateList');
+        if (!el) return;
+        if (!d.settings.length) {
+            el.innerHTML = '<div class="admin-row">Настроек нет — игра честная (50%)</div>';
+            return;
+        }
+        el.innerHTML = d.settings.map(s => `
+            <div class="admin-row" style="flex-direction:column; align-items:flex-start; gap:6px;">
+                <div style="display:flex; justify-content:space-between; width:100%;">
+                    <b>${s.is_global ? '🌍 ГЛОБАЛЬНО' : '@' + s.user_id}</b>
+                    <span>${s.winrate.toFixed(1)}% · ×${s.payout_mult.toFixed(2)}</span>
+                </div>
+                <div style="font-size:10px; color:#666;">${s.updated_at ? s.updated_at.slice(0, 16) : ''}</div>
+                ${!s.is_global ? `<button class="wd-btn fail" onclick="adminClearWinrateFor(${s.user_id})" style="align-self:flex-end;">🗑</button>` : ''}
+            </div>
+        `).join('');
+    } catch (e) { console.error(e); }
+}
+
+async function adminClearWinrateFor(userId) {
+    if (!confirm(`Сбросить подкрутку для ${userId}?`)) return;
+    try {
+        await api('/api/admin/winrate/clear', { target: String(userId) });
+        toast('✅ Сброшено', 'success');
+        loadAdminWinrates();
+    } catch (e) { toast(e.message, 'error'); }
 }
 /* ═══ BOOTSTRAP ═══ */
 function bootstrap() {
