@@ -2358,3 +2358,148 @@ select.input { text-align: left; letter-spacing: 0; }
   color: #666;
   cursor: not-allowed;
 }
+/* ═══════════ BATTLE PASS ═══════════ */
+
+#screen-battlepass {
+  padding: 16px 16px 90px;
+}
+
+.bp-info {
+  background: linear-gradient(160deg, #16161a 0%, #0d0d10 100%);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.bp-season {
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.bp-level {
+  font-size: 22px;
+  font-weight: 900;
+  font-family: var(--font-num);
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.bp-level span {
+  color: #ff8f00;
+}
+
+.bp-xp-bar {
+  height: 12px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.bp-xp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff5722, #ff8f00);
+  border-radius: 6px;
+  transition: width 0.4s ease;
+  box-shadow: 0 0 12px rgba(255,87,34,0.5);
+}
+
+.bp-xp-text {
+  font-size: 12px;
+  color: #999;
+  font-family: var(--font-num);
+}
+
+.bp-premium-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #ffc107, #ff8f00);
+  color: #000;
+  font-weight: 800;
+  font-size: 14px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 20px rgba(255,193,7,0.3);
+}
+
+.bp-premium-btn:active {
+  transform: scale(0.97);
+}
+
+.bp-premium-btn.active {
+  background: #333;
+  color: #666;
+  box-shadow: none;
+}
+
+.bp-rewards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bp-reward {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #16161a;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  transition: border-color 0.2s;
+}
+
+.bp-reward.reached {
+  border-color: rgba(74,222,128,0.4);
+}
+
+.bp-reward.locked {
+  opacity: 0.4;
+}
+
+.bp-reward-emoji {
+  font-size: 26px;
+  text-align: center;
+}
+
+.bp-reward-info {
+  min-width: 0;
+}
+
+.bp-reward-level {
+  font-size: 11px;
+  font-weight: 700;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bp-reward-content {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 2px;
+}
+
+.bp-reward-btn {
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #4ade80, #22c55e);
+  color: #000;
+  font-size: 11px;
+  font-weight: 900;
+  border-radius: 8px;
+  text-transform: uppercase;
+}
+
+.bp-reward-btn:disabled {
+  background: #333;
+  color: #666;
+}
