@@ -49,6 +49,7 @@ from database import (
     get_user_items_admin, transfer_item,
     get_free_case_info, claim_free_case,
     log_house_flow, get_house_stats,
+    get_winrate, set_winrate, clear_winrate, list_winrates,
 )
 
 WITHDRAW_RATE = 125
@@ -358,19 +359,37 @@ async def api_slots(request: Request):
     symbols = ["🍒", "🍋", "🍊", "💎", "🤑", "7️⃣"]
     result = [random.choice(symbols) for _ in range(3)]
 
-    win = 0
+    # честный выигрыш
+    base_win = 0
     jackpot = False
     if result[0] == result[1] == result[2]:
         if result[0] == "🤑":
-            win, jackpot = bet * 10, True
+            base_win, jackpot = bet * 10, True
         elif result[0] == "💎":
-            win = bet * 5
+            base_win = bet * 5
         elif result[0] == "7️⃣":
-            win = bet * 4
+            base_win = bet * 4
         else:
-            win = bet * 3
+            base_win = bet * 3
     elif result[0] == result[1] or result[1] == result[2] or result[0] == result[2]:
-        win = bet * 2
+        base_win = bet * 2
+
+    base_win_bool = base_win > 0
+
+    # подкрутка
+    final_win_bool = await _apply_winrate(uid, base_win_bool)
+
+    if final_win_bool and not base_win_bool:
+        # подыграли — даём случайный небольшой выигрыш
+        win = int(bet * random.choice([1.5, 2.0, 2.5, 3.0]))
+    elif not final_win_bool and base_win_bool:
+        # помешали — обнуляем
+        win = 0
+    else:
+        win = base_win
+
+    # применяем множитель выплат
+    win = await _apply_payout(uid, win)
 
     if win > 0:
         await add_balance(uid, win)
@@ -382,7 +401,7 @@ async def api_slots(request: Request):
     await unlock_achievement(uid, "first_bet")
     if win > 0:
         await unlock_achievement(uid, "first_win")
-    if jackpot:
+    if jackpot and win > 0:
         await unlock_achievement(uid, "jackpot")
     if win >= 100000:
         await unlock_achievement(uid, "big_win")
@@ -2923,6 +2942,126 @@ async def api_admin_broadcast(request: Request):
     await log_admin_action(admin["id"], "broadcast", None, f"sent={sent} failed={failed}")
     return {"ok": True, "sent": sent, "failed": failed}
 
+# ═══════════ ЛОГИКА ПОДКРУТКИ ═══════════
+
+from database import get_winrate
+
+async def _apply_winrate(uid: int, base_win: bool) -> bool:
+    """
+    base_win — «честный» результат (True=победа).
+    Возвращает итоговый результат с учётом настроек.
+    """
+    winrate, _ = await get_winrate(uid)
+    # winrate: 0..100 — целевой процент побед
+    # если base_win=False, но winrate высокий — с шансом даём победу
+    # если base_win=True, но winrate низкий — с шансом отменяем победу
+    r = random.random() * 100
+    if winrate >= 50:
+        # подыгрываем: если игрок проиграл, даём шанс на победу
+        if not base_win:
+            # насколько сильно подыгрываем
+            bias = (winrate - 50) / 50  # 0..1
+            return random.random() < bias
+        return True
+    else:
+        # мешаем: если игрок выиграл, шанс отменить
+        if base_win:
+            bias = (50 - winrate) / 50  # 0..1
+            return random.random() > bias
+        return False
+
+
+async def _apply_payout(uid: int, win_amount: int) -> int:
+    """Урезает/увеличивает выплату согласно payout_mult."""
+    _, payout_mult = await get_winrate(uid)
+    if payout_mult == 1.0 or win_amount <= 0:
+        return win_amount
+    return int(win_amount * payout_mult)
+
+# ═══════════ ПОДКРУТКА ШАНСОВ ═══════════
+
+@app.post("/api/admin/winrate/set")
+async def api_admin_winrate_set(request: Request):
+    data = await request.json()
+    admin = admin_only(data.get("initData", ""))
+
+    target = data.get("target")            # None / "" / "12345" / "@user"
+    winrate = float(data.get("winrate", 50.0))
+    payout_mult = float(data.get("payout_mult", 1.0))
+
+    if winrate < 0 or winrate > 100:
+        raise HTTPException(400, "Винрейт от 0 до 100")
+    if payout_mult < 0 or payout_mult > 10:
+        raise HTTPException(400, "Множитель выплат от 0 до 10")
+
+    from database import set_winrate, get_user_by_username
+
+    target_id = None
+    if target and str(target).strip():
+        t = str(target).strip()
+        if t.startswith("@"):
+            row = await get_user_by_username(t)
+            if not row:
+                raise HTTPException(404, "Пользователь не найден")
+            target_id = row[0]
+        else:
+            try:
+                target_id = int(t)
+            except ValueError:
+                raise HTTPException(400, "Некорректный ID")
+        # проверим, что пользователь есть
+        bal = await get_balance(target_id)
+        # не падаем, даже если 0
+
+    await set_winrate(target_id, winrate, payout_mult)
+    await log_admin_action(
+        admin["id"], "set_winrate", target_id,
+        f"winrate={winrate}% payout_mult={payout_mult}",
+    )
+    return {"ok": True, "target_id": target_id, "winrate": winrate, "payout_mult": payout_mult}
+
+
+@app.post("/api/admin/winrate/list")
+async def api_admin_winrate_list(request: Request):
+    data = await request.json()
+    admin_only(data.get("initData", ""))
+    from database import list_winrates
+    rows = await list_winrates()
+    return {
+        "settings": [
+            {
+                "user_id": r[0],
+                "winrate": r[1],
+                "payout_mult": r[2],
+                "updated_at": r[3],
+                "is_global": r[0] is None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@app.post("/api/admin/winrate/clear")
+async def api_admin_winrate_clear(request: Request):
+    data = await request.json()
+    admin = admin_only(data.get("initData", ""))
+    from database import clear_winrate, get_user_by_username
+
+    target = data.get("target")
+    target_id = None
+    if target and str(target).strip():
+        t = str(target).strip()
+        if t.startswith("@"):
+            row = await get_user_by_username(t)
+            if not row:
+                raise HTTPException(404, "Пользователь не найден")
+            target_id = row[0]
+        else:
+            target_id = int(t)
+
+    await clear_winrate(target_id)
+    await log_admin_action(admin["id"], "clear_winrate", target_id, "")
+    return {"ok": True}
 
 if __name__ == "__main__":
     import os
