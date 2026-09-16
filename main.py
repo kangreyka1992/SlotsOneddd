@@ -380,7 +380,7 @@ async def api_slots(request: Request):
 
     print(f"🎰 bet={bet} balance={await get_balance(uid)}")   # ← ДОБАВЬ ЭТО
 
-    if bet <= 0 or bet > 10000000:
+    if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
 
     balance = await get_balance(uid)
@@ -541,7 +541,7 @@ async def api_slots2_spin(request: Request):
 
     print(f"🎰 SLOTS2: uid={uid} bet={bet} lines={lines_count} balance={await get_balance(uid)}")   # ← добавь
 
-    if bet <= 0 or bet > 10000000:
+    if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
     if lines_count not in (1, 5, 10, 20):
         raise HTTPException(400, "invalid_lines")
@@ -622,7 +622,7 @@ async def api_mines_start(request: Request):
 
     if uid in mines_games:
         raise HTTPException(400, "already_playing")
-    if bet <= 0 or bet > 10000000:
+    if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
     if mines_count not in MINES_MULT:
         raise HTTPException(400, "invalid_mines")
@@ -803,7 +803,7 @@ async def api_crash_start(request: Request):
 
     if uid in crash_games:
         raise HTTPException(400, "already_playing")
-    if bet <= 0 or bet > 10000000:
+    if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
 
     balance = await get_balance(uid)
@@ -956,7 +956,7 @@ async def api_dice(request: Request):
 
     print(f"🎲 DICE: uid={uid} bet={bet} choice={choice!r} balance={await get_balance(uid)}")
 
-    if bet <= 0 or bet > 10000000:
+    if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
 
     balance = await get_balance(uid)
@@ -1026,7 +1026,7 @@ async def api_rr_start(request: Request):
 
     if uid in rr_games:
         raise HTTPException(400, "already_playing")
-    if bet <= 0 or bet > 10000000:
+    if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
 
     balance = await get_balance(uid)
@@ -1116,7 +1116,7 @@ async def api_plinko(request: Request):
     bet = int(data.get("bet", 0))
     risk = data.get("risk", "low")
 
-    if bet <= 0 or bet > 10000000:
+    if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
     if risk not in PLINKO_MULTS:
         raise HTTPException(400, "invalid_risk")
@@ -1256,7 +1256,7 @@ async def api_penalti_start(request: Request):
             await add_balance(uid, existing["bet"])
         del penalti_games[uid]
 
-    if bet <= 0 or bet > 10000000:
+    if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
 
     balance = await get_balance(uid)
@@ -1419,7 +1419,7 @@ async def api_coin_flip(request: Request):
 
     if side not in ("heads", "tails"):
         raise HTTPException(400, "invalid_side")
-    if bet <= 0 or bet > 10000000:
+    if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
 
     balance = await get_balance(uid)
@@ -1496,7 +1496,7 @@ async def api_duel_join(request: Request):
 
     cleanup_duel()
 
-    if bet <= 0 or bet > 10000000:
+    if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
 
     for i in range(len(duel_queue) - 1, -1, -1):
