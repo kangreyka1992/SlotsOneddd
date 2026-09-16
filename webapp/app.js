@@ -2284,10 +2284,6 @@ async function loadCases() {
     try {
         const d = await api('/api/cases/list');
         casesCache = d.cases;
-async function loadCases() {
-    try {
-        const d = await api('/api/cases/list');
-        casesCache = d.cases;
 
         const el = document.getElementById('casesGrid');
         const homeEl = document.getElementById('homeCasesGrid');
@@ -2316,7 +2312,9 @@ async function loadCases() {
 
         if (el) el.innerHTML = d.cases.map(cardHtml).join('');
         if (homeEl) homeEl.innerHTML = d.cases.slice(0, 6).map(cardHtml).join('');
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+        toast(e.message, 'error');
+    }
 }
 
 
@@ -3700,28 +3698,32 @@ async function bootstrap() {
         return;
     }
 
-    console.log('INIT at start:', tg.initData?.length);
-    setTimeout(() => console.log('INIT 1s:', tg.initData?.length), 1000);
-    setTimeout(() => console.log('INIT 3s:', tg.initData?.length), 3000);
+    try {
+        await loadProfile();
+    } catch (e) {
+        console.error('loadProfile failed:', e);
+    }
 
-    // ✅ Ждём профиль
-    await loadProfile();
-    // Скрываем splash
-setTimeout(() => {
-    document.getElementById('splash')?.classList.add('hide');
-}, 800);
+    // ✅ Скрываем splash ВСЕГДА — даже если что-то упало
+    setTimeout(() => {
+        document.getElementById('splash')?.classList.add('hide');
+    }, 800);
 
-    renderGamesGrid();
-    renderHistory();
-    loadCases().then(() => renderHomeInventoryPreview());
-    loadFreeCaseStatus();
-    startHeroTimer();
-    initToolbarFilters();
-    loadLiveFeed();
-    setInterval(loadLiveFeed, 10000);
-    setInterval(renderHomeInventoryPreview, 30000);
+    try {
+        renderGamesGrid();
+        renderHistory();
+        loadCases().then(() => renderHomeInventoryPreview());
+        loadFreeCaseStatus();
+        startHeroTimer();
+        initToolbarFilters();
+        loadLiveFeed();
+        setInterval(loadLiveFeed, 10000);
+        setInterval(renderHomeInventoryPreview, 30000);
 
-    api('/api/penalti/reset').catch(() => {});
-    api('/api/duel/cancel').catch(() => {});
+        api('/api/penalti/reset').catch(() => {});
+        api('/api/duel/cancel').catch(() => {});
+    } catch (e) {
+        console.error('bootstrap error:', e);
+    }
 }
 bootstrap();
