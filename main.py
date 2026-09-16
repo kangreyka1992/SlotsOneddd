@@ -7,7 +7,7 @@ import random
 import time
 import datetime
 from contextlib import asynccontextmanager
-from urllib.parse import parse_qsl, quote
+from urllib.parse import parse_qsl
 
 import aiohttp
 from fastapi import FastAPI, Request, HTTPException
@@ -44,10 +44,14 @@ MIN_WITHDRAW = 15
 BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
 
-# ═══════════ PAYGATE ═══════════
+# ═══════════ CRYPTO DIRECT (Polygon USDC) ═══════════
 SELLER_WALLET = "0xFe06D515f0728567e34B94de549289791d9b1BA3"
-PAYGATE_CALLBACK_URL = "https://bot-1789335277-8932-slotbots.bothost.tech/paygate/callback"
-CRYPTO_PER_USD = 1000   # 1 USDC = 100 монет
+POLYGONSCAN_API_KEY = "ВСТАВЬ_СВОЙ_КЛЮЧ_С_POLYGONSCAN"   # https://polygonscan.com/myapikey
+USDC_POLYGON_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+CRYPTO_PER_USD = 100   # 1 USDC = 100 монет
+
+# Хранилище ожидающих платежей {order_id: {...}}
+pending_payments: dict[str, dict] = {}
 
 
 def validate_init_data(init_data: str) -> dict:
@@ -98,91 +102,154 @@ async def health():
     return {"status": "ok"}
 
 
-# ═══════════ PAYGATE WEBHOOK ═══════════
+# ═══════════ CRYPTO DIRECT (Polygon) ═══════════
 
-@app.get("/paygate/test")
-async def paygate_test():
-    return {"status": "alive"}
-
-
-@app.get("/paygate/callback")
-async def paygate_callback(request: Request):
-    """Paygate присылает сюда GET-запрос после оплаты"""
-    params = dict(request.query_params)
-    print("PAYGATE CALLBACK:", params)
-
-    try:
-        user_id = int(params.get("number", 0))
-        amount_usdc = float(params.get("value_coin", 0))
-    except (ValueError, TypeError):
-        return {"error": "bad params"}
-
-    if user_id <= 0 or amount_usdc <= 0:
-        return {"error": "invalid"}
-
-    coins = int(amount_usdc * CRYPTO_PER_USD)
-    bal = await add_balance(user_id, coins, None)
-    await unlock_achievement(user_id, "paid_user")
-
-    try:
-        await bot.send_message(
-            user_id,
-            "✅ <b>Оплата получена!</b>\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💳 Оплачено: <b>{amount_usdc} USDC</b>\n"
-            f"🪙 Зачислено: <b>{coins}</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💰 Баланс: <b>{bal}</b> 🪙",
-            parse_mode="HTML",
-        )
-    except Exception as e:
-        print(f"Paygate notify error: {e}")
-
-    return {"status": "ok"}
+@app.get("/crypto/test")
+async def crypto_test():
+    return {"status": "alive", "wallet": SELLER_WALLET}
 
 
-@app.post("/api/paygate/create")
-async def api_paygate_create(request: Request):
-    """Создаёт платёжную ссылку для пополнения"""
+@app.post("/api/crypto/create")
+async def api_crypto_create(request: Request):
+    """Создаёт уникальный заказ на пополнение через USDC Polygon"""
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
-    amount_usd = float(data.get("amount_usd", 25))
+    amount_usd = float(data.get("amount_usd", 10))
 
     if amount_usd < 1:
         raise HTTPException(400, "Минимум $1")
 
-    callback = f"{PAYGATE_CALLBACK_URL}?number={uid}"
-    url1 = (
-        f"https://api.paygate.to/control/wallet.php"
-        f"?address={SELLER_WALLET}"
-        f"&callback={quote(callback, safe='')}"
-    )
+    # Уникальная сумма: например 10.0347, чтобы понять кто платит
+    order_id = f"{uid}_{int(time.time())}"
+    unique_amount = round(amount_usd + random.randint(1, 999) / 10000, 4)
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url1) as resp:
-                resp_json = await resp.json()
-    except Exception as e:
-        raise HTTPException(500, f"paygate error: {e}")
+    pending_payments[order_id] = {
+        "user_id": uid,
+        "amount": unique_amount,
+        "base_amount": amount_usd,
+        "created": time.time(),
+        "status": "pending",
+    }
 
-    address_in = resp_json.get("address_in")
-    if not address_in:
-        raise HTTPException(500, "paygate: no address_in")
-
-    pay_url = (
-        f"https://checkout.paygate.to/process-payment.php"
-        f"?address={quote(address_in, safe='')}"
-        f"&amount={amount_usd}"
-        f"&provider=wert"
-        f"&email=player{uid}%40example.com"
-        f"&currency=USD"
+    # QR-код через публичный API
+    qr_url = (
+        f"https://api.qrserver.com/v1/create-qr-code/"
+        f"?size=300x300&data=ethereum:{SELLER_WALLET}@137"
     )
 
     return {
-        "pay_url": pay_url,
-        "amount_usd": amount_usd,
+        "order_id": order_id,
+        "wallet": SELLER_WALLET,
+        "network": "Polygon (MATIC)",
+        "token": "USDC",
+        "amount": unique_amount,
+        "base_amount": amount_usd,
         "coins": int(amount_usd * CRYPTO_PER_USD),
+        "qr_url": qr_url,
+        "expires_in": 3600,
+    }
+
+
+@app.post("/api/crypto/check")
+async def api_crypto_check(request: Request):
+    """Проверяет, поступила ли оплата на кошелёк"""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    order_id = data.get("order_id", "")
+
+    order = pending_payments.get(order_id)
+    if not order:
+        raise HTTPException(404, "Заказ не найден")
+    if order["user_id"] != uid:
+        raise HTTPException(403, "Это не ваш заказ")
+
+    if order["status"] == "paid":
+        return {
+            "status": "paid",
+            "coins": order.get("coins", 0),
+            "balance": await get_balance(uid),
+        }
+
+    # Проверяем блокчейн через PolygonScan
+    try:
+        url = (
+            f"https://api.polygonscan.com/api"
+            f"?module=account"
+            f"&action=tokentx"
+            f"&contractaddress={USDC_POLYGON_CONTRACT}"
+            f"&address={SELLER_WALLET}"
+            f"&page=1&offset=20&sort=desc"
+            f"&apikey={POLYGONSCAN_API_KEY}"
+        )
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                result = await resp.json()
+
+        txs = result.get("result", [])
+        if not isinstance(txs, list):
+            txs = []
+
+        target_amount = order["amount"]
+        order_created = order["created"]
+
+        for tx in txs:
+            # Только входящие (to == наш кошелёк)
+            if tx["to"].lower() != SELLER_WALLET.lower():
+                continue
+            # Только после создания заказа
+            if int(tx["timeStamp"]) < order_created - 60:
+                continue
+
+            value_usdc = int(tx["value"]) / (10 ** int(tx["tokenDecimal"]))
+
+            # Сравниваем с точностью до 0.001
+            if abs(value_usdc - target_amount) < 0.001:
+                order["status"] = "paid"
+                coins = int(order["base_amount"] * CRYPTO_PER_USD)
+                order["coins"] = coins
+
+                bal = await add_balance(uid, coins, None)
+                await unlock_achievement(uid, "paid_user")
+
+                try:
+                    await bot.send_message(
+                        uid,
+                        "✅ <b>Оплата получена!</b>\n\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"💳 Оплачено: <b>{value_usdc} USDC</b>\n"
+                        f"🪙 Зачислено: <b>{coins}</b>\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"💰 Баланс: <b>{bal}</b> 🪙",
+                        parse_mode="HTML",
+                    )
+                except Exception as e:
+                    print(f"notify error: {e}")
+
+                return {
+                    "status": "paid",
+                    "coins": coins,
+                    "balance": bal,
+                    "txid": tx["hash"],
+                }
+
+        return {"status": "pending"}
+
+    except Exception as e:
+        print(f"crypto check error: {e}")
+        return {"status": "pending", "error": str(e)}
+
+
+@app.get("/crypto/pending")
+async def crypto_pending():
+    """Для отладки — посмотреть все ожидающие заказы"""
+    return {
+        "count": len(pending_payments),
+        "orders": [
+            {"id": k, "user": v["user_id"], "amount": v["amount"], "status": v["status"]}
+            for k, v in list(pending_payments.items())[-20:]
+        ],
     }
 
 
@@ -2343,7 +2410,7 @@ async def api_daily(request: Request):
     return {"reward": reward, "streak": new_streak, "balance": nb}
 
 
-# ═══════════ ИНВОЙС ═══════════
+# ═══════════ ИНВОЙС (звёзды) ═══════════
 
 @app.post("/api/invoice")
 async def api_invoice(request: Request):
