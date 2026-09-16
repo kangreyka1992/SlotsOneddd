@@ -611,6 +611,10 @@ async def api_mines_open(request: Request):
         del mines_games[uid]
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
+        # ⭐ Обновляем прогресс квестов при взрыве
+        await update_quest_progress(uid, "bets_count", 1)
+        await update_quest_progress(uid, "wagered", bet)
+        await update_quest_progress(uid, "game_mines", 1)
         return {
             "hit_mine": True,
             "idx": idx,
@@ -628,6 +632,11 @@ async def api_mines_open(request: Request):
         await add_balance(uid, win)
         await log_game(uid, game["bet"], win)
         await log_house_flow(wagered=game["bet"], paid=win)
+        # ⭐ Обновляем прогресс квестов при победе
+        await update_quest_progress(uid, "bets_count", 1)
+        await update_quest_progress(uid, "wagered", game["bet"])
+        await update_quest_progress(uid, "game_mines", 1)
+        await update_quest_progress(uid, "wins", 1)
         del mines_games[uid]
         await unlock_achievement(uid, "first_bet")
         await unlock_achievement(uid, "first_win")
