@@ -539,6 +539,8 @@ async def api_slots2_spin(request: Request):
     bet = int(data.get("bet", 0))
     lines_count = int(data.get("lines", 5))
 
+    print(f"🎰 SLOTS2: uid={uid} bet={bet} lines={lines_count} balance={await get_balance(uid)}")   # ← добавь
+
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
     if lines_count not in (1, 5, 10, 20):
@@ -954,9 +956,6 @@ async def api_dice(request: Request):
 
     print(f"🎲 DICE: uid={uid} bet={bet} choice={choice!r} balance={await get_balance(uid)}")
 
-    if bet <= 0 or bet > 10000000:
-        raise HTTPException(400, "invalid_bet")
-        print(f"🎲 dice: uid={uid} bet={bet} choice={choice} balance={await get_balance(uid)}")
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
 
