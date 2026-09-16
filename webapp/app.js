@@ -1762,6 +1762,13 @@ async function cryptoPay(amountUsd) {
                     💎 Оплата USDC (Polygon)
                 </div>
                 <img src="${d.qr_url}" style="width:220px; height:220px; background:#fff; padding:8px; border-radius:12px;">
+
+                <!-- ← КНОПКА ОТКРЫТИЯ В КОШЕЛЬКЕ -->
+                <a href="${d.deeplink}"
+                   style="display:block; margin-top:16px; padding:16px; background:linear-gradient(135deg,#ff9b26,#e07a00); color:#000; font-weight:800; border-radius:12px; text-decoration:none; font-size:15px;">
+                    💳 Открыть в кошельке
+                </a>
+
                 <div style="margin-top:14px; font-size:13px; color:#8a92a3;">Адрес кошелька:</div>
                 <div style="font-family:monospace; font-size:12px; color:#ff9b26; word-break:break-all; padding:0 10px;">
                     ${d.wallet}
