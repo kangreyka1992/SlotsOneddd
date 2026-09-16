@@ -1751,39 +1751,68 @@ function renderPay() {
     const el = document.getElementById('payGrid');
     if (!el) return;
 
-    // Рисуем структуру: табы + контент
     el.innerHTML = `
         <div class="pay-tabs">
             <button class="pay-tab active" data-method="stars" onclick="switchPayTab('stars')">
-                ⭐ Stars
+                <span class="pay-tab-icon">⭐</span>
+                <span class="pay-tab-name">Stars</span>
             </button>
             <button class="pay-tab" data-method="crypto" onclick="switchPayTab('crypto')">
-                💎 Крипта
+                <span class="pay-tab-icon">💎</span>
+                <span class="pay-tab-name">Крипта</span>
             </button>
             <button class="pay-tab" data-method="sbp" onclick="switchPayTab('sbp')">
-                🇷🇺 СБП
+                <span class="pay-tab-icon">🇷🇺</span>
+                <span class="pay-tab-name">СБП</span>
             </button>
         </div>
 
         <!-- ⭐ STARS -->
         <div class="pay-method active" id="pay-method-stars">
-            <div class="pay-method-title">⭐ Telegram Stars</div>
-            <div class="pay-method-desc">Быстрое пополнение через встроенную оплату Telegram</div>
+            <div class="pay-header">
+                <div class="pay-header-icon">⭐</div>
+                <div>
+                    <div class="pay-header-title">Telegram Stars</div>
+                    <div class="pay-header-sub">Мгновенное зачисление · Без комиссии</div>
+                </div>
+                <div class="pay-badge hot">🔥 ХИТ</div>
+            </div>
             <div class="pay-grid-inner" id="payGridStars"></div>
+            <div class="pay-info">
+                💡 Оплата проходит прямо в Telegram. Зачисление — моментально.
+            </div>
         </div>
 
         <!-- 💎 CRYPTO -->
         <div class="pay-method" id="pay-method-crypto">
-            <div class="pay-method-title">💎 USDC (Polygon)</div>
-            <div class="pay-method-desc">Отправьте USDC в сети Polygon на кошелёк. Зачисление автоматическое.</div>
+            <div class="pay-header">
+                <div class="pay-header-icon">💎</div>
+                <div>
+                    <div class="pay-header-title">USDC · Polygon</div>
+                    <div class="pay-header-sub">Автоматическое зачисление · ~1-2 мин</div>
+                </div>
+                <div class="pay-badge">+5%</div>
+            </div>
             <div class="pay-grid-inner" id="payGridCrypto"></div>
+            <div class="pay-info">
+                💡 Отправьте <b>ровно указанную сумму</b> USDC в сети Polygon. Не отправляйте из других сетей.
+            </div>
         </div>
 
         <!-- 🇷🇺 СБП -->
         <div class="pay-method" id="pay-method-sbp">
-            <div class="pay-method-title">🇷🇺 СБП / Карта РФ</div>
-            <div class="pay-method-desc">Перевод на карту или СБП. После оплаты отправьте скриншот в поддержку.</div>
+            <div class="pay-header">
+                <div class="pay-header-icon">🇷🇺</div>
+                <div>
+                    <div class="pay-header-title">СБП / Карта РФ</div>
+                    <div class="pay-header-sub">Ручная обработка · 5-30 мин</div>
+                </div>
+                <div class="pay-badge">+10%</div>
+            </div>
             <div class="pay-grid-inner" id="payGridSbp"></div>
+            <div class="pay-info">
+                💡 Переведите на карту, пришлите скриншот в поддержку — и мы зачислим баланс.
+            </div>
         </div>
     `;
 
@@ -1807,11 +1836,31 @@ function renderStarsButtons() {
     const el = document.getElementById('payGridStars');
     if (!el) return;
     el.innerHTML = '';
-    PAY_PACKS.forEach(s => {
+
+    const PACKS = [
+        { stars: 10,  coins: 1000,  badge: null },
+        { stars: 30,  coins: 3000,  badge: null },
+        { stars: 50,  coins: 5000,  badge: 'Выгодно' },
+        { stars: 100, coins: 10000, badge: '+5%' },
+        { stars: 250, coins: 25000, badge: '+10%' },
+        { stars: 500, coins: 50000, badge: '+15%' },
+    ];
+
+    PACKS.forEach(p => {
         const btn = document.createElement('button');
-        btn.className = 'withdraw-btn';
-        btn.innerHTML = `<b>${s} ⭐</b><br><span style="font-size:11px;color:#8a92a3;">${fmt(s * 100)} 🪙</span>`;
-        btn.onclick = () => buyStars(s);
+        btn.className = 'pay-card';
+        btn.innerHTML = `
+            ${p.badge ? `<div class="pay-card-badge">${p.badge}</div>` : ''}
+            <div class="pay-card-top">
+                <span class="pay-card-amount">${p.stars}</span>
+                <span class="pay-card-icon">⭐</span>
+            </div>
+            <div class="pay-card-bottom">
+                <span class="pay-card-coins">${fmt(p.coins)}</span>
+                <span class="pay-card-coin-icon">🪙</span>
+            </div>
+        `;
+        btn.onclick = () => buyStars(p.stars);
         el.appendChild(btn);
     });
 }
@@ -1821,11 +1870,31 @@ function renderCryptoButtons() {
     const el = document.getElementById('payGridCrypto');
     if (!el) return;
     el.innerHTML = '';
-    [1, 2, 5, 10, 25].forEach(usd => {
+
+    const PACKS = [
+        { usd: 1,  coins: 500,   badge: 'Старт' },
+        { usd: 2,  coins: 1000,  badge: null },
+        { usd: 5,  coins: 2500,  badge: 'Популярно' },
+        { usd: 10, coins: 5000,  badge: '+5%' },
+        { usd: 25, coins: 12500, badge: '+10%' },
+        { usd: 50, coins: 25000, badge: '+15%' },
+    ];
+
+    PACKS.forEach(p => {
         const btn = document.createElement('button');
-        btn.className = 'withdraw-btn';
-        btn.innerHTML = `<b>$${usd}</b><br><span style="font-size:11px;color:#8a92a3;">${fmt(usd * 500)} 🪙</span>`;
-        btn.onclick = () => cryptoPay(usd);
+        btn.className = 'pay-card';
+        btn.innerHTML = `
+            ${p.badge ? `<div class="pay-card-badge">${p.badge}</div>` : ''}
+            <div class="pay-card-top">
+                <span class="pay-card-amount">$${p.usd}</span>
+                <span class="pay-card-icon">💎</span>
+            </div>
+            <div class="pay-card-bottom">
+                <span class="pay-card-coins">${fmt(p.coins)}</span>
+                <span class="pay-card-coin-icon">🪙</span>
+            </div>
+        `;
+        btn.onclick = () => cryptoPay(p.usd);
         el.appendChild(btn);
     });
 }
@@ -1837,18 +1906,28 @@ function renderSbpButtons() {
     el.innerHTML = '';
 
     const PACKS = [
-        {rub: 100,  coins: 500},
-        {rub: 300,  coins: 1500},
-        {rub: 500,  coins: 2500},
-        {rub: 1000, coins: 5000},
-        {rub: 2000, coins: 10000},
-        {rub: 5000, coins: 25000},
+        { rub: 100,  coins: 500,   badge: 'Старт' },
+        { rub: 300,  coins: 1500,  badge: null },
+        { rub: 500,  coins: 2500,  badge: 'Популярно' },
+        { rub: 1000, coins: 5000,  badge: '+5%' },
+        { rub: 2000, coins: 10000, badge: '+10%' },
+        { rub: 5000, coins: 25000, badge: '+15%' },
     ];
 
     PACKS.forEach(p => {
         const btn = document.createElement('button');
-        btn.className = 'withdraw-btn';
-        btn.innerHTML = `<b>${p.rub} ₽</b><br><span style="font-size:11px;color:#8a92a3;">${fmt(p.coins)} 🪙</span>`;
+        btn.className = 'pay-card';
+        btn.innerHTML = `
+            ${p.badge ? `<div class="pay-card-badge">${p.badge}</div>` : ''}
+            <div class="pay-card-top">
+                <span class="pay-card-amount">${p.rub}₽</span>
+                <span class="pay-card-icon">🇷🇺</span>
+            </div>
+            <div class="pay-card-bottom">
+                <span class="pay-card-coins">${fmt(p.coins)}</span>
+                <span class="pay-card-coin-icon">🪙</span>
+            </div>
+        `;
         btn.onclick = () => sbpPay(p.rub, p.coins);
         el.appendChild(btn);
     });
@@ -1868,21 +1947,15 @@ function sbpPay(rub, coins) {
                 Сумма к оплате: <b style="color:#fff;">${rub} ₽</b><br>
                 Зачисление: <b style="color:#3dd68c;">${fmt(coins)} 🪙</b>
             </div>
-
             <div style="background:#1a1d24; padding:16px; border-radius:12px; text-align:left; font-size:13px; line-height:1.7; color:#e8eaed;">
                 <b>📋 Инструкция:</b><br>
-                1. Переведите <b>${rub} ₽</b> по номеру телефона:<br>
+                1. Переведите <b>${rub} ₽</b> по номеру:<br>
                 <b style="color:#ff9b26;">+7 (XXX) XXX-XX-XX</b><br>
                 <span style="color:#8a92a3; font-size:11px;">(получатель: Ivan I.)</span><br><br>
-                2. В комментарии укажите ваш <b>ID: ${profile.user_id || '—'}</b><br><br>
+                2. В комментарии укажите <b>ID: ${profile.user_id || '—'}</b><br><br>
                 3. Отправьте <b>скриншот чека</b> в поддержку: <b>@ТвойПоддержка</b><br><br>
                 4. Зачисление в течение <b>5-30 минут</b>.
             </div>
-
-            <div style="margin-top:14px; font-size:11px; color:#5a6373; line-height:1.5;">
-                ⚠️ Оплата вручную. Обработка занимает до 30 минут.
-            </div>
-
             <button class="btn-secondary" onclick="this.closest('.case-opening').remove()" style="margin-top:16px;">
                 Закрыть
             </button>
