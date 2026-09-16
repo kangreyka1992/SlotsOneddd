@@ -1723,7 +1723,29 @@ function startDuelPolling() {
         } catch (e) {}
     }, 1500);
 }
+async function buyStars(stars) {
+    try {
+        haptic('medium');
+        const d = await api('/api/invoice', { stars });
 
+        tg.openInvoice(d.link, (status) => {
+            if (status === 'paid') {
+                toast('✅ Оплата успешна', 'success');
+                SFX.cashout();
+                setTimeout(() => {
+                    loadProfile();
+                    updateBalance(profile.balance);
+                }, 1500);
+            } else if (status === 'cancelled') {
+                toast('❌ Оплата отменена', 'error');
+            } else if (status === 'failed') {
+                toast('❌ Ошибка оплаты', 'error');
+            }
+        });
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
 /* ═══ ПОПОЛНЕНИЕ ═══ */
 function renderPay() {
     const el = document.getElementById('payGrid');
