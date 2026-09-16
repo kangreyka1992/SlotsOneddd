@@ -499,6 +499,9 @@ async def api_slots2_spin(request: Request):
     await log_game(uid, total_bet, total_win)
     await log_house_flow(wagered=total_bet, paid=total_win)
     nb = await get_balance(uid)
+    if total_win >= 1000:
+        username = user.get("username") or user.get("first_name") or "Игрок"
+        await log_live_win(uid, username, "Слоты 5×3", total_win)
 
     await unlock_achievement(uid, "first_bet")
     if total_win > 0:
@@ -656,6 +659,9 @@ async def api_mines_cashout(request: Request):
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
     await log_house_flow(wagered=bet, paid=prize)
+    if prize >= 1000:
+        username = user.get("username") or "Игрок"
+        await log_live_win(uid, username, "Mines", prize)
     del mines_games[uid]
     await unlock_achievement(uid, "first_bet")
     return {"prize": prize, "bet": bet, "balance": await get_balance(uid)}
@@ -742,6 +748,9 @@ async def api_crash_status(request: Request):
         await add_balance(uid, prize)
         await log_game(uid, game["bet"], prize)
         await log_house_flow(wagered=game["bet"], paid=prize)
+        if prize >= 1000:
+            username = user.get("username") or "Игрок"
+            await log_live_win(uid, username, "Crash", prize)
         await unlock_achievement(uid, "first_bet")
         if prize > game["bet"]:
             await unlock_achievement(uid, "first_win")
@@ -856,6 +865,9 @@ async def api_dice(request: Request):
         await add_balance(uid, win)
     await log_game(uid, bet, win)
     await log_house_flow(wagered=bet, paid=win)
+    if win >= 1000:
+        username = user.get("username") or "Игрок"
+        await log_live_win(uid, username, "Кости", win)
     nb = await get_balance(uid)
     await unlock_achievement(uid, "first_bet")
     if win > 0:
@@ -910,6 +922,9 @@ async def api_rr_spin(request: Request):
         del rr_games[uid]
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
+        if prize >= 1000:
+            username = user.get("username") or "Игрок"
+            await log_live_win(uid, username, "Рулетка", prize)
         return {"shot": True, "bet": bet, "balance": await get_balance(uid)}
 
     step += 1
@@ -1003,6 +1018,9 @@ async def api_plinko(request: Request):
 
     await log_game(uid, bet, win)
     await log_house_flow(wagered=bet, paid=win)
+    if win >= 1000:
+        username = user.get("username") or "Игрок"
+        await log_live_win(uid, username, "Plinko", win)
     nb = await get_balance(uid)
 
     await unlock_achievement(uid, "first_bet")
@@ -1147,6 +1165,9 @@ async def api_penalti_kick(request: Request):
         del penalti_games[uid]
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
+        if prize >= 1000:
+            username = user.get("username") or "Игрок"
+            await log_live_win(uid, username, "Penalti", prize)
         return {
             "goal": False,
             "save": True,
@@ -1267,6 +1288,9 @@ async def api_coin_flip(request: Request):
 
     await log_game(uid, bet, win)
     await log_house_flow(wagered=bet, paid=win)
+    if win >= 1000:
+        username = user.get("username") or "Игрок"
+        await log_live_win(uid, username, "Монетка", win)
     nb = await get_balance(uid)
     await unlock_achievement(uid, "first_bet")
     if win > 0:
@@ -1870,6 +1894,9 @@ async def api_cases_spin(request: Request):
     await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
     await log_game(uid, price_coins, 0)
     await log_house_flow(wagered=price_coins, paid=0)
+    if value >= 1000:
+        username = user.get("username") or "Игрок"
+        await log_live_win(uid, username, "Кейсы", value)
     await unlock_achievement(uid, "first_bet")
     if rarity_id in ("epic", "legendary", "mythic"):
         await unlock_achievement(uid, "big_win")
