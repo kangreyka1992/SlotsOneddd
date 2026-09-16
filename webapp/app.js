@@ -409,7 +409,8 @@ async function loadProfile() {
         const displayName = d.username ? '@' + d.username : 'Игрок';
         if (nameEl) nameEl.textContent = displayName;
         if (profileNameEl) profileNameEl.textContent = displayName;
-        if (avatarEl) avatarEl.textContent = (d.username || 'И')[0].toUpperCase();
+        const avatarEl = document.getElementById('profileAvatar');
+        if (avatarEl) avatarEl.textContent = (d.username || 'И')[0].toUpperCase();;
 
         const sg = document.getElementById('statGames');
         const sw = document.getElementById('statWagered');
