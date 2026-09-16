@@ -616,7 +616,7 @@ function renderBets(containerId, onPick, multiplier = 1) {
 
     const all = document.createElement('button');
     all.className = 'bet-btn allin';
-    const maxBet = Math.floor(profile.balance / multiplier);
+    const maxBet = Math.min(10000000, Math.floor(profile.balance / multiplier));
     all.textContent = multiplier > 1
         ? `💯 Макс (${fmt(maxBet)} × ${multiplier})`
         : '💯 Весь баланс';
