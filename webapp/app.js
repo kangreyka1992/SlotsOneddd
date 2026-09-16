@@ -2554,13 +2554,13 @@ async function openCase(c, count = 1) {
         const rewardPrice = document.getElementById('crRewardPrice');
         const sellPrice = document.getElementById('crSellPrice');
 
-        if (count === 1) {
-            rewardEmoji.textContent = r.emoji;
-            rewardName.textContent = r.name;
-            rewardPrice.textContent = `${fmt(r.value)} 🪙`;
-            rewardBox.classList.remove('hidden');
-            sellPrice.textContent = fmt(r.value);
-        }
+        if (r) {
+    rewardEmoji.textContent = r.emoji;
+    rewardName.textContent = r.name;
+    rewardPrice.textContent = `${fmt(r.value)} 🪙`;
+    rewardBox.classList.remove('hidden');
+    sellPrice.textContent = fmt(r.value);
+}
 
         // Статус
         status.textContent = count === 1
