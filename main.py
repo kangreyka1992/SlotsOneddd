@@ -177,14 +177,14 @@ async def api_crypto_check(request: Request):
     # Проверяем блокчейн через PolygonScan
     try:
         url = (
-            f"https://api.polygonscan.com/api"
-            f"?module=account"
-            f"&action=tokentx"
-            f"&contractaddress={USDC_POLYGON_CONTRACT}"
-            f"&address={SELLER_WALLET}"
-            f"&page=1&offset=20&sort=desc"
-            f"&apikey={POLYGONSCAN_API_KEY}"
-        )
+    f"https://api.polygonscan.com/api"
+    f"?module=account"
+    f"&action=tokentx"
+    f"&contractaddress={USDC_POLYGON_CONTRACT}"
+    f"&address={SELLER_WALLET}"
+    f"&page=1&offset=20&sort=desc"
+    f"&apikey={POLYGONSCAN_API_KEY}"
+)
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 result = await resp.json()
