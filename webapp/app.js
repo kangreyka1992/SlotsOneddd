@@ -2930,8 +2930,12 @@ async function upgraderPlay() {
         return;
     }
 
+    // ═══ БЛОКИРУЕМ ИНТЕРФЕЙС ═══
     upgraderBusy = true;
     haptic('medium');
+
+    const blocker = document.getElementById('upgradeBlocker');
+    if (blocker) blocker.classList.remove('hidden');
 
     const arrowEl = document.getElementById('upgArrowSpin');
     const percentEl = document.getElementById('upgPercent');
@@ -2946,9 +2950,11 @@ async function upgraderPlay() {
             target_idx: upgraderTargetIdx,
         });
     } catch (e) {
+        // ═══ ОШИБКА — РАЗБЛОКИРУЕМ ═══
         toast(e.message, 'error');
         upgraderBusy = false;
         if (goBtn) goBtn.disabled = false;
+        if (blocker) blocker.classList.add('hidden');
         return;
     }
 
@@ -2961,6 +2967,81 @@ async function upgraderPlay() {
     } else {
         finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
     }
+
+    // ⭐ ПРОКРУТКА
+    const spinDuration = upgraderFastMode ? 0.4 : 3.0;
+    const spinMs = upgraderFastMode ? 400 : 3000;
+    const baseTurns = upgraderFastMode
+        ? 1 + Math.floor(Math.random() * 2)
+        : 4 + Math.floor(Math.random() * 3);
+
+    const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
+
+    if (arrowEl) {
+        arrowEl.classList.remove('animate');
+        arrowEl.style.transition = 'none';
+        arrowEl.style.transform = 'rotate(0deg)';
+        void arrowEl.offsetWidth;
+
+        requestAnimationFrame(() => {
+            arrowEl.style.transition = `transform ${spinDuration}s cubic-bezier(0.15, 0.9, 0.15, 1)`;
+            arrowEl.style.transform = `rotate(${finalAngle}deg)`;
+        });
+    }
+
+    let tickInt = null;
+    if (!upgraderFastMode) {
+        tickInt = setInterval(() => {
+            playTone(800 + Math.random() * 400, 0.02, 'square', 0.02);
+        }, 100);
+    }
+
+    await new Promise(r => setTimeout(r, spinMs));
+    if (tickInt) clearInterval(tickInt);
+
+    percentEl.textContent = finalPercent.toFixed(2) + '%';
+    percentEl.classList.remove('green', 'yellow', 'red');
+    if (d.win) percentEl.classList.add('green');
+    else percentEl.classList.add('red');
+
+    // ═══ СНИМАЕМ БЛОКИРОВКУ перед показом результата ═══
+    if (blocker) blocker.classList.add('hidden');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'upg-overlay';
+    document.body.appendChild(overlay);
+
+    if (d.win) {
+        SFX.jackpot();
+        confettiJackpot();
+        overlay.innerHTML = `
+            <div class="upg-result-icon">${d.target.emoji}</div>
+            <div class="upg-result-text win">УСПЕХ!</div>
+            <div class="upg-result-name">${d.target.name}</div>
+            <div class="upg-result-price">+${fmt(d.target.price_coins)} 🪙</div>
+        `;
+    } else {
+        SFX.lose();
+        overlay.innerHTML = `
+            <div class="upg-result-icon">💀</div>
+            <div class="upg-result-text lose">НЕ ПОВЕЗЛО</div>
+            <div class="upg-result-name">Предметы потеряны</div>
+            <div class="upg-result-price">−${fmt(d.total_value)} 🪙</div>
+        `;
+    }
+
+    haptic(d.win ? 'success' : 'error');
+    updateBalance(d.balance);
+    loadProfile();
+    addHistory('upgrader', d.total_value, d.win ? d.target.price_coins : 0);
+
+    setTimeout(() => {
+        overlay.remove();
+        upgraderBusy = false;
+        if (goBtn) goBtn.disabled = false;
+        loadUpgrader();
+    }, 2500);
+}
 
     // ⭐ ПРОКРУТКА — быстрая (1с) или обычная (3с)
     const spinDuration = upgraderFastMode ? 0.4 : 3.0;
@@ -3727,3 +3808,25 @@ async function bootstrap() {
     }
 }
 bootstrap();
+// Блокировка горячих клавиш во время апгрейда
+document.addEventListener('keydown', (e) => {
+    if (upgraderBusy) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+    }
+}, true);
+
+// Блокировка кликов вне блокера (на всякий случай)
+document.addEventListener('click', (e) => {
+    if (upgraderBusy) {
+        const blocker = document.getElementById('upgradeBlocker');
+        if (blocker && !blocker.classList.contains('hidden')) {
+            if (!blocker.contains(e.target)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }
+    }
+}, true);
