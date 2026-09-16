@@ -184,6 +184,23 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS winrate_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE,
+                winrate REAL NOT NULL DEFAULT 50.0,
+                payout_mult REAL NOT NULL DEFAULT 1.0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)await db.execute("""
+            CREATE TABLE IF NOT EXISTS winrate_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE,
+                winrate REAL NOT NULL DEFAULT 50.0,
+                payout_mult REAL NOT NULL DEFAULT 1.0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         await db.commit()
 
 async def has_deposited(user_id: int, min_stars: int) -> bool:
@@ -1147,3 +1164,64 @@ async def buy_premium_pass(user_id: int) -> bool:
         )
         await db.commit()
         return True
+async def set_winrate(user_id, winrate: float, payout_mult: float = 1.0):
+    """user_id=None → глобально."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        if user_id is None:
+            await db.execute(
+                "INSERT INTO winrate_settings (id, user_id, winrate, payout_mult) "
+                "VALUES (1, NULL, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET winrate = ?, payout_mult = ?, "
+                "updated_at = CURRENT_TIMESTAMP",
+                (winrate, payout_mult, winrate, payout_mult),
+            )
+        else:
+            await db.execute(
+                "INSERT INTO winrate_settings (user_id, winrate, payout_mult) "
+                "VALUES (?, ?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET winrate = ?, payout_mult = ?, "
+                "updated_at = CURRENT_TIMESTAMP",
+                (user_id, winrate, payout_mult, winrate, payout_mult),
+            )
+        await db.commit()
+
+
+async def get_winrate(user_id):
+    """Возвращает (winrate, payout_mult) с учётом приоритета."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # сначала персональный
+        async with db.execute(
+            "SELECT winrate, payout_mult FROM winrate_settings WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if row:
+                return row[0], row[1]
+
+        # потом глобальный (id=1, user_id IS NULL)
+        async with db.execute(
+            "SELECT winrate, payout_mult FROM winrate_settings WHERE id = 1 AND user_id IS NULL"
+        ) as cur:
+            row = await cur.fetchone()
+            if row:
+                return row[0], row[1]
+
+    return 50.0, 1.0   # дефолт
+
+
+async def clear_winrate(user_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        if user_id is None:
+            await db.execute("DELETE FROM winrate_settings WHERE id = 1")
+        else:
+            await db.execute("DELETE FROM winrate_settings WHERE user_id = ?", (user_id,))
+        await db.commit()
+
+
+async def list_winrates():
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT user_id, winrate, payout_mult, updated_at "
+            "FROM winrate_settings ORDER BY updated_at DESC LIMIT 50"
+        ) as cur:
+            return await cur.fetchall()
