@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=300">
+<link rel="stylesheet" href="style.css?v=310">
 </head>
 <body>
 <div id="app">
@@ -121,50 +121,67 @@
     </section>
 
     <section class="screen" id="screen-upgrader">
-      <div class="upg-top">
-        <div class="upg-side-card" id="upgMyItem">
-          <div class="upg-side-empty">Выбери предметы</div>
-        </div>
+      <!-- Заголовок -->
+      <div class="upg-title">⚡ АПГРЕЙД</div>
 
-        <div class="upg-circle-wrap">
-          <svg class="upg-circle" viewBox="0 0 200 200">
-            <circle class="upg-circle-bg" cx="100" cy="100" r="85" />
-            <circle class="upg-circle-fail" id="upgCircleFail" cx="100" cy="100" r="85" />
-            <circle class="upg-circle-success" id="upgCircleSuccess" cx="100" cy="100" r="85" />
-          </svg>
-          <div class="upg-arrow-spin" id="upgArrowSpin"></div>
-          <div class="upg-circle-center">
-            <div class="upg-percent" id="upgPercent">0%</div>
-            <div class="upg-percent-label">шанс</div>
+      <!-- Три колонки: мой предмет | круг с процентом | цель -->
+      <div class="upg-stage">
+        <!-- Левая колонка: выбранные предметы -->
+        <div class="upg-slot" id="upgMyItem">
+          <div class="upg-slot-empty">
+            <div class="upg-slot-empty-icon">🎒</div>
+            <div class="upg-slot-empty-text">Выбери<br>предметы</div>
           </div>
         </div>
 
-        <div class="upg-side-card upg-target-card" id="upgTargetCard">
+        <!-- Центр: круг с процентом -->
+        <div class="upg-center">
+          <div class="upg-circle-wrap">
+            <svg class="upg-circle" viewBox="0 0 200 200">
+              <circle class="upg-circle-bg" cx="100" cy="100" r="85" />
+              <circle class="upg-circle-fail" id="upgCircleFail" cx="100" cy="100" r="85" />
+              <circle class="upg-circle-success" id="upgCircleSuccess" cx="100" cy="100" r="85" />
+            </svg>
+            <div class="upg-arrow-spin" id="upgArrowSpin"></div>
+            <div class="upg-circle-center">
+              <div class="upg-percent" id="upgPercent">0%</div>
+              <div class="upg-percent-label">шанс</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Правая колонка: цель -->
+        <div class="upg-slot upg-target-card" id="upgTargetCard">
           <button class="upg-nav upg-nav-prev" onclick="upgraderNav(-1)">‹</button>
-          <div class="upg-side-empty">Выбери цель</div>
+          <div class="upg-slot-empty">
+            <div class="upg-slot-empty-icon">🎯</div>
+            <div class="upg-slot-empty-text">Выбери<br>цель</div>
+          </div>
           <button class="upg-nav upg-nav-next" onclick="upgraderNav(1)">›</button>
         </div>
       </div>
 
-      <div class="upg-quick-row">
-        <button class="upg-quick" onclick="upgraderQuickMult(2)">×2</button>
-        <button class="upg-quick" onclick="upgraderQuickMult(4)">×4</button>
-        <button class="upg-quick" onclick="upgraderQuickMult(8)">×8</button>
-        <button class="upg-quick" onclick="upgraderQuickChance(35)">35%</button>
-        <button class="upg-quick" onclick="upgraderQuickChance(55)">55%</button>
-        <button class="upg-quick" onclick="upgraderQuickChance(75)">75%</button>
-        <button class="upg-quick upg-quick-shuffle" onclick="upgraderRandomTarget()">🎲</button>
-      </div>
-
-      <button class="btn-primary upg-go-big" onclick="upgraderPlay()" id="upgGoBtn">
-        ⚡ Прокачать
+      <!-- Кнопка «Прокачать» -->
+      <button class="upg-go-big" onclick="upgraderPlay()" id="upgGoBtn">
+        ⚡ ПРОКАЧАТЬ
       </button>
 
-      <h4 class="admin-subtitle" style="margin-top: 16px;">
-        Твой инвентарь
-        <span id="upgSelectedCount" style="color: var(--gold); font-size: 11px;"></span>
-      </h4>
-      <div class="upg-inv-list" id="upgInvList"></div>
+      <!-- Секция: Мой инвентарь -->
+      <div class="upg-section">
+        <div class="upg-section-title">
+          <span>🎒 Твой инвентарь</span>
+          <span id="upgSelectedCount" class="upg-selected-count"></span>
+        </div>
+        <div class="upg-inv-list" id="upgInvList"></div>
+      </div>
+
+      <!-- Секция: Все цели -->
+      <div class="upg-section">
+        <div class="upg-section-title">
+          <span>🎯 Доступные цели</span>
+        </div>
+        <div class="upg-targets-list" id="upgTargetsList"></div>
+      </div>
     </section>
 
     <section class="screen" id="screen-profile">
@@ -573,6 +590,6 @@
   };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=200"></script>
+<script src="app.js?v=310"></script>
 </body>
 </html>
