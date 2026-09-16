@@ -2477,20 +2477,22 @@ async function openCase(c, count = 1) {
         }
 
         // Показываем кнопки через 600мс
-        setTimeout(() => {
-            actionsBox.classList.remove('hidden');
-            // Сохраняем контекст для кнопок
-            window._lastCaseDrop = {
-                caseId: c.id,
-                casePrice: c.price_coins,
-                itemId: r.item_id,
-                itemValue: r.value,
-                itemName: r.name,
-                itemEmoji: r.emoji,
-                rarity: r.rarity,
-                count: count,
-            };
-        }, 600);
+        // ✅ Сначала сохраняем данные
+window._lastCaseDrop = {
+    caseId: c.id,
+    casePrice: c.price_coins,
+    itemId: r.item_id,
+    itemValue: r.value,
+    itemName: r.name,
+    itemEmoji: r.emoji,
+    rarity: r.rarity,
+    count: count,
+};
+
+// Потом показываем кнопки
+setTimeout(() => {
+    actionsBox.classList.remove('hidden');
+}, 600);
 
         // Обновляем баланс
         updateBalance(data.balance);
@@ -3083,24 +3085,19 @@ async function openFreeCase() {
 
 async function caseSellNow() {
     const drop = window._lastCaseDrop;
-    if (!drop) return;
+    if (!drop) { toast('Данные потеряны', 'error'); return; }
     haptic('medium');
-
-    // Продажа через API
-    const inv = await api('/api/cases/inventory');
-    // Ищем последний предмет (по item_id, name, emoji — самые свежие)
-    const item = inv.items.find(i =>
-        i.item_id === drop.itemId &&
-        i.name === drop.itemName &&
-        !i.sold
-    );
-
-    if (!item) {
-        toast('Предмет не найден', 'error');
-        return;
-    }
-
     try {
+        const inv = await api('/api/cases/inventory');
+        // Ищем САМЫЙ СВЕЖИЙ предмет (по created_at desc), совпадающий по item_id
+        const candidates = (inv.items || [])
+            .filter(i => i.item_id === drop.itemId && !i.sold)
+            .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+        const item = candidates[0];
+        if (!item) {
+            toast('Предмет не найден в инвентаре', 'error');
+            return;
+        }
         const d = await api('/api/cases/sell', { item_pk: item.id });
         toast(`✅ Продано за ${fmt(d.sold_value)} 🪙`, 'success');
         SFX.cashout();
@@ -3108,7 +3105,9 @@ async function caseSellNow() {
         closeCaseRoulette();
         loadProfile();
         loadInventory();
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+        toast(e.message, 'error');
+    }
 }
 
 function caseToUpgrade() {
