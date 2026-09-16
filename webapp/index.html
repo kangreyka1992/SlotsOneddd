@@ -640,10 +640,30 @@
     <div class="cr-title" id="crTitle">Кейс</div>
     <button class="cr-close" onclick="closeCaseRoulette()">✕</button>
   </div>
+
   <div class="cr-viewport">
     <div class="cr-track" id="crTrack"></div>
     <div class="cr-cursor"></div>
   </div>
+
+  <div class="cr-reward hidden" id="crReward">
+    <div class="cr-reward-emoji" id="crRewardEmoji">🎁</div>
+    <div class="cr-reward-name" id="crRewardName">Предмет</div>
+    <div class="cr-reward-price" id="crRewardPrice">0 🪙</div>
+  </div>
+
+  <div class="cr-actions hidden" id="crActions">
+    <button class="cr-action-btn cr-action-upgrade" onclick="caseToUpgrade()">
+      ⚡ В АПГРЕЙД
+    </button>
+    <button class="cr-action-btn cr-action-sell" onclick="caseSellNow()">
+      💰 ПРОДАТЬ ЗА <span id="crSellPrice">0</span> 🪙
+    </button>
+    <button class="cr-action-btn cr-action-again" onclick="caseOpenAgain()">
+      🔄 ЕЩЁ РАЗ
+    </button>
+  </div>
+
   <div class="cr-footer" id="crFooter">
     <div class="cr-status" id="crStatus">Крутим...</div>
     <div class="cr-multi hidden" id="crMulti"></div>
