@@ -1730,7 +1730,7 @@ function renderPay() {
     if (!el) return;
     el.innerHTML = '';
 
-    // ─── Звёзды (как было) ───
+    // ⭐ Звёзды (Telegram Stars) — оставляем
     PAY_PACKS.forEach(s => {
         const btn = document.createElement('button');
         btn.className = 'withdraw-btn';
@@ -1739,36 +1739,77 @@ function renderPay() {
         el.appendChild(btn);
     });
 
-    // ─── Карта / Крипта (Paygate) ───
+    // 💎 USDC (Polygon) — прямое пополнение
     [5, 10, 25, 50, 100].forEach(usd => {
         const btn = document.createElement('button');
         btn.className = 'withdraw-btn';
-        btn.textContent = `💳 $${usd} → ${fmt(usd * 100)} 🪙`;
-        btn.onclick = async () => {
-            try {
-                haptic();
-                const d = await api('/api/paygate/create', { amount_usd: usd });
-                tg.openLink(d.pay_url);
-            } catch (e) {
-                toast(e.message, 'error');
-            }
-        };
+        btn.textContent = `💎 $${usd} → ${fmt(usd * 100)} 🪙`;
+        btn.onclick = () => cryptoPay(usd);
         el.appendChild(btn);
     });
 }
 
-async function buyStars(stars) {
-    haptic();
+async function cryptoPay(amountUsd) {
     try {
-        const d = await api('/api/invoice', { stars });
-        tg.openInvoice(d.link, (status) => {
-            if (status === 'paid') {
-                toast('✅ Оплата успешна', 'success');
-                SFX.cashout();
-                setTimeout(loadProfile, 1500);
-            }
-        });
-    } catch (e) { toast(e.message, 'error'); }
+        haptic('medium');
+        const d = await api('/api/crypto/create', { amount_usd: amountUsd });
+
+        const overlay = document.createElement('div');
+        overlay.className = 'case-opening';
+        overlay.innerHTML = `
+            <div style="color:#fff; text-align:center; max-width:90%;">
+                <div style="font-size:22px; font-weight:800; margin-bottom:12px;">
+                    💎 Оплата USDC (Polygon)
+                </div>
+                <img src="${d.qr_url}" style="width:220px; height:220px; background:#fff; padding:8px; border-radius:12px;">
+                <div style="margin-top:14px; font-size:13px; color:#8a92a3;">Адрес кошелька:</div>
+                <div style="font-family:monospace; font-size:12px; color:#ff9b26; word-break:break-all; padding:0 10px;">
+                    ${d.wallet}
+                </div>
+                <div style="margin-top:14px; font-size:13px; color:#8a92a3;">Сумма к отправке:</div>
+                <div style="font-size:26px; font-weight:900; color:#3dd68c; font-family:monospace;">
+                    ${d.amount} USDC
+                </div>
+                <div style="margin-top:10px; font-size:11px; color:#5a6373; line-height:1.5;">
+                    ⚠️ Отправьте <b>ровно эту сумму</b> в сети <b>Polygon</b>.<br>
+                    Зачисление: <b>${fmt(d.coins)}</b> 🪙<br>
+                    Не отправляйте из других сетей — потеряете деньги.
+                </div>
+                <div style="margin-top:16px; font-size:13px; color:#ff9b26;" id="cryptoStatus">
+                    ⏳ Ожидаем оплату...
+                </div>
+                <button class="btn-secondary" onclick="this.closest('.case-opening').remove()" style="margin-top:16px;">
+                    Закрыть
+                </button>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const interval = setInterval(async () => {
+            try {
+                const check = await api('/api/crypto/check', { order_id: d.order_id });
+                if (check.status === 'paid') {
+                    clearInterval(interval);
+                    const statusEl = overlay.querySelector('#cryptoStatus');
+                    if (statusEl) {
+                        statusEl.textContent = `✅ Оплачено! +${fmt(check.coins)} 🪙`;
+                        statusEl.style.color = '#3dd68c';
+                    }
+                    confettiBurst('#3dd68c');
+                    updateBalance(check.balance);
+                    setTimeout(() => overlay.remove(), 2500);
+                }
+            } catch (e) {}
+        }, 5000);
+
+        setTimeout(() => {
+            clearInterval(interval);
+            if (document.body.contains(overlay)) overlay.remove();
+        }, 30 * 60 * 1000);
+
+    } catch (e) {
+        toast(e.message, 'error');
+    }
 }
 
 /* ═══ ВЫВОД ═══ */
