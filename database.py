@@ -192,7 +192,8 @@ async def init_db():
                 payout_mult REAL NOT NULL DEFAULT 1.0,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """)await db.execute("""
+        """)
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS winrate_settings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER UNIQUE,
