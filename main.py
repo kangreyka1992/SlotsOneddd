@@ -506,6 +506,7 @@ async def api_slots2_spin(request: Request):
     if total_win > 0:
         await add_balance(uid, total_win)
     await log_game(uid, total_bet, total_win)
+    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
     await log_house_flow(wagered=total_bet, paid=total_win)
     nb = await get_balance(uid)
     await update_quest_progress(uid, "bets_count", 1)
@@ -617,6 +618,7 @@ async def api_mines_open(request: Request):
         bet = game["bet"]
         del mines_games[uid]
         await log_game(uid, bet, 0)
+        await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
         await log_house_flow(wagered=bet, paid=0)
         # ⭐ Обновляем прогресс квестов при взрыве
         await update_quest_progress(uid, "bets_count", 1)
@@ -686,6 +688,7 @@ async def api_mines_cashout(request: Request):
     await update_quest_progress(uid, "game_mines", 1)
     await update_quest_progress(uid, "wins", 1)
     await log_game(uid, bet, prize)
+    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
     await log_house_flow(wagered=bet, paid=prize)
     if prize >= 1000:
         username = user.get("username") or "Игрок"
@@ -775,6 +778,7 @@ async def api_crash_status(request: Request):
         prize = int(game["bet"] * game["auto_cashout"])
         await add_balance(uid, prize)
         await log_game(uid, game["bet"], prize)
+        await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
         await log_house_flow(wagered=game["bet"], paid=prize)
         if prize >= 1000:
             username = user.get("username") or "Игрок"
@@ -832,6 +836,7 @@ async def api_crash_cashout(request: Request):
         bet = game["bet"]
         del crash_games[uid]
         await log_game(uid, bet, 0)
+        await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
         await log_house_flow(wagered=bet, paid=0)
         raise HTTPException(400, "crashed")
 
@@ -897,6 +902,7 @@ async def api_dice(request: Request):
     if win > 0:
         await add_balance(uid, win)
     await log_game(uid, bet, win)
+    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
     await log_house_flow(wagered=bet, paid=win)
     if win >= 1000:
         username = user.get("username") or "Игрок"
@@ -1054,6 +1060,7 @@ async def api_plinko(request: Request):
         await add_balance(uid, win)
 
     await log_game(uid, bet, win)
+    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
     await log_house_flow(wagered=bet, paid=win)
     if win >= 1000:
         username = user.get("username") or "Игрок"
@@ -1284,6 +1291,7 @@ async def api_penalti_cashout(request: Request):
     del penalti_games[uid]
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
+    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
     await log_house_flow(wagered=bet, paid=prize)
     await unlock_achievement(uid, "first_bet")
     return {"prize": prize, "mult": mult, "balance": await get_balance(uid)}
@@ -1331,6 +1339,7 @@ async def api_coin_flip(request: Request):
         await add_balance(uid, win)
 
     await log_game(uid, bet, win)
+    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
     await log_house_flow(wagered=bet, paid=win)
     if win >= 1000:
         username = user.get("username") or "Игрок"
@@ -1941,6 +1950,7 @@ async def api_cases_spin(request: Request):
 
     await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
     await log_game(uid, price_coins, 0)
+    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
     await log_house_flow(wagered=price_coins, paid=0)
     await update_quest_progress(uid, "cases_opened", 1)
     if value >= 1000:
