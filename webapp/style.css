@@ -1944,3 +1944,58 @@ select.input { text-align: left; letter-spacing: 0; }
   border-color: var(--accent);
   box-shadow: 0 0 20px var(--accent-glow);
 }
+/* ═══════════ PAY TABS (Способы оплаты) ═══════════ */
+.pay-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.pay-tab {
+    padding: 12px 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    transition: all 0.15s;
+}
+.pay-tab.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.pay-method {
+    display: none;
+}
+.pay-method.active {
+    display: block;
+}
+
+.pay-method-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 4px;
+}
+.pay-method-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+    line-height: 1.5;
+}
+
+.pay-grid-inner {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.pay-grid-inner .withdraw-btn {
+    padding: 16px 12px;
+    text-align: center;
+    line-height: 1.3;
+}
