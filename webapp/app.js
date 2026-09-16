@@ -2912,22 +2912,22 @@ async function upgraderPlay() {
     } else {
         finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
     }
-function toggleFastUpgrade() {
-    upgraderFastMode = !upgraderFastMode;
-    const btn = document.getElementById('upgFastBtn');
-    if (btn) {
-        btn.textContent = upgraderFastMode ? '⚡ БЫСТРО: ВКЛ' : '⚡ Быстрый апгрейд';
-        btn.classList.toggle('active', upgraderFastMode);
+async function upgraderPlay() {
+    if (upgraderBusy) return;
+    ...
+    let finalPercent;
+    if (d.win) {
+        finalPercent = Math.random() * chancePercent * 0.95;
+    } else {
+        finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
     }
-    haptic();
-    toast(upgraderFastMode ? '⚡ Быстрый режим ВКЛ' : 'Обычный режим');
-}
-        // ⭐ ПРОКРУТКА — быстрая (1с) или обычная (3с)
+
+    // ⭐ ПРОКРУТКА — быстрая (1с) или обычная (3с)
     const spinDuration = upgraderFastMode ? 0.4 : 3.0;
     const spinMs = upgraderFastMode ? 400 : 3000;
     const baseTurns = upgraderFastMode
-        ? 1 + Math.floor(Math.random() * 2)   // 1-2 оборота
-        : 4 + Math.floor(Math.random() * 3);  // 4-6 оборотов
+        ? 1 + Math.floor(Math.random() * 2)
+        : 4 + Math.floor(Math.random() * 3);
 
     const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
 
