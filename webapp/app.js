@@ -3537,6 +3537,26 @@ function toggleUpgSort() {
 }
 /* ═══ BOOTSTRAP ═══ */
 async function bootstrap() {
+    // ✅ Проверка initData
+    if (!initData) {
+        document.body.innerHTML = `
+            <div style="color:#fff; padding:40px 20px; text-align:center; font-family:sans-serif; background:#0a0e14; min-height:100vh;">
+                <div style="font-size:64px; margin-bottom:16px;">⚠️</div>
+                <div style="font-size:20px; font-weight:800; margin-bottom:12px;">
+                    Открой через Telegram
+                </div>
+                <div style="font-size:14px; color:#8a92a3; line-height:1.7;">
+                    Это приложение работает только внутри Telegram.<br><br>
+                    <b>1.</b> Обнови Telegram до последней версии<br>
+                    <b>2.</b> Открой бота <b>@SlotsGameFast_bot</b><br>
+                    <b>3.</b> Нажми кнопку <b>«🎰 ИГРАТЬ 🎰»</b><br>
+                    <b>4.</b> Выключи VPN, если он включён
+                </div>
+            </div>
+        `;
+        return;
+    }
+
     console.log('INIT at start:', tg.initData?.length);
     setTimeout(() => console.log('INIT 1s:', tg.initData?.length), 1000);
     setTimeout(() => console.log('INIT 3s:', tg.initData?.length), 3000);
