@@ -3559,6 +3559,33 @@ function toggleUpgSort() {
     if (el) el.textContent = upgSortDesc ? '💎 Дорогие ↓' : '💎 Дешёвые ↑';
     renderUpgraderInv();
 }
+/* ═══ БЫСТРЫЙ АПГРЕЙД ═══ */
+let upgraderFastMode = false;
+
+function toggleFastUpgrade() {
+    upgraderFastMode = !upgraderFastMode;
+    const btn = document.getElementById('upgFastBtn');
+    if (btn) {
+        btn.textContent = upgraderFastMode ? '⚡ БЫСТРО: ВКЛ' : '⚡ Быстрый апгрейд';
+        btn.classList.toggle('active', upgraderFastMode);
+    }
+    haptic();
+    toast(upgraderFastMode ? '⚡ Быстрый режим ВКЛ' : 'Обычный режим');
+}
+
+/* ═══ БЫСТРЫЙ ПРОКРУТ КЕЙСОВ ═══ */
+let caseFastMode = false;
+
+function toggleFastCase() {
+    caseFastMode = !caseFastMode;
+    const btn = document.getElementById('casesFastBtn');
+    if (btn) {
+        btn.textContent = caseFastMode ? '⚡ БЫСТРО: ВКЛ' : '⚡ Быстрый прокрут';
+        btn.classList.toggle('active', caseFastMode);
+    }
+    haptic();
+    toast(caseFastMode ? '⚡ Быстрый прокрут ВКЛ' : 'Обычный прокрут');
+}
 /* ═══ BOOTSTRAP ═══ */
 async function bootstrap() {
     // ✅ Проверка initData
