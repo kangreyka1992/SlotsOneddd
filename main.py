@@ -2355,20 +2355,34 @@ async def api_upgrader_play(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
 
-    item_pks = data.get("item_pks", [])
+    item_pks = data.get("item_pks", []) or []
     target_idx = int(data.get("target_idx", -1))
+    extra_coins = int(data.get("extra_coins", 0) or 0)
 
-    if not item_pks:
-        raise HTTPException(400, "Выбери хотя бы один предмет")
+    if extra_coins < 0:
+        raise HTTPException(400, "Некорректная сумма монет")
+
+    if not item_pks and extra_coins <= 0:
+        raise HTTPException(400, "Выбери предметы или введи сумму монет")
+
     if target_idx < 0 or target_idx >= len(UPGRADER_TARGETS):
         raise HTTPException(400, "Неверная цель")
 
-    total_value = 0
+    # ═══ Считаем сумму скинов ═══
+    items_total = 0
     for pk in item_pks:
         it = await get_user_item(pk, uid)
         if not it or it[8] == 1:
             raise HTTPException(400, "Предмет не найден или уже продан")
-        total_value += it[6]
+        items_total += it[6]
+
+    # ═══ Проверяем баланс на доп. монеты ═══
+    balance = await get_balance(uid)
+    if extra_coins > balance:
+        raise HTTPException(400, f"Недостаточно монет. Доступно: {balance}")
+
+    # ═══ Итоговая ставка ═══
+    total_value = items_total + extra_coins
 
     target = UPGRADER_TARGETS[target_idx]
     target_price_coins = target[3] * RATE
@@ -2379,12 +2393,18 @@ async def api_upgrader_play(request: Request):
     if target_price_coins <= total_value:
         raise HTTPException(400, "Цель дешевле твоей ставки — так нельзя")
 
+    # ═══ Списываем монеты ═══
+    if extra_coins > 0:
+        await add_balance(uid, -extra_coins)
+
+    # ═══ Шанс ═══
     chance = total_value / target_price_coins
     chance = max(0.01, min(0.95, chance))
 
     roll = random.random()
     win = roll < chance
 
+    # ═══ Сжигаем скины ═══
     await mark_items_sold(item_pks, uid)
 
     if win:
@@ -2415,6 +2435,8 @@ async def api_upgrader_play(request: Request):
         "win": win,
         "chance": round(chance * 100, 2),
         "total_value": total_value,
+        "items_total": items_total,
+        "extra_coins": extra_coins,
         "target": {
             "emoji": target[0],
             "name": target[1],
@@ -2424,7 +2446,6 @@ async def api_upgrader_play(request: Request):
         "result_item": result_item,
         "balance": await get_balance(uid),
     }
-
 
 # ═══════════ БЕСПЛАТНЫЙ КЕЙС ═══════════
 
