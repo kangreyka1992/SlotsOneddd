@@ -32,7 +32,6 @@ async def init_db():
                 win INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-
         """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS daily_quests (
@@ -57,6 +56,7 @@ async def init_db():
                 refunded INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS battle_pass (
                 user_id INTEGER PRIMARY KEY,
@@ -76,7 +76,6 @@ async def init_db():
                 started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 ends_at TIMESTAMP
             )
-        """)
         """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS withdrawals (
