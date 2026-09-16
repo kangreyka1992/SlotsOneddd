@@ -2574,9 +2574,10 @@ function renderUpgraderInv() {
     `).join('');
     const cntEl = document.getElementById('upgSelectedCount');
     if (cntEl) {
-        cntEl.textContent = upgraderSelectedPks.size > 0 ? `(выбрано: ${upgraderSelectedPks.size})` : '';
+        cntEl.textContent = upgraderSelectedPks.size > 0 ? `выбрано: ${upgraderSelectedPks.size}` : '';
     }
 }
+
 
 function selectUpgraderItem(pk) {
     haptic();
@@ -2603,42 +2604,72 @@ function renderUpgraderMyItem() {
     if (!el) return;
     const items = getSelectedItems();
     if (!items.length) {
-        el.innerHTML = '<div class="upg-side-empty">Выбери предметы<br>снизу ↓</div>';
+        el.innerHTML = `
+            <div class="upg-slot-empty">
+                <div class="upg-slot-empty-icon">🎒</div>
+                <div class="upg-slot-empty-text">Выбери<br>предметы</div>
+            </div>
+        `;
         return;
     }
+    const total = getSelectedTotal();
+    // Показываем первый предмет крупно + счётчик
+    const first = items[0];
     el.innerHTML = `
-        <div class="upg-side-list">
-            ${items.map(i => `
-                <div class="upg-side-list-item">
-                    <span class="upg-side-list-emoji">${i.emoji}</span>
-                    <span class="upg-side-list-name">${i.name}</span>
-                    <span class="upg-side-list-price">${fmt(i.value)}</span>
-                </div>
-            `).join('')}
-        </div>
-        <div class="upg-total-inline">${fmt(getSelectedTotal())} 🪙</div>
+        <div class="upg-slot-emoji">${first.emoji}</div>
+        <div class="upg-slot-name">${items.length > 1 ? `+${items.length - 1} ещё` : first.name}</div>
+        <div class="upg-slot-price">${fmt(total)} 🪙</div>
     `;
 }
+
 
 function renderUpgraderTarget() {
     const el = document.getElementById('upgTargetCard');
     if (!el) return;
+
+    // Если целей нет
     if (upgraderTargetIdx < 0 || !upgraderTargets.length) {
         el.innerHTML = `
             <button class="upg-nav upg-nav-prev" onclick="upgraderNav(-1)">‹</button>
-            <div class="upg-side-empty">Нет целей</div>
+            <div class="upg-slot-empty">
+                <div class="upg-slot-empty-icon">🎯</div>
+                <div class="upg-slot-empty-text">Нет<br>целей</div>
+            </div>
             <button class="upg-nav upg-nav-next" onclick="upgraderNav(1)">›</button>
         `;
         return;
     }
+
     const t = upgraderTargets[upgraderTargetIdx];
     el.innerHTML = `
         <button class="upg-nav upg-nav-prev" onclick="upgraderNav(-1)">‹</button>
-        <div class="upg-side-emoji">${t.emoji}</div>
-        <div class="upg-side-name">${t.name}</div>
-        <div class="upg-side-price">${fmt(t.price_coins)}</div>
+        <div class="upg-slot-emoji">${t.emoji}</div>
+        <div class="upg-slot-name">${t.name}</div>
+        <div class="upg-slot-price">${fmt(t.price_coins)} 🪙</div>
         <button class="upg-nav upg-nav-next" onclick="upgraderNav(1)">›</button>
     `;
+
+    // Обновляем список всех целей (новая функция)
+    renderUpgraderTargetsList();
+}
+
+function renderUpgraderTargetsList() {
+    const el = document.getElementById('upgTargetsList');
+    if (!el) return;
+    el.innerHTML = upgraderTargets.map((t, i) => `
+        <div class="upg-target-item ${i === upgraderTargetIdx ? 'selected' : ''}" onclick="selectUpgraderTarget(${i})">
+            <div class="upg-target-item-emoji">${t.emoji}</div>
+            <div class="upg-target-item-name">${t.name}</div>
+            <div class="upg-target-item-price">${fmt(t.price_coins)}</div>
+        </div>
+    `).join('');
+}
+
+function selectUpgraderTarget(idx) {
+    haptic();
+    upgraderTargetIdx = idx;
+    renderUpgraderTarget();
+    updateUpgraderChance();
 }
 
 function upgraderNav(dir) {
