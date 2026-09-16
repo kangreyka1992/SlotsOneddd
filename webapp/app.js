@@ -1919,10 +1919,10 @@ async function loadCases() {
                     <div class="case-emoji">${c.emoji}</div>
                 </div>
                 <div class="case-rarity-bar" data-rarity="${rarityFromPrice(c.price_coins)}"></div>
-                <div class="case-info">
-                    <div class="case-name">${c.name}</div>
-                    <div class="case-price">${fmt(c.price_coins)} 🪙</div>
-                </div>
+                <div class="case-card-info">
+                <div class="case-name">${c.name}</div>
+                <div class="case-price">${fmt(c.price_coins)} 🪙</div>
+            </div>
             </div>
         `;
 
