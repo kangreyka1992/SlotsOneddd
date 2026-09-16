@@ -292,20 +292,43 @@ function showScreen(name) {
     if (name === 'upgrader') loadUpgrader();
 }
 
+let balanceAnimId = null;
+
 function updateBalance(b) {
     const prev = profile.balance;
     profile.balance = b;
-    ['headerBalance', 'profileBalance', 'gameBalance', 'withdrawBalance'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.textContent = fmt(b);
-            if (prev !== b && id === 'headerBalance') {
-                el.classList.remove('balance-bump');
-                void el.offsetWidth;
-                el.classList.add('balance-bump');
-            }
+
+    if (balanceAnimId) cancelAnimationFrame(balanceAnimId);
+
+    const startVal = prev;
+    const endVal = b;
+    const startTime = performance.now();
+    const duration = 400;
+
+    function tick(now) {
+        const t = Math.min((now - startTime) / duration, 1);
+        const eased = 1 - Math.pow(1 - t, 3);
+        const current = Math.round(startVal + (endVal - startVal) * eased);
+
+        ['headerBalance', 'profileBalance', 'gameBalance', 'withdrawBalance'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = fmt(current);
+        });
+
+        if (t < 1) {
+            balanceAnimId = requestAnimationFrame(tick);
+        } else {
+            balanceAnimId = null;
         }
-    });
+    }
+    requestAnimationFrame(tick);
+
+    const el = document.getElementById('headerBalance');
+    if (el && prev !== b) {
+        el.classList.remove('balance-bump');
+        void el.offsetWidth;
+        el.classList.add('balance-bump');
+    }
 }
 
 /* ═══ CAROUSEL + GRID ═══ */
@@ -2252,6 +2275,16 @@ async function claimDaily() {
 
 /* ═══ CASES ═══ */
 async function loadCases() {
+    // Skeleton пока грузится
+    const grid = document.getElementById('casesGrid');
+    const homeGrid = document.getElementById('homeCasesGrid');
+    if (grid) grid.innerHTML = Array(6).fill('<div class="case-card loading"></div>').join('');
+    if (homeGrid) homeGrid.innerHTML = Array(3).fill('<div class="case-card loading"></div>').join('');
+
+    try {
+        const d = await api('/api/cases/list');
+        casesCache = d.cases;
+async function loadCases() {
     try {
         const d = await api('/api/cases/list');
         casesCache = d.cases;
@@ -2447,8 +2480,13 @@ async function openCase(c, count = 1) {
 
         // Звук + конфетти
         if (r.rarity === 'mythic' || r.rarity === 'legendary') {
-            SFX.jackpot(); confettiJackpot();
-        } else if (r.rarity === 'epic') {
+    SFX.jackpot(); confettiJackpot();
+    // SHOCKWAVE
+    const wave = document.createElement('div');
+    wave.className = 'shockwave';
+    document.body.appendChild(wave);
+    setTimeout(() => wave.remove(), 1200);
+} else if (r.rarity === 'epic') {
             SFX.win(); confettiBurst('#7c5cff');
         } else {
             SFX.cashout();
@@ -3668,6 +3706,10 @@ async function bootstrap() {
 
     // ✅ Ждём профиль
     await loadProfile();
+    // Скрываем splash
+setTimeout(() => {
+    document.getElementById('splash')?.classList.add('hide');
+}, 800);
 
     renderGamesGrid();
     renderHistory();
