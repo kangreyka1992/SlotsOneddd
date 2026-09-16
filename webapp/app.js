@@ -3210,7 +3210,104 @@ async function loadAdminLogs() {
         });
     } catch (e) { toast(e.message, 'error'); }
 }
+/* ═══ BATTLE PASS ═══ */
+let bpData = null;
 
+async function loadBattlePass() {
+    try {
+        const d = await api('/api/battlepass/status');
+        bpData = d;
+
+        document.getElementById('bpSeason').textContent = d.season;
+        document.getElementById('bpLevel').textContent = d.level;
+        document.getElementById('bpXp').textContent = fmt(d.xp);
+        document.getElementById('bpXpMax').textContent = fmt(d.level * d.xp_per_level);
+
+        const currentXp = d.xp - (d.level - 1) * d.xp_per_level;
+        const percent = Math.min(100, (currentXp / d.xp_per_level) * 100);
+        document.getElementById('bpXpFill').style.width = percent + '%';
+
+        const premiumBtn = document.getElementById('bpPremiumBtn');
+        if (d.premium) {
+            premiumBtn.textContent = '✅ Premium активен';
+            premiumBtn.classList.add('active');
+            premiumBtn.disabled = true;
+        }
+
+        renderBattlePassRewards(d);
+    } catch (e) {
+        console.error('BP load error:', e);
+    }
+}
+
+function renderBattlePassRewards(d) {
+    const el = document.getElementById('bpRewards');
+    if (!el) return;
+
+    el.innerHTML = d.rewards.map(r => {
+        const reached = d.level >= r.level;
+        const claimedFree = d.claimed_free.includes(String(r.level));
+        const claimedPremium = d.claimed_premium.includes(String(r.level));
+
+        const emoji = r.bonus ? '📦' : '🪙';
+        const freeText = r.bonus ? 'Кейс' : `+${fmt(r.free_coins)} 🪙`;
+        const premiumText = r.bonus ? 'Кейс ×2' : `+${fmt(r.premium_coins)} 🪙`;
+
+        let buttons = '';
+        if (reached && !claimedFree) {
+            buttons = `<button class="bp-reward-btn" onclick="claimBpReward(${r.level}, false)">Забрать</button>`;
+        } else if (claimedFree) {
+            buttons = `<button class="bp-reward-btn" disabled>✅</button>`;
+        } else {
+            buttons = `<span style="color:#666;font-size:11px;">Ур. ${r.level}</span>`;
+        }
+
+        return `
+            <div class="bp-reward ${reached ? 'reached' : 'locked'}">
+                <div class="bp-reward-emoji">${emoji}</div>
+                <div class="bp-reward-info">
+                    <div class="bp-reward-level">Уровень ${r.level}</div>
+                    <div class="bp-reward-content">${freeText}</div>
+                </div>
+                ${buttons}
+            </div>
+        `;
+    }).join('');
+}
+
+async function claimBpReward(level, premium) {
+    haptic('medium');
+    try {
+        const d = await api('/api/battlepass/claim', { level, premium });
+        toast(`✅ +${fmt(d.coins)} 🪙${d.bonus ? ' + кейс' : ''}`, 'success');
+        SFX.cashout();
+        confettiBurst('#ffc107');
+        updateBalance(d.balance);
+        loadBattlePass();
+        if (d.bonus) loadInventory();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+async function buyPremiumPass() {
+    haptic('medium');
+    try {
+        const d = await api('/api/battlepass/buy-premium');
+        tg.openInvoice(d.link, (status) => {
+            if (status === 'paid') {
+                toast('✅ Premium активирован', 'success');
+                SFX.jackpot();
+                confettiJackpot();
+                setTimeout(loadBattlePass, 1500);
+            } else if (status === 'cancelled') {
+                toast('❌ Отменено', 'error');
+            }
+        });
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
 /* ═══ ADMIN INVENTORY ═══ */
 async function loadUserInventory() {
     const target = document.getElementById('invTarget').value.trim();
