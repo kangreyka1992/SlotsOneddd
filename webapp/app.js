@@ -1342,13 +1342,20 @@ function zoneToScene(zone) {
     const goal = document.getElementById('goalFrame');
     const scene = document.getElementById('penaltiScene');
     const z = zonePercent(zone);
-    const gRect = goal.getBoundingClientRect();
-    const sRect = scene.getBoundingClientRect();
-    const leftPx = (gRect.left - sRect.left) + (gRect.width * z.left / 100);
-    const topPx  = (gRect.top  - sRect.top)  + (gRect.height * z.top  / 100);
+
+    // goal: absolute внутри scene с left:8%, right:8%, top:14%, height:60%
+    // scene: relative. Используем offset-координаты.
+    const goalW = goal.offsetWidth;
+    const goalH = goal.offsetHeight;
+    const goalLeft = goal.offsetLeft;
+    const goalTop = goal.offsetTop;
+
+    const leftPx = goalLeft + (goalW * z.left / 100);
+    const topPx  = goalTop  + (goalH * z.top  / 100);
+
     return {
-        left: (leftPx / sRect.width) * 100,
-        top:  (topPx  / sRect.height) * 100,
+        left: (leftPx / scene.offsetWidth) * 100,
+        top:  (topPx  / scene.offsetHeight) * 100,
     };
 }
 
