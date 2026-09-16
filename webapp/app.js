@@ -484,7 +484,7 @@ async function loadProfile() {
 }
 
 /* ═══ GAMES ═══ */
-function openGame(game) {
+async function openGame(game) {                    // ✅ добавь async
     if (gameLocked) {
         toast('⏳ Дождись окончания игры', 'error');
         return;
@@ -499,6 +499,9 @@ function openGame(game) {
     if (titleEl) titleEl.textContent = GAMES_META[game]?.name || 'Игра';
 
     showScreen('game');
+
+    // ✅ Обновляем профиль перед рендером кнопок
+    try { await loadProfile(); } catch (e) {}
     updateBalance(profile.balance);
 
     minesState = null; rrState = null; diceBet = null; penaltiState = null; coinBet = null;
@@ -587,6 +590,12 @@ function renderBets(containerId, onPick, multiplier = 1) {
     const el = document.getElementById(containerId);
     if (!el) return;
     el.innerHTML = '';
+
+    // ✅ Если профиль не загружен — ждём
+    if (!profile || profile.balance === undefined) {
+        el.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Загрузка...</div>';
+        return;
+    }
     BETS.forEach(b => {
         const cost = b * multiplier;
         const btn = document.createElement('button');
@@ -3489,13 +3498,16 @@ async function adminClearWinrateFor(userId) {
     } catch (e) { toast(e.message, 'error'); }
 }
 /* ═══ BOOTSTRAP ═══ */
-function bootstrap() {
+async function bootstrap() {
     console.log('INIT at start:', tg.initData?.length);
     setTimeout(() => console.log('INIT 1s:', tg.initData?.length), 1000);
     setTimeout(() => console.log('INIT 3s:', tg.initData?.length), 3000);
+
+    // ✅ Ждём профиль
+    await loadProfile();
+
     renderGamesGrid();
     renderHistory();
-    loadProfile();
     loadCases().then(() => renderHomeInventoryPreview());
     loadFreeCaseStatus();
     startHeroTimer();
@@ -3506,20 +3518,5 @@ function bootstrap() {
 
     api('/api/penalti/reset').catch(() => {});
     api('/api/duel/cancel').catch(() => {});
-
-    let touchStart = 0;
-    document.querySelector('.screens').addEventListener('touchstart', e => {
-        touchStart = e.touches[0].clientY;
-    }, { passive: true });
-    document.querySelector('.screens').addEventListener('touchend', e => {
-        const diff = e.changedTouches[0].clientY - touchStart;
-        const screen = document.querySelector('.screen.active');
-        if (diff > 120 && screen && screen.scrollTop === 0 && !gameLocked) {
-            loadProfile();
-            loadFreeCaseStatus();
-            renderHomeInventoryPreview();
-            toast('🔄 Обновлено');
-        }
-    }, { passive: true });
 }
 bootstrap();
