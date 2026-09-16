@@ -31,6 +31,7 @@ async def init_db():
                 win INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS daily_quests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +44,6 @@ async def init_db():
                 quest_date TEXT NOT NULL,
                 UNIQUE(user_id, quest_id, quest_date)
             )
-        """)
         """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS payments (
@@ -164,7 +164,6 @@ async def init_db():
             )
         """)
         await db.commit()
-
 
 async def has_deposited(user_id: int, min_stars: int) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
