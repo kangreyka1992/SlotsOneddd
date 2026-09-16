@@ -20,6 +20,7 @@ async def init_db():
                 referrals INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS live_feed (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,7 +30,6 @@ async def init_db():
                 win INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """)
         """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS payments (
