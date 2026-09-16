@@ -2424,9 +2424,6 @@ async function openCase(c, count = 1) {
         const winnerEl = items[data.win_pos];
         if (winnerEl) winnerEl.classList.add('winner');
 
-        setTimeout(() => {
-            overlay.classList.add('zoom');
-        }, 400);
 
         const r = count === 1 ? data.result : data.best;
         const totalWin = count === 1
