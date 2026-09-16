@@ -7,7 +7,6 @@ import random
 import time
 import datetime
 from contextlib import asynccontextmanager
-from urllib.parse import parse_qsl
 from urllib.parse import parse_qsl, quote
 
 import aiohttp
@@ -59,11 +58,10 @@ ADMIN_IDS = [7643224285]
 
 # ═══════════ CRYPTO DIRECT (Polygon USDC) ═══════════
 SELLER_WALLET = "0xFe06D515f0728567e34B94de549289791d9b1BA3"
-POLYGONSCAN_API_KEY = "Y2CVHHPY54VYJUTKG2FW7YZAI49EMYVXHN"   # https://polygonscan.com/myapikey
+POLYGONSCAN_API_KEY = "Y2CVHHPY54VYJUTKG2FW7YZAI49EMYVXHN"
 USDC_POLYGON_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
-CRYPTO_PER_USD = 500   # 1 USDC = 500 монет
+CRYPTO_PER_USD = 500
 
-# Хранилище ожидающих платежей {order_id: {...}}
 pending_payments: dict[str, dict] = {}
 
 
@@ -138,8 +136,7 @@ async def api_crypto_create(request: Request):
         "status": "pending",
     }
 
-    # Deep-link EIP-681 для открытия в кошельке
-    amount_micro = int(unique_amount * 10 ** 6)   # USDC = 6 decimals
+    amount_micro = int(unique_amount * 10 ** 6)
     deeplink = (
         f"ethereum:{SELLER_WALLET}@137/transfer"
         f"?address={USDC_POLYGON_CONTRACT}"
@@ -160,14 +157,13 @@ async def api_crypto_create(request: Request):
         "base_amount": amount_usd,
         "coins": int(amount_usd * CRYPTO_PER_USD),
         "qr_url": qr_url,
-        "deeplink": deeplink,     # ← НОВОЕ
+        "deeplink": deeplink,
         "expires_in": 3600,
     }
 
 
 @app.post("/api/crypto/check")
 async def api_crypto_check(request: Request):
-    """Проверяет, поступила ли оплата на кошелёк"""
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
@@ -186,17 +182,16 @@ async def api_crypto_check(request: Request):
             "balance": await get_balance(uid),
         }
 
-    # Проверяем блокчейн через PolygonScan
     try:
         url = (
-    f"https://api.polygonscan.com/api"
-    f"?module=account"
-    f"&action=tokentx"
-    f"&contractaddress={USDC_POLYGON_CONTRACT}"
-    f"&address={SELLER_WALLET}"
-    f"&page=1&offset=20&sort=desc"
-    f"&apikey={POLYGONSCAN_API_KEY}"
-)
+            f"https://api.polygonscan.com/api"
+            f"?module=account"
+            f"&action=tokentx"
+            f"&contractaddress={USDC_POLYGON_CONTRACT}"
+            f"&address={SELLER_WALLET}"
+            f"&page=1&offset=20&sort=desc"
+            f"&apikey={POLYGONSCAN_API_KEY}"
+        )
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 result = await resp.json()
@@ -209,16 +204,13 @@ async def api_crypto_check(request: Request):
         order_created = order["created"]
 
         for tx in txs:
-            # Только входящие (to == наш кошелёк)
             if tx["to"].lower() != SELLER_WALLET.lower():
                 continue
-            # Только после создания заказа
             if int(tx["timeStamp"]) < order_created - 60:
                 continue
 
             value_usdc = int(tx["value"]) / (10 ** int(tx["tokenDecimal"]))
 
-            # Сравниваем с точностью до 0.001
             if abs(value_usdc - target_amount) < 0.001:
                 order["status"] = "paid"
                 coins = int(order["base_amount"] * CRYPTO_PER_USD)
@@ -257,7 +249,6 @@ async def api_crypto_check(request: Request):
 
 @app.get("/crypto/pending")
 async def crypto_pending():
-    """Для отладки — посмотреть все ожидающие заказы"""
     return {
         "count": len(pending_payments),
         "orders": [
@@ -299,9 +290,10 @@ async def api_profile(request: Request):
         "referral": {"invited": invited, "bonuses": bonuses},
         "discount": discount,
     }
-@app.post("/api/feed/live")    
+
+
+@app.post("/api/feed/live")
 async def api_feed_live(request: Request):
-    """Реальная лента выигрышей"""
     data = await request.json()
     validate_init_data(data.get("initData", ""))
     feed = await get_live_feed(15)
@@ -316,6 +308,7 @@ async def api_feed_live(request: Request):
             for f in feed
         ]
     }
+
 
 @app.post("/api/achievements")
 async def api_ach(request: Request):
@@ -506,7 +499,7 @@ async def api_slots2_spin(request: Request):
     if total_win > 0:
         await add_balance(uid, total_win)
     await log_game(uid, total_bet, total_win)
-    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
+    await add_battle_pass_xp(uid, total_bet // 10)
     await log_house_flow(wagered=total_bet, paid=total_win)
     nb = await get_balance(uid)
     await update_quest_progress(uid, "bets_count", 1)
@@ -514,7 +507,7 @@ async def api_slots2_spin(request: Request):
     await update_quest_progress(uid, "game_slots2", 1)
     if total_win > 0:
         await update_quest_progress(uid, "wins", 1)
-    
+
     if total_win >= 1000:
         username = user.get("username") or user.get("first_name") or "Игрок"
         await log_live_win(uid, username, "Слоты 5×3", total_win)
@@ -618,9 +611,8 @@ async def api_mines_open(request: Request):
         bet = game["bet"]
         del mines_games[uid]
         await log_game(uid, bet, 0)
-        await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
+        await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=0)
-        # ⭐ Обновляем прогресс квестов при взрыве
         await update_quest_progress(uid, "bets_count", 1)
         await update_quest_progress(uid, "wagered", bet)
         await update_quest_progress(uid, "game_mines", 1)
@@ -640,8 +632,8 @@ async def api_mines_open(request: Request):
         win = int(game["bet"] * (1 + step_mult * safe))
         await add_balance(uid, win)
         await log_game(uid, game["bet"], win)
+        await add_battle_pass_xp(uid, game["bet"] // 10)
         await log_house_flow(wagered=game["bet"], paid=win)
-        # ⭐ Обновляем прогресс квестов при победе
         await update_quest_progress(uid, "bets_count", 1)
         await update_quest_progress(uid, "wagered", game["bet"])
         await update_quest_progress(uid, "game_mines", 1)
@@ -688,7 +680,7 @@ async def api_mines_cashout(request: Request):
     await update_quest_progress(uid, "game_mines", 1)
     await update_quest_progress(uid, "wins", 1)
     await log_game(uid, bet, prize)
-    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
+    await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=prize)
     if prize >= 1000:
         username = user.get("username") or "Игрок"
@@ -778,7 +770,7 @@ async def api_crash_status(request: Request):
         prize = int(game["bet"] * game["auto_cashout"])
         await add_balance(uid, prize)
         await log_game(uid, game["bet"], prize)
-        await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
+        await add_battle_pass_xp(uid, game["bet"] // 10)
         await log_house_flow(wagered=game["bet"], paid=prize)
         if prize >= 1000:
             username = user.get("username") or "Игрок"
@@ -820,6 +812,7 @@ async def api_crash_status(request: Request):
         "balance": await get_balance(uid),
     }
 
+
 @app.post("/api/crash/cashout")
 async def api_crash_cashout(request: Request):
     data = await request.json()
@@ -836,7 +829,7 @@ async def api_crash_cashout(request: Request):
         bet = game["bet"]
         del crash_games[uid]
         await log_game(uid, bet, 0)
-        await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
+        await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=0)
         raise HTTPException(400, "crashed")
 
@@ -845,6 +838,7 @@ async def api_crash_cashout(request: Request):
     del crash_games[uid]
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
+    await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=prize)
     await update_quest_progress(uid, "bets_count", 1)
     await update_quest_progress(uid, "wagered", bet)
@@ -854,6 +848,7 @@ async def api_crash_cashout(request: Request):
     if prize > bet:
         await unlock_achievement(uid, "first_win")
     return {"prize": prize, "mult": mult, "bet": bet, "balance": await get_balance(uid)}
+
 
 # ═══════════ КОСТИ ═══════════
 
@@ -902,7 +897,7 @@ async def api_dice(request: Request):
     if win > 0:
         await add_balance(uid, win)
     await log_game(uid, bet, win)
-    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
+    await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     if win >= 1000:
         username = user.get("username") or "Игрок"
@@ -965,9 +960,6 @@ async def api_rr_spin(request: Request):
         del rr_games[uid]
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
-        if prize >= 1000:
-            username = user.get("username") or "Игрок"
-            await log_live_win(uid, username, "Рулетка", prize)
         return {"shot": True, "bet": bet, "balance": await get_balance(uid)}
 
     step += 1
@@ -1060,7 +1052,7 @@ async def api_plinko(request: Request):
         await add_balance(uid, win)
 
     await log_game(uid, bet, win)
-    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
+    await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     if win >= 1000:
         username = user.get("username") or "Игрок"
@@ -1213,9 +1205,6 @@ async def api_penalti_kick(request: Request):
         del penalti_games[uid]
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
-        if prize >= 1000:
-            username = user.get("username") or "Игрок"
-            await log_live_win(uid, username, "Penalti", prize)
         return {
             "goal": False,
             "save": True,
@@ -1291,7 +1280,7 @@ async def api_penalti_cashout(request: Request):
     del penalti_games[uid]
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
-    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
+    await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=prize)
     await unlock_achievement(uid, "first_bet")
     return {"prize": prize, "mult": mult, "balance": await get_balance(uid)}
@@ -1339,7 +1328,7 @@ async def api_coin_flip(request: Request):
         await add_balance(uid, win)
 
     await log_game(uid, bet, win)
-    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
+    await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     if win >= 1000:
         username = user.get("username") or "Игрок"
@@ -1521,7 +1510,11 @@ RARITY_TABLE = [
     ("mythic",    "🟥", "Мифический",    15, 35.00),
 ]
 
+# (Огромный словарь CASE_ITEMS — оставь как у тебя, не буду его дублировать.
+#  Просто убедись, что он есть в файле без изменений.)
+
 CASE_ITEMS = {
+    CASE_ITEMS = {
     "starter": {
         "common":    [("cherry","🍒","Вишня"),("lemon","🍋","Лимон"),("orange","🍊","Апельсин"),("grape","🍇","Виноград"),("coin","🪙","Монетка")],
         "uncommon":  [("gem","💎","Самоцвет"),("star","⭐","Звезда"),("clover","🍀","Клевер"),("bell","🔔","Колокольчик"),("horseshoe","🧲","Подкова")],
@@ -1771,8 +1764,6 @@ CASE_ITEMS = {
         "mythic":    [("titan_abs","⚡","Абсолют титанов"),("cronus_abs","⏳","Абсолют Кроноса"),("earth_abs","🌍","Абсолют Земли"),("primordial_titan","🗿","Первородный титан"),("eternal_titan","♾️","Вечный титан")],
     },
 }
-
-
 def _get_case_items(case_id: str):
     if case_id in CASE_ITEMS:
         return CASE_ITEMS[case_id]
@@ -1950,7 +1941,7 @@ async def api_cases_spin(request: Request):
 
     await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
     await log_game(uid, price_coins, 0)
-    await add_battle_pass_xp(uid, total_bet // 10)   # 1 XP за каждые 10 монет ставки
+    await add_battle_pass_xp(uid, price_coins // 10)
     await log_house_flow(wagered=price_coins, paid=0)
     await update_quest_progress(uid, "cases_opened", 1)
     if value >= 1000:
@@ -2033,6 +2024,7 @@ async def api_cases_spin_multi(request: Request):
         })
 
     await log_game(uid, total_cost, 0)
+    await add_battle_pass_xp(uid, total_cost // 10)
     await log_house_flow(wagered=total_cost, paid=0)
     await unlock_achievement(uid, "first_bet")
 
@@ -2233,10 +2225,7 @@ async def api_upgrader_play(request: Request):
         raise HTTPException(400, "Некорректная ставка")
 
     if target_price_coins <= total_value:
-        raise HTTPException(
-            400,
-            "Цель дешевле твоей ставки — так нельзя"
-        )
+        raise HTTPException(400, "Цель дешевле твоей ставки — так нельзя")
 
     chance = total_value / target_price_coins
     chance = max(0.01, min(0.95, chance))
@@ -2515,6 +2504,8 @@ async def api_daily(request: Request):
         await unlock_achievement(uid, "daily_7")
 
     return {"reward": reward, "streak": new_streak, "balance": nb}
+
+
 # ═══════════ ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ═══════════
 
 @app.post("/api/quests/list")
@@ -2551,6 +2542,8 @@ async def api_quests_claim(request: Request):
         "message": message,
         "balance": new_balance,
     }
+
+
 # ═══════════ BATTLE PASS ═══════════
 
 @app.post("/api/battlepass/status")
@@ -2596,7 +2589,6 @@ async def api_bp_claim(request: Request):
 
     new_balance = await add_balance(uid, coins, None)
 
-    # Если это бонус-кейс — выдаём предмет
     if bonus:
         case_id = bonus.replace("case_", "")
         case = next((c for c in CASES if c[0] == case_id), None)
@@ -2618,7 +2610,6 @@ async def api_bp_claim(request: Request):
 
 @app.post("/api/battlepass/buy-premium")
 async def api_bp_buy_premium(request: Request):
-    """Создаёт счёт на покупку Premium Pass за 250 ⭐."""
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
@@ -2635,6 +2626,8 @@ async def api_bp_buy_premium(request: Request):
     )
 
     return {"link": link, "stars": 250}
+
+
 # ═══════════ ИНВОЙС (звёзды) ═══════════
 
 @app.post("/api/invoice")
@@ -2937,3 +2930,4 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     print(f"🚀 Запуск на порту {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
+}
