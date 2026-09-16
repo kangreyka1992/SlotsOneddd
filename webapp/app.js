@@ -604,6 +604,11 @@ function renderBets(containerId, onPick, multiplier = 1) {
         if (cost > profile.balance || gameLocked) btn.disabled = true;
         btn.onclick = () => {
             if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
+            if (cost > profile.balance) { toast('Недостаточно монет', 'error'); return; }
+        SFX.click(); haptic(); onPick(b);
+};
+        btn.onclick = () => {
+            if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
             SFX.click(); haptic(); onPick(b);
         };
         el.appendChild(btn);
