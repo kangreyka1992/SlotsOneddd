@@ -284,6 +284,7 @@ function showScreen(name) {
     if (name === 'profile') { loadProfile(); renderHistory(); }
     if (name === 'admin') switchAdminTab('stats');
     if (name === 'cases') { loadCases(); loadFreeCaseStatus(); }
+    if (name === 'quests') loadQuests();
     if (name === 'inventory') loadInventory();
     if (name === 'upgrader') loadUpgrader();
 }
@@ -3257,7 +3258,66 @@ async function adminBroadcast() {
         document.getElementById('broadcastText').value = '';
     } catch (e) { toast(e.message, 'error'); }
 }
+/* ═══ DAILY QUESTS ═══ */
+async function loadQuests() {
+    try {
+        const d = await api('/api/quests/list');
+        const el = document.getElementById('questsList');
+        if (!el) return;
 
+        if (!d.quests || !d.quests.length) {
+            el.innerHTML = '<div class="quests-info">Задания загружаются...</div>';
+            return;
+        }
+
+        el.innerHTML = d.quests.map(q => {
+            const progress = Math.min(q.progress, q.target);
+            const percent = (progress / q.target) * 100;
+            const done = progress >= q.target;
+            const claimed = q.claimed;
+            const cardCls = claimed ? 'claimed' : (done ? 'done' : '');
+
+            return `
+                <div class="quest-card ${cardCls}">
+                    <div class="quest-header">
+                        <span class="quest-name">${q.name}</span>
+                        <span class="quest-reward">+${fmt(q.reward)} 🪙</span>
+                    </div>
+                    <div class="quest-progress-bar">
+                        <div class="quest-progress-fill" style="width:${percent}%"></div>
+                    </div>
+                    <div class="quest-progress-text">
+                        <span>${progress}/${q.target}</span>
+                        <span>${percent.toFixed(0)}%</span>
+                    </div>
+                    ${done && !claimed ? `
+                        <button class="quest-claim-btn" onclick="claimQuest('${q.id}')">
+                            🎁 Забрать
+                        </button>
+                    ` : (claimed ? `
+                        <button class="quest-claim-btn" disabled>✅ Получено</button>
+                    ` : '')}
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error('Quests load error:', e);
+    }
+}
+
+async function claimQuest(questId) {
+    haptic('medium');
+    try {
+        const d = await api('/api/quests/claim', { quest_id: questId });
+        toast(`✅ +${fmt(d.reward)} 🪙`, 'success');
+        SFX.cashout();
+        confettiBurst('#4ade80');
+        updateBalance(d.balance);
+        loadQuests();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
 /* ═══ BOOTSTRAP ═══ */
 function bootstrap() {
     console.log('INIT at start:', tg.initData?.length);
@@ -3292,5 +3352,5 @@ function bootstrap() {
         }
     }, { passive: true });
 }
-
+loadQuests();
 bootstrap();
