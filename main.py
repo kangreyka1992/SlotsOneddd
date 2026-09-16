@@ -289,7 +289,7 @@ async def api_profile(request: Request):
         "referral": {"invited": invited, "bonuses": bonuses},
         "discount": discount,
     }
-@app.post("/api/feed/live")
+@app.post("/api/feed/live")    
 async def api_feed_live(request: Request):
     """Реальная лента выигрышей"""
     data = await request.json()
