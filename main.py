@@ -104,14 +104,8 @@ async def health():
 
 # ═══════════ CRYPTO DIRECT (Polygon) ═══════════
 
-@app.get("/crypto/test")
-async def crypto_test():
-    return {"status": "alive", "wallet": SELLER_WALLET}
-
-
 @app.post("/api/crypto/create")
 async def api_crypto_create(request: Request):
-    """Создаёт уникальный заказ на пополнение через USDC Polygon"""
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
@@ -120,7 +114,6 @@ async def api_crypto_create(request: Request):
     if amount_usd < 1:
         raise HTTPException(400, "Минимум $1")
 
-    # Уникальная сумма: например 10.0347, чтобы понять кто платит
     order_id = f"{uid}_{int(time.time())}"
     unique_amount = round(amount_usd + random.randint(1, 999) / 10000, 4)
 
@@ -132,10 +125,17 @@ async def api_crypto_create(request: Request):
         "status": "pending",
     }
 
-    # QR-код через публичный API
+    # Deep-link EIP-681 для открытия в кошельке
+    amount_micro = int(unique_amount * 10 ** 6)   # USDC = 6 decimals
+    deeplink = (
+        f"ethereum:{SELLER_WALLET}@137/transfer"
+        f"?address={USDC_POLYGON_CONTRACT}"
+        f"&uint256={amount_micro}"
+    )
+
     qr_url = (
         f"https://api.qrserver.com/v1/create-qr-code/"
-        f"?size=300x300&data=ethereum:{SELLER_WALLET}@137"
+        f"?size=300x300&data={quote(deeplink, safe='')}"
     )
 
     return {
@@ -147,6 +147,7 @@ async def api_crypto_create(request: Request):
         "base_amount": amount_usd,
         "coins": int(amount_usd * CRYPTO_PER_USD),
         "qr_url": qr_url,
+        "deeplink": deeplink,     # ← НОВОЕ
         "expires_in": 3600,
     }
 
