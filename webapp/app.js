@@ -2346,14 +2346,16 @@ async function openCase(c, count = 1) {
     const track = document.getElementById('crTrack');
     const title = document.getElementById('crTitle');
     const status = document.getElementById('crStatus');
+    const rewardBox = document.getElementById('crReward');
+    const actionsBox = document.getElementById('crActions');
     const multi = document.getElementById('crMulti');
 
-    overlay.classList.add('csgo');
-    overlay.classList.remove('zoom');
-
+    // Сброс UI
     title.textContent = `${c.emoji} ${c.name}` + (count > 1 ? ` · ×${count}` : '');
-    status.textContent = 'Открываем...';
+    status.textContent = 'Крутим...';
     status.className = 'cr-status';
+    rewardBox.classList.add('hidden');
+    actionsBox.classList.add('hidden');
     multi.classList.add('hidden');
     multi.innerHTML = '';
     track.style.transition = 'none';
@@ -2361,21 +2363,20 @@ async function openCase(c, count = 1) {
     track.innerHTML = '';
     overlay.classList.remove('hidden');
 
+    // Запрос на сервер
     let data;
     try {
         const url = count > 1 ? '/api/cases/spin_multi' : '/api/cases/spin';
-        const body = count > 1
-            ? { case_id: c.id, count }
-            : { case_id: c.id };
+        const body = count > 1 ? { case_id: c.id, count } : { case_id: c.id };
         data = await api(url, body);
     } catch (e) {
         overlay.classList.add('hidden');
-        overlay.classList.remove('csgo');
         caseRouletteBusy = false;
         toast(e.message, 'error');
         return;
     }
 
+    // Трек
     track.innerHTML = data.track.map(item => `
         <div class="cr-item" data-rarity="${item.rarity}">
             <div class="cr-emoji">${item.emoji}</div>
@@ -2387,15 +2388,13 @@ async function openCase(c, count = 1) {
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     const firstItem = track.querySelector('.cr-item');
-    const ITEM_W = firstItem ? firstItem.offsetWidth : 100;
-    const ITEM_GAP = parseFloat(getComputedStyle(track).gap) || 8;
+    const ITEM_W = firstItem ? firstItem.offsetWidth : 110;
+    const ITEM_GAP = parseFloat(getComputedStyle(track).gap) || 12;
     const ITEM_TOTAL = ITEM_W + ITEM_GAP;
     const viewportW = overlay.querySelector('.cr-viewport').clientWidth;
-
     const viewportCenter = viewportW / 2;
     const winCenterInTrack = data.win_pos * ITEM_TOTAL + ITEM_W / 2;
     const finalX = viewportCenter - winCenterInTrack;
-
     const jitter = (Math.random() - 0.5) * (ITEM_W * 0.4);
     const targetX = finalX + jitter;
 
@@ -2413,7 +2412,6 @@ async function openCase(c, count = 1) {
             ? easeOutCubic(t / 0.85) * 0.9
             : 0.9 + easeOutQuint((t - 0.85) / 0.15) * 0.1;
         const x = targetX * eased;
-
         track.style.transform = `translateX(${x}px)`;
 
         const passedItems = Math.floor(Math.abs(x) / ITEM_TOTAL);
@@ -2424,21 +2422,19 @@ async function openCase(c, count = 1) {
             }
         }
 
-        if (t < 1) {
-            requestAnimationFrame(animate);
-            return;
-        }
+        if (t < 1) { requestAnimationFrame(animate); return; }
 
+        // ═══ ПРОКРУТ ЗАКОНЧЕН ═══
         const items = track.querySelectorAll('.cr-item');
         const winnerEl = items[data.win_pos];
         if (winnerEl) winnerEl.classList.add('winner');
-
 
         const r = count === 1 ? data.result : data.best;
         const totalWin = count === 1
             ? r.value
             : data.results.reduce((s, x) => s + x.value, 0);
 
+        // Звук + конфетти
         if (r.rarity === 'mythic' || r.rarity === 'legendary') {
             SFX.jackpot(); confettiJackpot();
         } else if (r.rarity === 'epic') {
@@ -2448,11 +2444,27 @@ async function openCase(c, count = 1) {
         }
         haptic('success');
 
+        // Показываем награду
+        const rewardEmoji = document.getElementById('crRewardEmoji');
+        const rewardName = document.getElementById('crRewardName');
+        const rewardPrice = document.getElementById('crRewardPrice');
+        const sellPrice = document.getElementById('crSellPrice');
+
+        if (count === 1) {
+            rewardEmoji.textContent = r.emoji;
+            rewardName.textContent = r.name;
+            rewardPrice.textContent = `${fmt(r.value)} 🪙`;
+            rewardBox.classList.remove('hidden');
+            sellPrice.textContent = fmt(r.value);
+        }
+
+        // Статус
         status.textContent = count === 1
             ? `${r.emoji} ${r.name} · ${fmt(r.value)} 🪙`
             : `🏆 ${r.name} · ${fmt(r.value)} 🪙`;
         status.className = 'cr-status win';
 
+        // Мульти
         if (count > 1) {
             multi.innerHTML = data.results.map(x => `
                 <div class="cr-multi-item" data-rarity="${x.rarity}">
@@ -2464,38 +2476,32 @@ async function openCase(c, count = 1) {
             multi.classList.remove('hidden');
         }
 
+        // Показываем кнопки через 600мс
+        setTimeout(() => {
+            actionsBox.classList.remove('hidden');
+            // Сохраняем контекст для кнопок
+            window._lastCaseDrop = {
+                caseId: c.id,
+                casePrice: c.price_coins,
+                itemId: r.item_id,
+                itemValue: r.value,
+                itemName: r.name,
+                itemEmoji: r.emoji,
+                rarity: r.rarity,
+                count: count,
+            };
+        }, 600);
+
+        // Обновляем баланс
         updateBalance(data.balance);
         loadProfile();
         addHistory('case', count === 1 ? c.price_coins : totalCost, totalWin);
 
-        setTimeout(() => {
-            overlay.classList.add('hidden');
-            overlay.classList.remove('csgo');
-            overlay.classList.remove('zoom');
-            caseRouletteBusy = false;
-        }, 3000);
+        caseRouletteBusy = false;
     }
 
     requestAnimationFrame(animate);
 }
-function toggleFastCase() {
-    caseFastMode = !caseFastMode;
-    const btn = document.getElementById('casesFastBtn');
-    if (btn) {
-        btn.textContent = caseFastMode ? '⚡ БЫСТРО: ВКЛ' : '⚡ Быстрый прокрут';
-        btn.classList.toggle('active', caseFastMode);
-    }
-    haptic();
-    toast(caseFastMode ? '⚡ Быстрый прокрут ВКЛ' : 'Обычный прокрут');
-}
-function closeCaseRoulette() {
-    if (caseRouletteBusy) return;
-    const overlay = document.getElementById('caseRoulette');
-    overlay.classList.add('hidden');
-    overlay.classList.remove('csgo');
-    overlay.classList.remove('zoom');
-}
-
 /* ═══ INVENTORY ═══ */
 async function loadInventory() {
     try {
@@ -3081,6 +3087,57 @@ async function openFreeCase() {
         toast(e.message, 'error');
         loadFreeCaseStatus();
     }
+}
+
+/* ═══ CS:GO КНОПКИ ПОД ДРОПОМ ═══ */
+
+async function caseSellNow() {
+    const drop = window._lastCaseDrop;
+    if (!drop) return;
+    haptic('medium');
+
+    // Продажа через API
+    const inv = await api('/api/cases/inventory');
+    // Ищем последний предмет (по item_id, name, emoji — самые свежие)
+    const item = inv.items.find(i =>
+        i.item_id === drop.itemId &&
+        i.name === drop.itemName &&
+        !i.sold
+    );
+
+    if (!item) {
+        toast('Предмет не найден', 'error');
+        return;
+    }
+
+    try {
+        const d = await api('/api/cases/sell', { item_pk: item.id });
+        toast(`✅ Продано за ${fmt(d.sold_value)} 🪙`, 'success');
+        SFX.cashout();
+        updateBalance(d.balance);
+        closeCaseRoulette();
+        loadProfile();
+        loadInventory();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function caseToUpgrade() {
+    const drop = window._lastCaseDrop;
+    if (!drop) return;
+    haptic('medium');
+    closeCaseRoulette();
+    showScreen('upgrader');
+    loadUpgrader();
+}
+
+function caseOpenAgain() {
+    const drop = window._lastCaseDrop;
+    if (!drop) return;
+    haptic('medium');
+    const c = casesCache.find(x => x.id === drop.caseId);
+    if (!c) { toast('Кейс не найден', 'error'); return; }
+    closeCaseRoulette();
+    setTimeout(() => openCase(c, drop.count), 200);
 }
 
 /* ═══ АДМИНКА ═══ */
