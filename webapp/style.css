@@ -871,7 +871,7 @@ select.input { text-align: left; letter-spacing: 0; }
 .screen::-webkit-scrollbar { width: 0; }
 
 /* ═══════════ CASE INFO ═══════════ */
-.case-info {
+.case-info-overlay {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.92);
   z-index: 2500;
