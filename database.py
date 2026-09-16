@@ -1,6 +1,7 @@
 import aiosqlite
 import datetime
 import os
+import random
 
 DB_PATH = os.getenv("DB_PATH", "casino.db")
 
@@ -30,6 +31,19 @@ async def init_db():
                 win INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS daily_quests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                quest_id TEXT NOT NULL,
+                progress INTEGER DEFAULT 0,
+                target INTEGER NOT NULL,
+                reward INTEGER NOT NULL,
+                claimed INTEGER DEFAULT 0,
+                quest_date TEXT NOT NULL,
+                UNIQUE(user_id, quest_id, quest_date)
+            )
+        """)
         """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS payments (
@@ -753,3 +767,130 @@ async def get_live_feed(limit: int = 15):
             (limit,),
         ) as cur:
             return await cur.fetchall()
+DAILY_QUEST_POOL = [
+    {"id": "bet_10",       "name": "🎯 Сделай 10 ставок",                "target": 10,     "reward": 500,   "type": "bets_count"},
+    {"id": "bet_50",       "name": "🎯 Сделай 50 ставок",                "target": 50,     "reward": 2000,  "type": "bets_count"},
+    {"id": "wagered_5000", "name": "💰 Поставь 5.000 монет",             "target": 5000,   "reward": 1000,  "type": "wagered"},
+    {"id": "wagered_50000","name": "💰 Поставь 50.000 монет",            "target": 50000,  "reward": 8000,  "type": "wagered"},
+    {"id": "win_3",        "name": "🎉 Выиграй 3 раза",                  "target": 3,      "reward": 800,   "type": "wins"},
+    {"id": "win_10",       "name": "🏆 Выиграй 10 раз",                  "target": 10,     "reward": 3000,  "type": "wins"},
+    {"id": "cases_2",      "name": "📦 Открой 2 кейса",                  "target": 2,      "reward": 1500,  "type": "cases_opened"},
+    {"id": "cases_5",      "name": "📦 Открой 5 кейсов",                 "target": 5,      "reward": 4000,  "type": "cases_opened"},
+    {"id": "slots_5",      "name": "🎰 Сыграй 5 раз в Слотах",           "target": 5,      "reward": 700,   "type": "game_slots2"},
+    {"id": "mines_3",      "name": "⛏ Сыграй 3 раза в Mines",            "target": 3,      "reward": 700,   "type": "game_mines"},
+    {"id": "crash_3",      "name": "📈 Сыграй 3 раза в Crash",           "target": 3,      "reward": 700,   "type": "game_crash"},
+    {"id": "upgrade_1",    "name": "⚡ Сделай 1 апгрейд",                "target": 1,      "reward": 1000,  "type": "upgrades"},
+]
+
+
+async def get_daily_quests(user_id: int) -> list:
+    """Возвращает 3 задания игрока на сегодня. Если их нет — генерирует."""
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Проверяем, есть ли уже задания на сегодня
+        async with db.execute(
+            "SELECT quest_id, progress, target, reward, claimed "
+            "FROM daily_quests WHERE user_id = ? AND quest_date = ?",
+            (user_id, today),
+        ) as cur:
+            rows = await cur.fetchall()
+
+        if rows:
+            quests = []
+            for r in rows:
+                quest_id = r[0]
+                meta = next((q for q in DAILY_QUEST_POOL if q["id"] == quest_id), None)
+                if not meta:
+                    continue
+                quests.append({
+                    "id": quest_id,
+                    "name": meta["name"],
+                    "progress": r[1],
+                    "target": r[2],
+                    "reward": r[3],
+                    "claimed": bool(r[4]),
+                })
+            return quests
+
+        # Генерируем 3 новых задания
+        new_quests = random.sample(DAILY_QUEST_POOL, 3)
+        for q in new_quests:
+            await db.execute(
+                "INSERT OR IGNORE INTO daily_quests "
+                "(user_id, quest_id, progress, target, reward, quest_date) "
+                "VALUES (?, ?, 0, ?, ?, ?)",
+                (user_id, q["id"], q["target"], q["reward"], today),
+            )
+        await db.commit()
+
+        return [
+            {
+                "id": q["id"],
+                "name": q["name"],
+                "progress": 0,
+                "target": q["target"],
+                "reward": q["reward"],
+                "claimed": False,
+            }
+            for q in new_quests
+        ]
+
+
+async def update_quest_progress(user_id: int, quest_type: str, amount: int = 1):
+    """Обновляет прогресс всех активных заданий данного типа."""
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, quest_id, progress, target FROM daily_quests "
+            "WHERE user_id = ? AND quest_date = ? AND claimed = 0",
+            (user_id, today),
+        ) as cur:
+            rows = await cur.fetchall()
+
+        for r in rows:
+            q_id = r[1]
+            meta = next((q for q in DAILY_QUEST_POOL if q["id"] == q_id), None)
+            if not meta or meta["type"] != quest_type:
+                continue
+
+            new_progress = min(r[2] + amount, r[3])
+            await db.execute(
+                "UPDATE daily_quests SET progress = ? WHERE id = ?",
+                (new_progress, r[0]),
+            )
+
+        await db.commit()
+
+
+async def claim_quest_reward(user_id: int, quest_id: str) -> tuple:
+    """Забирает награду за задание. Возвращает (success, reward, message)."""
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, progress, target, reward, claimed FROM daily_quests "
+            "WHERE user_id = ? AND quest_id = ? AND quest_date = ?",
+            (user_id, quest_id, today),
+        ) as cur:
+            row = await cur.fetchone()
+
+        if not row:
+            return False, 0, "Задание не найдено"
+
+        q_db_id, progress, target, reward, claimed = row
+
+        if claimed:
+            return False, 0, "Награда уже получена"
+
+        if progress < target:
+            return False, 0, f"Не выполнено: {progress}/{target}"
+
+        await db.execute(
+            "UPDATE daily_quests SET claimed = 1 WHERE id = ?",
+            (q_db_id,),
+        )
+        await db.commit()
+
+        return True, reward, "Награда получена!"
