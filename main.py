@@ -47,7 +47,7 @@ ADMIN_IDS = [7643224285]
 # ═══════════ PAYGATE ═══════════
 SELLER_WALLET = "0xFe06D515f0728567e34B94de549289791d9b1BA3"
 PAYGATE_CALLBACK_URL = "https://bot-1789335277-8932-slotbots.bothost.tech/paygate/callback"
-CRYPTO_PER_USD = 100   # 1 USDC = 100 монет
+CRYPTO_PER_USD = 1000   # 1 USDC = 100 монет
 
 
 def validate_init_data(init_data: str) -> dict:
