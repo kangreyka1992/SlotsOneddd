@@ -3011,12 +3011,10 @@ async function upgraderPlay() {
         return;
     }
 
-    // ═══ БЛОКИРУЕМ ИНТЕРФЕЙС ═══            ← ВОТ ТУТ ДВА СЛЭША!
+    // ═══ БЛОКИРУЕМ ИНТЕРФЕЙС (без оверлея) ═══
     upgraderBusy = true;
+    document.body.classList.add('upgrade-running');
     haptic('medium');
-
-    const blocker = document.getElementById('upgradeBlocker');
-    if (blocker) blocker.classList.remove('hidden');
 
     const arrowEl = document.getElementById('upgArrowSpin');
     const percentEl = document.getElementById('upgPercent');
@@ -3029,16 +3027,17 @@ async function upgraderPlay() {
         d = await api('/api/upgrader/play', {
             item_pks: Array.from(upgraderSelectedPks),
             target_idx: upgraderTargetIdx,
-            extra_coins: extra,       // ← НЕ ЗАБУДЬ! Передаём extra_coins
+            extra_coins: extra,
         });
     } catch (e) {
         toast(e.message, 'error');
         upgraderBusy = false;
+        document.body.classList.remove('upgrade-running');
         if (goBtn) goBtn.disabled = false;
-        if (blocker) blocker.classList.add('hidden');
         return;
     }
 
+    // ═══ Списываем доп. монеты локально для UI ═══
     if (extra > 0) {
         profile.balance = Math.max(0, (profile.balance || 0) - extra);
     }
@@ -3053,6 +3052,7 @@ async function upgraderPlay() {
         finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
     }
 
+    // ⭐ ПОЛНОЦЕННАЯ ПРОКРУТКА СТРЕЛКИ
     const spinDuration = upgraderFastMode ? 0.4 : 3.0;
     const spinMs = upgraderFastMode ? 400 : 3000;
     const baseTurns = upgraderFastMode
@@ -3073,6 +3073,7 @@ async function upgraderPlay() {
         });
     }
 
+    // Тикающий звук
     let tickInt = null;
     if (!upgraderFastMode) {
         tickInt = setInterval(() => {
@@ -3083,12 +3084,14 @@ async function upgraderPlay() {
     await new Promise(r => setTimeout(r, spinMs));
     if (tickInt) clearInterval(tickInt);
 
+    // Финальный процент
     percentEl.textContent = finalPercent.toFixed(2) + '%';
     percentEl.classList.remove('green', 'yellow', 'red');
     if (d.win) percentEl.classList.add('green');
     else percentEl.classList.add('red');
 
-    if (blocker) blocker.classList.add('hidden');
+    // ═══ СНИМАЕМ БЛОКИРОВКУ — теперь можно смотреть результат ═══
+    document.body.classList.remove('upgrade-running');
 
     const overlay = document.createElement('div');
     overlay.className = 'upg-overlay';
