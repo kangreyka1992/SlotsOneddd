@@ -285,6 +285,7 @@ function showScreen(name) {
     if (name === 'admin') switchAdminTab('stats');
     if (name === 'cases') { loadCases(); loadFreeCaseStatus(); }
     if (name === 'quests') loadQuests();
+    if (name === 'battlepass') loadBattlePass();
     if (name === 'inventory') loadInventory();
     if (name === 'upgrader') loadUpgrader();
 }
