@@ -2856,23 +2856,76 @@ select.input { text-align: left; letter-spacing: 0; }
   color: #ff8f00;
   font-family: 'Orbitron', monospace;
 }
-body.upgrade-running .upg-stage,
-body.upgrade-running .upg-quick-mult,
-body.upgrade-running .upg-go-big,
-body.upgrade-running .upg-section {
-    opacity: 0.3;
+/* ═══ Блокировка и затемнение во время апгрейда ═══ */
+body.upgrade-running {
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Тушим ВСЁ, кроме круга — через :not() и универсальный селектор */
+body.upgrade-running #screen-upgrader > *:not(.upg-stage) {
+    opacity: 0.2 !important;
     transition: opacity 0.3s;
 }
-body.upgrade-running .upg-center,
-body.upgrade-running .upg-circle-wrap {
-    opacity: 1;
+
+/* Внутри .upg-stage тушим левый и правый слот (скин и цель) */
+body.upgrade-running .upg-stage > *:not(.upg-center) {
+    opacity: 0.2 !important;
+    transition: opacity 0.3s;
+}
+
+/* Центр — яркий и пульсирует */
+body.upgrade-running .upg-center {
+    opacity: 1 !important;
     filter: drop-shadow(0 0 20px #ff5722);
 }
+
+body.upgrade-running .upg-circle-wrap {
+    opacity: 1 !important;
+}
+
 body.upgrade-running .upg-circle-success {
     filter: drop-shadow(0 0 15px #ff5722);
     animation: upgPulse 0.6s ease-in-out infinite alternate;
 }
+
 @keyframes upgPulse {
     from { filter: drop-shadow(0 0 8px #ff5722); }
     to   { filter: drop-shadow(0 0 25px #ff5722); }
+}
+
+/* Стрелка — точно яркая */
+body.upgrade-running .upg-arrow-spin {
+    opacity: 1 !important;
+}
+
+body.upgrade-running .upg-arrow-spin::before {
+    filter: drop-shadow(0 0 12px #ff5722);
+    border-bottom-color: #ff5722;
+}
+
+/* Процент — яркий */
+body.upgrade-running .upg-percent {
+    opacity: 1 !important;
+    color: #ff5722 !important;
+    text-shadow: 0 0 15px #ff5722;
+}
+
+body.upgrade-running .upg-percent-label {
+    opacity: 1 !important;
+    color: #ff5722;
+    animation: upgBlink 0.8s infinite;
+}
+
+@keyframes upgBlink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+}
+
+/* Тушим хедер, нижнее меню, live-feed */
+body.upgrade-running .app-header,
+body.upgrade-running .live-feed,
+body.upgrade-running .bottom-nav {
+    opacity: 0.2 !important;
+    transition: opacity 0.3s;
 }
