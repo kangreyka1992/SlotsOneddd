@@ -2761,3 +2761,98 @@ select.input { text-align: left; letter-spacing: 0; }
   font-family: var(--font-num);
 }
 .cr-status.win { color: var(--green); }
+/* ═══ UPGRADER: доп. монеты ═══ */
+.upg-extra-block {
+  background: linear-gradient(160deg, #16161a 0%, #0d0d10 100%);
+  border: 1px solid rgba(255, 87, 34, 0.25);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upg-extra-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #ff5722;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.upg-extra-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.upg-extra-quick {
+  padding: 9px 4px;
+  background: #16161a;
+  border: 1px solid rgba(255, 87, 34, 0.3);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: 'Orbitron', monospace;
+  color: #ff5722;
+  transition: all 0.15s;
+}
+.upg-extra-quick:active {
+  background: rgba(255, 87, 34, 0.15);
+  transform: scale(0.94);
+}
+
+.upg-extra-input-wrap {
+  position: relative;
+}
+
+.upg-extra-input {
+  width: 100%;
+  padding: 12px 40px 12px 14px;
+  background: #0d0d10;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  font-family: 'Orbitron', monospace;
+  font-size: 16px;
+  font-weight: 800;
+  color: #ff8f00;
+  text-align: right;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.upg-extra-input:focus {
+  border-color: #ff5722;
+}
+
+.upg-extra-coin {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  pointer-events: none;
+}
+
+.upg-extra-hint {
+  font-size: 11px;
+  color: #666;
+  text-align: center;
+}
+.upg-extra-hint b { color: #ff8f00; font-family: 'Orbitron', monospace; }
+
+.upg-extra-summary {
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+  padding: 8px 10px;
+  background: rgba(255, 87, 34, 0.06);
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 87, 34, 0.2);
+  line-height: 1.5;
+}
+.upg-extra-summary b {
+  color: #ff8f00;
+  font-family: 'Orbitron', monospace;
+}
