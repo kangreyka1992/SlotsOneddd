@@ -2512,7 +2512,11 @@ async function loadInventory() {
             epic: '#7c5cff', legendary: '#ffc107', mythic: '#ff4757',
         };
 
-        listEl.innerHTML = d.items.map(i => `
+        const sortedItems = [...d.items].sort((a, b) =>
+            invSortDesc ? b.value - a.value : a.value - b.value
+        );
+
+        listEl.innerHTML = sortedItems.map(i => `
             <div class="inventory-item" data-rarity="${i.rarity}">
                 <div class="inv-emoji">${i.emoji}</div>
                 <div class="inv-info">
@@ -2601,13 +2605,16 @@ async function loadUpgrader() {
 function renderUpgraderInv() {
     const el = document.getElementById('upgInvList');
     if (!el) return;
-    if (!upgraderItems.length) {
+    const sorted = [...upgraderItems].sort((a, b) =>
+        upgSortDesc ? b.value - a.value : a.value - b.value
+    );
+    if (!sorted.length) {
         el.innerHTML = '<div class="upg-inv-empty">Инвентарь пуст</div>';
         const cnt = document.getElementById('upgSelectedCount');
         if (cnt) cnt.textContent = '';
         return;
     }
-    el.innerHTML = upgraderItems.map(i => `
+        el.innerHTML = sorted.map(i => `
         <div class="upg-inv-item ${upgraderSelectedPks.has(i.id) ? 'selected' : ''}" onclick="selectUpgraderItem(${i.id})">
             <div class="upg-inv-item-emoji">${i.emoji}</div>
             <div class="upg-inv-item-name">${i.name}</div>
@@ -3507,6 +3514,22 @@ async function adminClearWinrateFor(userId) {
         toast('✅ Сброшено', 'success');
         loadAdminWinrates();
     } catch (e) { toast(e.message, 'error'); }
+}
+let invSortDesc = true;
+let upgSortDesc = true;
+
+function toggleInvSort() {
+    invSortDesc = !invSortDesc;
+    const el = document.getElementById('invSortBtn');
+    if (el) el.textContent = invSortDesc ? '💎 Дорогие ↓' : '💎 Дешёвые ↑';
+    loadInventory();
+}
+
+function toggleUpgSort() {
+    upgSortDesc = !upgSortDesc;
+    const el = document.getElementById('upgSortBtn');
+    if (el) el.textContent = upgSortDesc ? '💎 Дорогие ↓' : '💎 Дешёвые ↑';
+    renderUpgraderInv();
 }
 /* ═══ BOOTSTRAP ═══ */
 async function bootstrap() {
