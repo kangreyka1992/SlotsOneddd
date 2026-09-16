@@ -2525,3 +2525,12 @@ select.input { text-align: left; letter-spacing: 0; }
   border-color: #ff5722;
   transform: scale(0.95);
 }
+.upg-sort-btn {
+  padding: 4px 10px;
+  background: rgba(255,87,34,0.15);
+  border: 1px solid rgba(255,87,34,0.3);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ff5722;
+}
