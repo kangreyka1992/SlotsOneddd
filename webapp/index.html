@@ -121,11 +121,10 @@
     </section>
 
     <section class="screen" id="screen-inventory">
-      <h3 class="section-title">🎒 Инвентарь</h3>
-      <div class="inventory-stats" id="inventoryStats"></div>
-      <button class="btn-primary" onclick="sellAllItems()" style="margin-bottom: 12px;">💸 Продать всё</button>
-      <div class="inventory-list" id="inventoryList"></div>
-    </section>
+  <h3 class="section-title">🎒 Инвентарь</h3>
+  <div class="inventory-stats" id="inventoryStats"></div>
+  <button class="btn-secondary" onclick="toggleInvSort()" id="invSortBtn" style="width:100%; margin-bottom:8px;">💎 Дорогие ↓</button>
+  <button class="btn-primary" onclick="sellAllItems()" style="margin-bottom: 12px;">💸 Продать всё</button>
 
     <section class="screen" id="screen-upgrader">
       <!-- Заголовок -->
@@ -182,7 +181,7 @@
       <div class="upg-section">
         <div class="upg-section-title">
           <span>🎒 Твой инвентарь</span>
-          <span id="upgSelectedCount" class="upg-selected-count"></span>
+          <button class="upg-sort-btn" onclick="toggleUpgSort()" id="upgSortBtn">💎 Дорогие ↓</button>
         </div>
         <div class="upg-inv-list" id="upgInvList"></div>
       </div>
