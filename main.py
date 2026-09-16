@@ -676,7 +676,7 @@ async def api_mines_cashout(request: Request):
     await add_balance(uid, prize)
     await update_quest_progress(uid, "bets_count", 1)
     await update_quest_progress(uid, "wagered", bet)
-    await update_quest_progress(uid, "game_crash", 1)
+    await update_quest_progress(uid, "game_mines", 1)
     await update_quest_progress(uid, "wins", 1)
     await log_game(uid, bet, prize)
     await log_house_flow(wagered=bet, paid=prize)
@@ -832,9 +832,23 @@ async def api_crash_cashout(request: Request):
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
     await log_house_flow(wagered=bet, paid=prize)
+    await update_quest_progress(uid, "bets_count", 1)
+    await update_quest_progress(uid, "wagered", bet)
+    await update_quest_progress(uid, "game_crash", 1)
+    await update_quest_progress(uid, "wins", 1)
     await unlock_achievement(uid, "first_bet")
     if prize > bet:
         await unlock_achievement(uid, "first_win")
+    if mult >= game["crash_at"]:
+        bet = game["bet"]
+        del crash_games[uid]
+        await log_game(uid, bet, 0)
+        await log_house_flow(wagered=bet, paid=0)
+        await update_quest_progress(uid, "bets_count", 1)
+        await update_quest_progress(uid, "wagered", bet)
+        await update_quest_progress(uid, "game_crash", 1)
+        return {
+            "crashed": True,
     return {"prize": prize, "mult": mult, "bet": bet, "balance": await get_balance(uid)}
 
 
