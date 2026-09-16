@@ -6,9 +6,232 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=330">
+<link rel="stylesheet" href="style.css?v=331">
+<style>
+/* ═══════════ НОВЫЕ ЭФФЕКТЫ ═══════════ */
+
+/* 1. SPLASH */
+.splash {
+  position: fixed; inset: 0; z-index: 9999;
+  background: radial-gradient(ellipse at center, #151b26 0%, #0a0e14 70%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 20px;
+  transition: opacity 0.5s, visibility 0.5s;
+}
+.splash.hide { opacity: 0; visibility: hidden; }
+.splash-logo {
+  font-size: 80px;
+  animation: splashPulse 1.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 30px #ff9b26);
+}
+@keyframes splashPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15) rotate(8deg); }
+}
+.splash-name {
+  font-size: 22px; font-weight: 900; letter-spacing: 3px;
+  color: #fff; font-family: 'Inter', sans-serif;
+}
+.splash-name span { color: #ff9b26; }
+.splash-loader {
+  width: 120px; height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px; overflow: hidden;
+  position: relative;
+}
+.splash-loader::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, #ff9b26, transparent);
+  animation: splashLoad 1.2s ease-in-out infinite;
+}
+@keyframes splashLoad {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* 2. СИЯНИЕ КАРТОЧЕК */
+.case-card {
+  position: relative;
+  transition: transform 0.15s, box-shadow 0.3s;
+}
+.case-card::after {
+  content: '';
+  position: absolute; inset: -2px;
+  border-radius: var(--radius, 10px);
+  background: linear-gradient(135deg, #ff9b26, transparent 60%);
+  opacity: 0; z-index: -1;
+  transition: opacity 0.3s;
+  filter: blur(12px);
+}
+.case-card:active::after { opacity: 0.8; }
+
+/* 4. ГРАДИЕНТНАЯ ОБВОДКА БАЛАНСА */
+.app-balance-chip {
+  position: relative;
+  background: var(--bg-elevated, #232732);
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+.app-balance-chip::before {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #ff9b26, transparent, #ff9b26);
+  background-size: 200% 200%;
+  z-index: -1;
+  animation: borderShift 3s linear infinite;
+}
+@keyframes borderShift {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 200%; }
+}
+
+/* 5. ПОЯВЛЕНИЕ КНОПОК СТАВКИ */
+.bets .bet-btn {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: betIn 0.4s ease forwards;
+}
+.bets .bet-btn:nth-child(1)  { animation-delay: 0.00s; }
+.bets .bet-btn:nth-child(2)  { animation-delay: 0.05s; }
+.bets .bet-btn:nth-child(3)  { animation-delay: 0.10s; }
+.bets .bet-btn:nth-child(4)  { animation-delay: 0.15s; }
+.bets .bet-btn:nth-child(5)  { animation-delay: 0.20s; }
+.bets .bet-btn:nth-child(6)  { animation-delay: 0.25s; }
+.bets .bet-btn:nth-child(7)  { animation-delay: 0.30s; }
+.bets .bet-btn:nth-child(8)  { animation-delay: 0.35s; }
+.bets .bet-btn:nth-child(9)  { animation-delay: 0.40s; }
+.bets .bet-btn:nth-child(10) { animation-delay: 0.45s; }
+.bets .bet-btn.allin { animation-delay: 0.50s; }
+@keyframes betIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 6. БЛИК НА LIVE-FEED */
+.feed-item {
+  position: relative;
+  overflow: hidden;
+}
+.feed-item::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(61,214,140,0.3), transparent);
+  transform: translateX(-100%);
+  animation: feedShine 3s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes feedShine {
+  0%, 60% { transform: translateX(-100%); }
+  100%    { transform: translateX(100%); }
+}
+
+/* 7. БЛИК УРОВНЯ */
+.level-fill {
+  position: relative;
+  overflow: hidden;
+}
+.level-fill::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: levelShine 2s ease-in-out infinite;
+}
+@keyframes levelShine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* 8. ПЛАВАЮЩИЙ ФОН */
+.home-bg {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  opacity: 0.05;
+}
+.home-bg span {
+  position: absolute;
+  font-size: 40px;
+  animation: floatUp 20s linear infinite;
+  bottom: 0;
+}
+.home-bg span:nth-child(1) { left: 10%; animation-delay: 0s; }
+.home-bg span:nth-child(2) { left: 30%; animation-delay: 4s; }
+.home-bg span:nth-child(3) { left: 50%; animation-delay: 8s; }
+.home-bg span:nth-child(4) { left: 70%; animation-delay: 12s; }
+.home-bg span:nth-child(5) { left: 85%; animation-delay: 16s; }
+.home-bg span:nth-child(6) { left: 20%; animation-delay: 2s; }
+@keyframes floatUp {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(-100vh) rotate(360deg); opacity: 0; }
+}
+
+/* 9. ТОП-ИГРОКИ */
+.top-item {
+  position: relative;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.top-item.gold {
+  background: linear-gradient(135deg, rgba(255,193,7,0.25), var(--bg-card, #1a1d24));
+  border: 1px solid rgba(255,193,7,0.4);
+  box-shadow: 0 0 24px rgba(255,193,7,0.25);
+}
+.top-item.gold::before {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: var(--radius, 10px);
+  background: linear-gradient(135deg, transparent, rgba(255,193,7,0.4), transparent);
+  background-size: 200% 200%;
+  z-index: -1;
+  animation: borderShift 3s linear infinite;
+}
+.top-item.silver { box-shadow: 0 0 20px rgba(192,192,192,0.2); }
+.top-item.bronze { box-shadow: 0 0 20px rgba(205,127,50,0.2); }
+
+/* 10. SHOCKWAVE */
+.shockwave {
+  position: fixed;
+  top: 50%; left: 50%;
+  width: 0; height: 0;
+  border-radius: 50%;
+  border: 3px solid #ff9b26;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 4000;
+  animation: shockwave 1.2s ease-out forwards;
+  box-shadow: 0 0 40px #ff9b26, inset 0 0 40px #ff9b26;
+}
+@keyframes shockwave {
+  0%   { width: 0; height: 0; opacity: 1; }
+  100% { width: 150vmax; height: 150vmax; opacity: 0; }
+}
+
+/* BONUS: SKELETON */
+.case-card.loading {
+  background: linear-gradient(90deg, #1a1d24 0%, #232732 50%, #1a1d24 100%);
+  background-size: 200% 100%;
+  animation: skeleton 1.5s infinite;
+  min-height: 140px;
+}
+@keyframes skeleton {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+</style>
 </head>
 <body>
+
+<!-- SPLASH -->
+<div id="splash" class="splash">
+  <div class="splash-logo">🎰</div>
+  <div class="splash-name">SLOTS<span>GAMING</span></div>
+  <div class="splash-loader"></div>
+</div>
+
 <div id="app">
 
 <header class="app-header">
@@ -36,6 +259,12 @@
   <main class="screens">
 
    <section class="screen active" id="screen-home">
+
+  <!-- Плавающий фон -->
+  <div class="home-bg">
+    <span>💎</span><span>🎰</span><span>🪙</span>
+    <span>🎲</span><span>⭐</span><span>🍒</span>
+  </div>
 
   <!-- Баннер -->
   <div class="hero-banner">
@@ -669,6 +898,7 @@
     <div class="cr-multi hidden" id="crMulti"></div>
   </div>
 </div>
+
 <script>
   window.onerror = function(message, source, lineno, colno, error) {
     console.error('[JS ERROR]', message, '|', source, lineno + ':' + colno);
@@ -683,6 +913,6 @@
   };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=330"></script>
+<script src="app.js?v=331"></script>
 </body>
 </html>
