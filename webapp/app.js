@@ -3222,10 +3222,15 @@ async function loadBattlePass() {
         document.getElementById('bpSeason').textContent = d.season;
         document.getElementById('bpLevel').textContent = d.level;
         document.getElementById('bpXp').textContent = fmt(d.xp);
-        document.getElementById('bpXpMax').textContent = fmt(d.level * d.xp_per_level);
+        document.getElementById('bpXpMax').textContent = fmt(d.xp_per_level);
 
-        const currentXp = d.xp - (d.level - 1) * d.xp_per_level;
-        const percent = Math.min(100, (currentXp / d.xp_per_level) * 100);
+        let currentXp;
+        if (d.level >= d.max_level) {
+            currentXp = d.xp_per_level;
+        } else {
+            currentXp = d.xp - (d.level - 1) * d.xp_per_level;
+        }
+        const percent = Math.min(100, Math.max(0, (currentXp / d.xp_per_level) * 100));
         document.getElementById('bpXpFill').style.width = percent + '%';
 
         const premiumBtn = document.getElementById('bpPremiumBtn');
