@@ -1663,15 +1663,6 @@ select.input { text-align: left; letter-spacing: 0; }
 .case-roulette.csgo .cr-item {
   transition: transform 0.3s, opacity 0.5s;
 }
-.case-roulette.csgo.zoom .cr-item:not(.winner) {
-  opacity: 0.15;
-  transform: scale(0.7);
-}
-.case-roulette.csgo.zoom .cr-item.winner {
-  transform: scale(1.7);
-  z-index: 100;
-  box-shadow: 0 0 60px currentColor;
-}
 .goal-zone.used {
   background: rgba(90, 99, 115, 0.25) !important;
   border-color: rgba(90, 99, 115, 0.4) !important;
