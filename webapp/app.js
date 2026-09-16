@@ -2912,15 +2912,6 @@ async function upgraderPlay() {
     } else {
         finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
     }
-async function upgraderPlay() {
-    if (upgraderBusy) return;
-    ...
-    let finalPercent;
-    if (d.win) {
-        finalPercent = Math.random() * chancePercent * 0.95;
-    } else {
-        finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
-    }
 
     // ⭐ ПРОКРУТКА — быстрая (1с) или обычная (3с)
     const spinDuration = upgraderFastMode ? 0.4 : 3.0;
@@ -2943,7 +2934,6 @@ async function upgraderPlay() {
         });
     }
 
-    // Тикающий звук (только в обычном режиме)
     let tickInt = null;
     if (!upgraderFastMode) {
         tickInt = setInterval(() => {
@@ -2954,11 +2944,11 @@ async function upgraderPlay() {
     await new Promise(r => setTimeout(r, spinMs));
     if (tickInt) clearInterval(tickInt);
 
-// Показываем финальный процент
-percentEl.textContent = finalPercent.toFixed(2) + '%';
-percentEl.classList.remove('green', 'yellow', 'red');
-if (d.win) percentEl.classList.add('green');
-else percentEl.classList.add('red');
+    percentEl.textContent = finalPercent.toFixed(2) + '%';
+    percentEl.classList.remove('green', 'yellow', 'red');
+    if (d.win) percentEl.classList.add('green');
+    else percentEl.classList.add('red');
+
     const overlay = document.createElement('div');
     overlay.className = 'upg-overlay';
     document.body.appendChild(overlay);
