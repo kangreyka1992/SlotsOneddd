@@ -38,6 +38,7 @@ let gameLocked = false;
 let freeCaseTimer = null;
 let casesCache = [];
 let caseRouletteBusy = false;
+let caseFastMode = false;
 let currentCaseInfo = null;
 let adminStatsTimer = null;
 
@@ -2398,7 +2399,7 @@ async function openCase(c, count = 1) {
     const jitter = (Math.random() - 0.5) * (ITEM_W * 0.4);
     const targetX = finalX + jitter;
 
-    const DURATION = 2500;   // было 6000
+    const DURATION = caseFastMode ? 800 : 6000;
     const start = performance.now();
     let lastTick = 0;
 
@@ -2477,7 +2478,16 @@ async function openCase(c, count = 1) {
 
     requestAnimationFrame(animate);
 }
-
+function toggleFastCase() {
+    caseFastMode = !caseFastMode;
+    const btn = document.getElementById('casesFastBtn');
+    if (btn) {
+        btn.textContent = caseFastMode ? '⚡ БЫСТРО: ВКЛ' : '⚡ Быстрый прокрут';
+        btn.classList.toggle('active', caseFastMode);
+    }
+    haptic();
+    toast(caseFastMode ? '⚡ Быстрый прокрут ВКЛ' : 'Обычный прокрут');
+}
 function closeCaseRoulette() {
     if (caseRouletteBusy) return;
     const overlay = document.getElementById('caseRoulette');
