@@ -1729,11 +1729,30 @@ function renderPay() {
     const el = document.getElementById('payGrid');
     if (!el) return;
     el.innerHTML = '';
+
+    // ─── Звёзды (как было) ───
     PAY_PACKS.forEach(s => {
         const btn = document.createElement('button');
         btn.className = 'withdraw-btn';
         btn.textContent = `${s} ⭐ → ${fmt(s * 100)} 🪙`;
         btn.onclick = () => buyStars(s);
+        el.appendChild(btn);
+    });
+
+    // ─── Карта / Крипта (Paygate) ───
+    [5, 10, 25, 50, 100].forEach(usd => {
+        const btn = document.createElement('button');
+        btn.className = 'withdraw-btn';
+        btn.textContent = `💳 $${usd} → ${fmt(usd * 100)} 🪙`;
+        btn.onclick = async () => {
+            try {
+                haptic();
+                const d = await api('/api/paygate/create', { amount_usd: usd });
+                tg.openLink(d.pay_url);
+            } catch (e) {
+                toast(e.message, 'error');
+            }
+        };
         el.appendChild(btn);
     });
 }
