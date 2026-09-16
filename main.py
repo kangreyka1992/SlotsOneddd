@@ -790,6 +790,9 @@ async def api_crash_status(request: Request):
         del crash_games[uid]
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
+        await update_quest_progress(uid, "bets_count", 1)
+        await update_quest_progress(uid, "wagered", bet)
+        await update_quest_progress(uid, "game_crash", 1)
         return {
             "crashed": True,
             "mult": game["crash_at"],
@@ -805,7 +808,6 @@ async def api_crash_status(request: Request):
         "bet": game["bet"],
         "balance": await get_balance(uid),
     }
-
 
 @app.post("/api/crash/cashout")
 async def api_crash_cashout(request: Request):
@@ -839,18 +841,7 @@ async def api_crash_cashout(request: Request):
     await unlock_achievement(uid, "first_bet")
     if prize > bet:
         await unlock_achievement(uid, "first_win")
-    if mult >= game["crash_at"]:
-        bet = game["bet"]
-        del crash_games[uid]
-        await log_game(uid, bet, 0)
-        await log_house_flow(wagered=bet, paid=0)
-        await update_quest_progress(uid, "bets_count", 1)
-        await update_quest_progress(uid, "wagered", bet)
-        await update_quest_progress(uid, "game_crash", 1)
-        return {
-            "crashed": True,
     return {"prize": prize, "mult": mult, "bet": bet, "balance": await get_balance(uid)}
-
 
 # ═══════════ КОСТИ ═══════════
 
