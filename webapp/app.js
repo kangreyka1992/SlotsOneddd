@@ -41,6 +41,8 @@ let caseRouletteBusy = false;
 let caseFastMode = false;
 let currentCaseInfo = null;
 let adminStatsTimer = null;
+let upgraderExtraCoins = 0;   // доп. монеты с баланса
+
 
 /* UPGRADER */
 let upgraderItems = [];
@@ -76,7 +78,62 @@ function playTone(freq, duration, type = 'sine', vol = 0.08) {
         osc.stop(audioCtx.currentTime + duration);
     } catch (e) {}
 }
+function upgraderSetExtra(amount) {
+    const max = Math.max(0, profile.balance || 0);
+    upgraderExtraCoins = Math.max(0, Math.min(max, Math.floor(amount || 0)));
 
+    const input = document.getElementById('upgExtraCoins');
+    if (input) input.value = upgraderExtraCoins || '';
+
+    const balEl = document.getElementById('upgExtraBalance');
+    if (balEl) balEl.textContent = fmt(max);
+
+    upgraderUpdateSummary();
+    updateUpgraderChance();
+}
+
+function upgraderAddCoins(mode) {
+    haptic();
+    const balance = profile.balance || 0;
+    const skinsTotal = getSelectedTotal();
+
+    if (mode === 0) {
+        upgraderSetExtra(0);
+        return;
+    }
+    if (mode === -1) {
+        // сброс
+        upgraderSetExtra(0);
+        return;
+    }
+    if (mode === 1) {
+        // ×2 — добавить столько же, сколько скинов дают
+        upgraderSetExtra(Math.min(balance, upgraderExtraCoins + (skinsTotal || 100)));
+        return;
+    }
+    // mode = 0.25 / 0.5 — процент от ТЕКУЩЕЙ ставки (скины + уже введённые монеты)
+    const current = skinsTotal + upgraderExtraCoins;
+    const add = Math.floor(current * mode);
+    upgraderSetExtra(upgraderExtraCoins + add);
+}
+
+function upgraderExtraChanged() {
+    const input = document.getElementById('upgExtraCoins');
+    if (!input) return;
+    const val = Math.floor(Number(input.value) || 0);
+    upgraderSetExtra(val);
+}
+
+function upgraderUpdateSummary() {
+    const skinsTotal = getSelectedTotal();
+    const extra = upgraderExtraCoins;
+    const total = skinsTotal + extra;
+
+    const sum = document.getElementById('upgExtraSummary');
+    if (sum) {
+        sum.innerHTML = `Ставка: <b>${fmt(skinsTotal)}</b> 🪙 (скины) + <b>${fmt(extra)}</b> 🪙 (монеты) = <b>${fmt(total)}</b> 🪙`;
+    }
+}
 const SFX = {
     click:   () => playTone(880, 0.06, 'square', 0.05),
     spin:    () => playTone(440, 0.1, 'sawtooth', 0.04),
@@ -2707,6 +2764,15 @@ function selectUpgraderItem(pk) {
     }
     renderUpgraderInv();
     renderUpgraderMyItem();
+    upgraderUpdateSummary();   // ← добавили
+    updateUpgraderChance();
+}
+
+function selectUpgraderTarget(idx) {
+    haptic();
+    upgraderTargetIdx = idx;
+    renderUpgraderTarget();
+    upgraderUpdateSummary();   // ← добавили
     updateUpgraderChance();
 }
 
@@ -2731,7 +2797,7 @@ function renderUpgraderMyItem() {
         `;
         return;
     }
-    const total = getSelectedTotal();
+    const total = getSelectedTotal() + upgraderExtraCoins;
     // Показываем первый предмет крупно + счётчик
     const first = items[0];
     el.innerHTML = `
@@ -2919,17 +2985,159 @@ function upgraderQuickChance(percent) {
 
 async function upgraderPlay() {
     if (upgraderBusy) return;
-    if (upgraderSelectedPks.size === 0) { toast('Выбери предметы', 'error'); return; }
-    if (upgraderTargetIdx < 0) { toast('Выбери цель', 'error'); return; }
+
+    const skinsTotal = getSelectedTotal();
+    const extra = upgraderExtraCoins || 0;
+
+    if (upgraderSelectedPks.size === 0 && extra <= 0) {
+        toast('Выбери предметы или введи сумму монет', 'error');
+        return;
+    }
+    if (upgraderTargetIdx < 0) {
+        toast('Выбери цель', 'error');
+        return;
+    }
 
     const target = upgraderTargets[upgraderTargetIdx];
-    const total = getSelectedTotal();
+    const total = skinsTotal + extra;
 
     if (target.price_coins <= total) {
         toast('⚠️ Цель дешевле ставки — так нельзя', 'error');
         return;
     }
 
+    if (extra > (profile.balance || 0)) {
+        toast('Недостаточно монет', 'error');
+        return;
+    }
+
+    // ═══ БЛОКИРУЕМ ИНТЕРФЕЙС ═══
+    upgraderBusy = true;
+    haptic('medium');
+
+    const blocker = document.getElementById('upgradeBlocker');
+    if (blocker) blocker.classList.remove('hidden');
+
+    const arrowEl = document.getElementById('upgArrowSpin');
+    const percentEl = document.getElementById('upgPercent');
+    const goBtn = document.getElementById('upgGoBtn');
+
+    if (goBtn) goBtn.disabled = true;
+
+    let d;
+    try {
+        d = await api('/api/upgrader/play', {
+            item_pks: Array.from(upgraderSelectedPks),
+            target_idx: upgraderTargetIdx,
+            extra_coins: extra,
+        });
+    } catch (e) {
+        toast(e.message, 'error');
+        upgraderBusy = false;
+        if (goBtn) goBtn.disabled = false;
+        if (blocker) blocker.classList.add('hidden');
+        return;
+    }
+
+    // ═══ Списываем доп. монеты локально (для UI) ═══
+    if (extra > 0) {
+        profile.balance = Math.max(0, (profile.balance || 0) - extra);
+    }
+
+    const chance = Math.min(0.95, Math.max(0.01, d.total_value / d.target.price_coins));
+    const chancePercent = chance * 100;
+
+    let finalPercent;
+    if (d.win) {
+        finalPercent = Math.random() * chancePercent * 0.95;
+    } else {
+        finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
+    }
+
+    // ⭐ ПРОКРУТКА — быстрая (0.4с) или обычная (3с)
+    const spinDuration = upgraderFastMode ? 0.4 : 3.0;
+    const spinMs = upgraderFastMode ? 400 : 3000;
+    const baseTurns = upgraderFastMode
+        ? 1 + Math.floor(Math.random() * 2)
+        : 4 + Math.floor(Math.random() * 3);
+
+    const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
+
+    if (arrowEl) {
+        arrowEl.classList.remove('animate');
+        arrowEl.style.transition = 'none';
+        arrowEl.style.transform = 'rotate(0deg)';
+        void arrowEl.offsetWidth;
+
+        requestAnimationFrame(() => {
+            arrowEl.style.transition = `transform ${spinDuration}s cubic-bezier(0.15, 0.9, 0.15, 1)`;
+            arrowEl.style.transform = `rotate(${finalAngle}deg)`;
+        });
+    }
+
+    // Тикающий звук (только в обычном режиме)
+    let tickInt = null;
+    if (!upgraderFastMode) {
+        tickInt = setInterval(() => {
+            playTone(800 + Math.random() * 400, 0.02, 'square', 0.02);
+        }, 100);
+    }
+
+    await new Promise(r => setTimeout(r, spinMs));
+    if (tickInt) clearInterval(tickInt);
+
+    // Показываем финальный процент
+    percentEl.textContent = finalPercent.toFixed(2) + '%';
+    percentEl.classList.remove('green', 'yellow', 'red');
+    if (d.win) percentEl.classList.add('green');
+    else percentEl.classList.add('red');
+
+    // ═══ СНИМАЕМ БЛОКИРОВКУ перед показом результата ═══
+    if (blocker) blocker.classList.add('hidden');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'upg-overlay';
+    document.body.appendChild(overlay);
+
+    if (d.win) {
+        SFX.jackpot();
+        confettiJackpot();
+        overlay.innerHTML = `
+            <div class="upg-result-icon">${d.target.emoji}</div>
+            <div class="upg-result-text win">УСПЕХ!</div>
+            <div class="upg-result-name">${d.target.name}</div>
+            <div class="upg-result-price">+${fmt(d.target.price_coins)} 🪙</div>
+            ${extra > 0 ? `<div class="upg-result-name" style="font-size:12px;opacity:0.7;">Ставка: ${fmt(skinsTotal)} (скины) + ${fmt(extra)} (монеты)</div>` : ''}
+        `;
+    } else {
+        SFX.lose();
+        overlay.innerHTML = `
+            <div class="upg-result-icon">💀</div>
+            <div class="upg-result-text lose">НЕ ПОВЕЗЛО</div>
+            <div class="upg-result-name">Предметы потеряны</div>
+            <div class="upg-result-price">−${fmt(d.total_value)} 🪙</div>
+            ${extra > 0 ? `<div class="upg-result-name" style="font-size:12px;opacity:0.7;">Ставка: ${fmt(skinsTotal)} (скины) + ${fmt(extra)} (монеты)</div>` : ''}
+        `;
+    }
+
+    haptic(d.win ? 'success' : 'error');
+    updateBalance(d.balance);
+    loadProfile();
+    addHistory('upgrader', d.total_value, d.win ? d.target.price_coins : 0);
+
+    setTimeout(() => {
+        overlay.remove();
+        upgraderBusy = false;
+        if (goBtn) goBtn.disabled = false;
+
+        // ═══ СБРОС ДОП. МОНЕТ ═══
+        upgraderExtraCoins = 0;
+        const input = document.getElementById('upgExtraCoins');
+        if (input) input.value = '';
+
+        loadUpgrader();
+    }, 2500);
+}
     // ═══ БЛОКИРУЕМ ИНТЕРФЕЙС ═══
     upgraderBusy = true;
     haptic('medium');
