@@ -1822,7 +1822,7 @@ select.input { text-align: left; letter-spacing: 0; }
   z-index: 1;
 }
 
-.case-info {
+.case-card-info {
   padding: 8px 10px 10px;
 }
 .case-name {
