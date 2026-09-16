@@ -1730,7 +1730,7 @@ function renderPay() {
     if (!el) return;
     el.innerHTML = '';
 
-    // ⭐ Звёзды (Telegram Stars) — оставляем
+    // ⭐ Звёзды (Telegram Stars)
     PAY_PACKS.forEach(s => {
         const btn = document.createElement('button');
         btn.className = 'withdraw-btn';
@@ -1739,11 +1739,11 @@ function renderPay() {
         el.appendChild(btn);
     });
 
-    // 💎 USDC (Polygon) — прямое пополнение
-    [5, 10, 25, 50, 100].forEach(usd => {
+    // 💎 USDC (Polygon) — 1, 2, 5, 10, 25
+    [1, 2, 5, 10, 25].forEach(usd => {
         const btn = document.createElement('button');
         btn.className = 'withdraw-btn';
-        btn.textContent = `💎 $${usd} → ${fmt(usd * 100)} 🪙`;
+        btn.textContent = `💎 $${usd} → ${fmt(usd * 500)} 🪙`;
         btn.onclick = () => cryptoPay(usd);
         el.appendChild(btn);
     });
