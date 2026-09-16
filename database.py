@@ -20,6 +20,16 @@ async def init_db():
                 referrals INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS live_feed (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                game TEXT NOT NULL,
+                win INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS payments (
@@ -718,3 +728,28 @@ async def get_house_stats():
                 "profit": profit,
                 "rtp": round(rtp, 2),
             }
+async def log_live_win(user_id: int, username: str, game: str, win: int):
+    """Записывает крупный выигрыш в ленту"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO live_feed (user_id, username, game, win) VALUES (?, ?, ?, ?)",
+            (user_id, username, game, win),
+        )
+        await db.commit()
+        # Оставляем только последние 100 записей
+        await db.execute(
+            "DELETE FROM live_feed WHERE id NOT IN "
+            "(SELECT id FROM live_feed ORDER BY id DESC LIMIT 100)"
+        )
+        await db.commit()
+
+
+async def get_live_feed(limit: int = 15):
+    """Возвращает последние крупные выигрыши"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT username, game, win, created_at FROM live_feed "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ) as cur:
+            return await cur.fetchall()
