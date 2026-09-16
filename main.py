@@ -430,11 +430,6 @@ async def api_slots(request: Request):
         mult = 0
     else:
         win = base_win
-    win = await _apply_payout(uid, win)
-
-    if win > 0:
-        await add_balance(uid, win)
-    await log_game(uid, bet, win)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     nb = await get_balance(uid)
@@ -554,7 +549,7 @@ async def api_slots2_spin(request: Request):
 
     await add_balance(uid, -total_bet)
 
-        field, total_win, line_wins = _slot_spin(bet, lines_count)
+    field, total_win, line_wins = _slot_spin(bet, lines_count)
 
     # подкрутка
     base_win_bool = total_win > 0
@@ -676,7 +671,7 @@ async def api_mines_open(request: Request):
                     n += 1
         return n
 
-        # подкрутка: с шансом «не взрываемся»
+    # подкрутка: с шансом «не взрываемся»
     hit_mine = idx in game["mines"]
     if hit_mine:
         winrate, _ = await get_winrate(uid)
@@ -703,20 +698,20 @@ async def api_mines_open(request: Request):
             "balance": await get_balance(uid),
         }
 
-    game["opened"].add(idx)
+        game["opened"].add(idx)
     safe = total - game["mines_count"]
 
     if len(game["opened"]) >= safe:
         step_mult = MINES_MULT[game["mines_count"]]
-    prize = int(game["bet"] * (1 + step_mult * len(game["opened"])))
-    prize = await _apply_payout(uid, prize)
-    bet = game["bet"]
-    await add_balance(uid, prize)
-        await log_game(uid, game["bet"], win)
-        await add_battle_pass_xp(uid, game["bet"] // 10)
-        await log_house_flow(wagered=game["bet"], paid=win)
+        win = int(game["bet"] * (1 + step_mult * safe))
+        win = await _apply_payout(uid, win)
+        bet = game["bet"]
+        await add_balance(uid, win)
+        await log_game(uid, bet, win)
+        await add_battle_pass_xp(uid, bet // 10)
+        await log_house_flow(wagered=bet, paid=win)
         await update_quest_progress(uid, "bets_count", 1)
-        await update_quest_progress(uid, "wagered", game["bet"])
+        await update_quest_progress(uid, "wagered", bet)
         await update_quest_progress(uid, "game_mines", 1)
         await update_quest_progress(uid, "wins", 1)
         del mines_games[uid]
@@ -813,7 +808,7 @@ async def api_crash_start(request: Request):
 
     await add_balance(uid, -bet)
 
-        r = random.random()
+    r = random.random()
     if r < 0.05:
         crash_at = 1.00
     else:
@@ -1142,41 +1137,6 @@ async def api_plinko(request: Request):
     mult = mults[slot]
     base_win = int(bet * mult)
 
-    # подкрутка
-    base_win_bool = base_win > bet
-    final_win_bool = await _apply_winrate(uid, base_win_bool)
-    if final_win_bool and not base_win_bool:
-        win = int(bet * 1.5)
-        mult = 1.5
-    elif not final_win_bool and base_win_bool:
-        win = int(bet * 0.5)
-        mult = 0.5
-    else:
-        win = base_win
-    win = await _apply_payout(uid, win)
-
-    if win > 0:
-        await add_balance(uid, win)
-
-    await log_game(uid, bet, win)
-    await add_battle_pass_xp(uid, bet // 10)
-    await log_house_flow(wagered=bet, paid=win)
-    if win >= 1000:
-        username = user.get("username") or "Игрок"
-        await log_live_win(uid, username, "Plinko", win)
-    nb = await get_balance(uid)
-    await update_quest_progress(uid, "bets_count", 1)
-    await update_quest_progress(uid, "wagered", bet)
-    if win > bet:
-        await update_quest_progress(uid, "wins", 1)
-
-    await unlock_achievement(uid, "first_bet")
-    if win > bet:
-        await unlock_achievement(uid, "first_win")
-    if win >= 100000:
-        await unlock_achievement(uid, "big_win")
-
-    return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
 # ═══════════ PENALTI ═══════════
@@ -1426,7 +1386,7 @@ async def api_coin_flip(request: Request):
 
     await add_balance(uid, -bet)
 
-     result = random.choice(["heads", "tails"])
+    result = random.choice(["heads", "tails"])
     base_win = int(bet * 1.95) if result == side else 0
     base_win_bool = base_win > 0
     final_win_bool = await _apply_winrate(uid, base_win_bool)
@@ -1444,8 +1404,6 @@ async def api_coin_flip(request: Request):
     win = await _apply_payout(uid, win)
     if win > 0:
         await add_balance(uid, win)
-
-    await log_game(uid, bet, win)
 
     await log_game(uid, bet, win)
     await add_battle_pass_xp(uid, bet // 10)
@@ -3114,9 +3072,6 @@ async def api_admin_winrate_clear(request: Request):
 
 @app.post("/api/admin/broadcast")
 async def api_admin_broadcast(request: Request):
-
-@app.post("/api/admin/broadcast")
-async def api_admin_broadcast(request: Request):
     data = await request.json()
     admin = admin_only(data.get("initData", ""))
     text = data.get("text", "").strip()
@@ -3135,43 +3090,6 @@ async def api_admin_broadcast(request: Request):
 
     await log_admin_action(admin["id"], "broadcast", None, f"sent={sent} failed={failed}")
     return {"ok": True, "sent": sent, "failed": failed}
-
-# ═══════════ ЛОГИКА ПОДКРУТКИ ═══════════
-
-from database import get_winrate
-
-async def _apply_winrate(uid: int, base_win: bool) -> bool:
-    """
-    base_win — «честный» результат (True=победа).
-    Возвращает итоговый результат с учётом настроек.
-    """
-    winrate, _ = await get_winrate(uid)
-    # winrate: 0..100 — целевой процент побед
-    # если base_win=False, но winrate высокий — с шансом даём победу
-    # если base_win=True, но winrate низкий — с шансом отменяем победу
-    r = random.random() * 100
-    if winrate >= 50:
-        # подыгрываем: если игрок проиграл, даём шанс на победу
-        if not base_win:
-            # насколько сильно подыгрываем
-            bias = (winrate - 50) / 50  # 0..1
-            return random.random() < bias
-        return True
-    else:
-        # мешаем: если игрок выиграл, шанс отменить
-        if base_win:
-            bias = (50 - winrate) / 50  # 0..1
-            return random.random() > bias
-        return False
-
-
-async def _apply_payout(uid: int, win_amount: int) -> int:
-    """Урезает/увеличивает выплату согласно payout_mult."""
-    _, payout_mult = await get_winrate(uid)
-    if payout_mult == 1.0 or win_amount <= 0:
-        return win_amount
-    return int(win_amount * payout_mult)
-
 
 if __name__ == "__main__":
     import os
