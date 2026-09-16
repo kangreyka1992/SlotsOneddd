@@ -289,6 +289,7 @@
         <button class="admin-tab" data-tab="money" onclick="switchAdminTab('money')">💰 Деньги</button>
         <button class="admin-tab" data-tab="promo" onclick="switchAdminTab('promo')">🎟 Промо</button>
         <button class="admin-tab" data-tab="inv" onclick="switchAdminTab('inv')">🎒 Инвентарь</button>
+        <button class="admin-tab" data-tab="winrate" onclick="switchAdminTab('winrate')">🎲 Подкрутка</button>
         <button class="admin-tab" data-tab="logs" onclick="switchAdminTab('logs')">📜 Логи</button>
       </div>
 
@@ -359,7 +360,18 @@
         <h4 class="admin-subtitle">Предметы</h4>
         <div id="admInvList"></div>
       </div>
-
+            <div class="admin-content hidden" id="admin-winrate">
+        <div class="admin-card">
+          <div class="admin-subtitle">🎲 Настроить винрейт</div>
+          <input class="input" id="wrTarget" placeholder="ID или @username (пусто = глобально)">
+          <input class="input" id="wrPercent" type="number" min="0" max="100" step="1" placeholder="Винрейт % (50 = честно, 100 = всегда выигрывает)">
+          <input class="input" id="wrPayout" type="number" min="0" max="10" step="0.1" placeholder="Множитель выплат (1.0 = как есть)">
+          <button class="btn-primary" onclick="adminSetWinrate()">Применить</button>
+          <button class="btn-secondary" onclick="adminClearWinrate()" style="margin-top:8px;">🗑 Сбросить</button>
+        </div>
+        <h4 class="admin-subtitle">📋 Активные настройки</h4>
+        <div id="admWinrateList"></div>
+      </div>
       <div class="admin-content hidden" id="admin-logs">
         <div id="admLogs"></div>
       </div>
