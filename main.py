@@ -378,6 +378,8 @@ async def api_slots(request: Request):
     uid = user["id"]
     bet = int(data.get("bet", 0))
 
+    print(f"🎰 bet={bet} balance={await get_balance(uid)}")   # ← ДОБАВЬ ЭТО
+
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
 
