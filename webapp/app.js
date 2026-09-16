@@ -2390,7 +2390,7 @@ async function openCase(c, count = 1) {
     const jitter = (Math.random() - 0.5) * (ITEM_W * 0.4);
     const targetX = finalX + jitter;
 
-    const DURATION = 6000;
+    const DURATION = 2500;   // было 6000
     const start = performance.now();
     let lastTick = 0;
 
@@ -2547,6 +2547,11 @@ async function renderHomeInventoryPreview() {
 
 async function sellItem(pk) {
     haptic();
+    const item = document.querySelector(`button[onclick="sellItem(${pk})"]`)
+        ?.closest('.inventory-item');
+    const name = item?.querySelector('.inv-name')?.textContent || 'предмет';
+    const value = item?.querySelector('.inv-sell-btn')?.textContent || '';
+    if (!confirm(`Продать «${name}» за ${value}?`)) return;
     try {
         const d = await api('/api/cases/sell', { item_pk: pk });
         toast(`✅ Продано за ${fmt(d.sold_value)} 🪙`, 'success');
@@ -2559,6 +2564,7 @@ async function sellItem(pk) {
 
 async function sellAllItems() {
     haptic('medium');
+    if (!confirm('Продать ВСЕ предметы из инвентаря?')) return;
     try {
         const d = await api('/api/cases/sell_all');
         if (d.count === 0) {
@@ -2880,7 +2886,7 @@ async function upgraderPlay() {
     }
 
     // ⭐ ПЛАВНАЯ ПРОКРУТКА — 3 секунды с замедлением
-const baseTurns = 3 + Math.floor(Math.random() * 2);  // 3-4 оборота
+const baseTurns = 1 + Math.floor(Math.random() * 2);  // 1-2 оборота
 const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
 
 if (arrowEl) {
@@ -2892,7 +2898,7 @@ if (arrowEl) {
 
     // Запускаем плавную прокрутку
     requestAnimationFrame(() => {
-        arrowEl.style.transition = 'transform 3s cubic-bezier(0.15, 0.9, 0.15, 1)';
+        arrowEl.style.transition = 'transform 1s cubic-bezier(0.15, 0.9, 0.15, 1)';
         arrowEl.style.transform = `rotate(${finalAngle}deg)`;
     });
 }
@@ -2902,8 +2908,8 @@ const tickInt = setInterval(() => {
     playTone(800 + Math.random() * 400, 0.02, 'square', 0.02);
 }, 100);
 
-// Ждём 3 секунды (пока крутится)
-await new Promise(r => setTimeout(r, 3000));
+// Ждём 1 секунду (пока крутится)
+await new Promise(r => setTimeout(r, 1000));
 
 clearInterval(tickInt);
 
