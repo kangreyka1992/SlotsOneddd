@@ -92,7 +92,8 @@ const SFX = {
 
 function toggleSound() {
     soundEnabled = !soundEnabled;
-    document.getElementById('soundToggle').textContent = soundEnabled ? '🔊' : '🔇';
+    const el = document.getElementById('soundToggle');
+    if (el) el.textContent = soundEnabled ? '🔊' : '🔇';
     toast(soundEnabled ? '🔊 Звук включён' : '🔇 Звук выключен');
 }
 
@@ -176,6 +177,33 @@ function renderHistory() {
             <span class="${cls}">${sign}${fmt(Math.abs(diff))} 🪙</span>
         </div>`;
     }).join('');
+}
+
+/* ═══ COPY TO CLIPBOARD ═══ */
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
+            .then(() => toast('✅ Скопировано'))
+            .catch(() => fallbackCopy(text));
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+        document.execCommand('copy');
+        toast('✅ Скопировано');
+    } catch (e) {
+        toast(text);
+    }
+    document.body.removeChild(ta);
 }
 
 /* ═══ CONFETTI ═══ */
@@ -333,10 +361,10 @@ function pushFeed() {
     el.prepend(item);
     while (el.children.length > 8) el.lastChild.remove();
 }
+
 function startHeroTimer() {
     const el = document.getElementById('heroTimer');
     if (!el) return;
-    // 7 дней от сегодняшней полуночи
     const target = new Date();
     target.setHours(23, 59, 59, 0);
     target.setDate(target.getDate() + 7);
@@ -353,6 +381,7 @@ function startHeroTimer() {
     tick();
     setInterval(tick, 1000);
 }
+
 function initToolbarFilters() {
     document.querySelectorAll('.toolbar-tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -388,13 +417,14 @@ function applyCasesFilter(filter) {
                 <div class="case-emoji">${c.emoji}</div>
             </div>
             <div class="case-rarity-bar" data-rarity="${rarityFromPrice(c.price_coins)}"></div>
-            <div class="case-info">
+            <div class="case-card-info">
                 <div class="case-name">${c.name}</div>
                 <div class="case-price">${fmt(c.price_coins)} 🪙</div>
             </div>
         </div>
     `).join('');
 }
+
 /* ═══ PROFILE ═══ */
 async function loadProfile() {
     try {
@@ -405,12 +435,12 @@ async function loadProfile() {
         const nameEl = document.getElementById('headerName');
         const profileNameEl = document.getElementById('profileName');
         const headerAvatar = document.getElementById('headerAvatar');
-        if (headerAvatar) headerAvatar.textContent = (d.username || 'И')[0].toUpperCase()
+        if (headerAvatar) headerAvatar.textContent = (d.username || 'И')[0].toUpperCase();
         const displayName = d.username ? '@' + d.username : 'Игрок';
         if (nameEl) nameEl.textContent = displayName;
         if (profileNameEl) profileNameEl.textContent = displayName;
         const avatarEl = document.getElementById('profileAvatar');
-        if (avatarEl) avatarEl.textContent = (d.username || 'И')[0].toUpperCase();;
+        if (avatarEl) avatarEl.textContent = (d.username || 'И')[0].toUpperCase();
 
         const sg = document.getElementById('statGames');
         const sw = document.getElementById('statWagered');
@@ -1251,7 +1281,7 @@ async function plinkoPlay(bet) {
     }, 800);
 }
 
-/* ═══ PENALTI (переделано) ═══ */
+/* ═══ PENALTI ═══ */
 function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
 }
@@ -1516,6 +1546,7 @@ async function penaltiCashout() {
         toast(e.message, 'error');
     }
 }
+
 /* ═══ МОНЕТКА ═══ */
 function initCoin() {
     renderCoinHistory();
@@ -1723,6 +1754,8 @@ function startDuelPolling() {
         } catch (e) {}
     }, 1500);
 }
+
+/* ═══ ПОКУПКА STARS ═══ */
 async function buyStars(stars) {
     try {
         haptic('medium');
@@ -1746,6 +1779,7 @@ async function buyStars(stars) {
         toast(e.message, 'error');
     }
 }
+
 /* ═══ ПОПОЛНЕНИЕ ═══ */
 function renderPay() {
     const el = document.getElementById('payGrid');
@@ -1767,7 +1801,6 @@ function renderPay() {
             </button>
         </div>
 
-        <!-- ⭐ STARS -->
         <div class="pay-method active" id="pay-method-stars">
             <div class="pay-header">
                 <div class="pay-header-icon">⭐</div>
@@ -1783,7 +1816,6 @@ function renderPay() {
             </div>
         </div>
 
-        <!-- 💎 CRYPTO -->
         <div class="pay-method" id="pay-method-crypto">
             <div class="pay-header">
                 <div class="pay-header-icon">💎</div>
@@ -1799,7 +1831,6 @@ function renderPay() {
             </div>
         </div>
 
-        <!-- 🇷🇺 СБП -->
         <div class="pay-method" id="pay-method-sbp">
             <div class="pay-header">
                 <div class="pay-header-icon">🇷🇺</div>
@@ -1831,7 +1862,6 @@ function switchPayTab(method) {
     });
 }
 
-/* ⭐ Telegram Stars */
 function renderStarsButtons() {
     const el = document.getElementById('payGridStars');
     if (!el) return;
@@ -1865,7 +1895,6 @@ function renderStarsButtons() {
     });
 }
 
-/* 💎 Крипта USDC (Polygon) */
 function renderCryptoButtons() {
     const el = document.getElementById('payGridCrypto');
     if (!el) return;
@@ -1899,7 +1928,6 @@ function renderCryptoButtons() {
     });
 }
 
-/* 🇷🇺 СБП / Карта РФ */
 function renderSbpButtons() {
     const el = document.getElementById('payGridSbp');
     if (!el) return;
@@ -1933,7 +1961,6 @@ function renderSbpButtons() {
     });
 }
 
-/* СБП заглушка — показываем инструкцию */
 function sbpPay(rub, coins) {
     haptic('medium');
     const overlay = document.createElement('div');
@@ -1963,20 +1990,6 @@ function sbpPay(rub, coins) {
     `;
     document.body.appendChild(overlay);
 }
-function copyToClipboard(text) {
-    try {
-        tg.showPopup({
-            title: 'Скопировано',
-            message: text,
-            buttons: [{type: 'close'}]
-        });
-        // Или через navigator.clipboard
-        navigator.clipboard.writeText(text);
-        toast('✅ Скопировано');
-    } catch (e) {
-        toast(text);
-    }
-}
 
 async function cryptoPay(amountUsd) {
     try {
@@ -1992,13 +2005,11 @@ async function cryptoPay(amountUsd) {
                 </div>
                 <img src="${d.qr_url}" style="width:220px; height:220px; background:#fff; padding:8px; border-radius:12px;">
 
-                <!-- ← КНОПКА ОТКРЫТИЯ В КОШЕЛЬКЕ -->
-               <button onclick="copyToClipboard('${d.wallet}')" style="...">
-                📋 Скопировать адрес
-                 
+                <button onclick="copyToClipboard('${d.wallet}')" class="btn-secondary" style="margin-top:12px; width:100%;">
+                    📋 Скопировать адрес
                 </button>
-                <button onclick="copyToClipboard('${d.amount}')" style="...">
-                📋 Скопировать сумму
+                <button onclick="copyToClipboard('${d.amount}')" class="btn-secondary" style="margin-top:8px; width:100%;">
+                    📋 Скопировать сумму
                 </button>
 
                 <div style="margin-top:14px; font-size:13px; color:#8a92a3;">Адрес кошелька:</div>
@@ -2219,9 +2230,9 @@ async function loadCases() {
                 </div>
                 <div class="case-rarity-bar" data-rarity="${rarityFromPrice(c.price_coins)}"></div>
                 <div class="case-card-info">
-                <div class="case-name">${c.name}</div>
-                <div class="case-price">${fmt(c.price_coins)} 🪙</div>
-            </div>
+                    <div class="case-name">${c.name}</div>
+                    <div class="case-price">${fmt(c.price_coins)} 🪙</div>
+                </div>
             </div>
         `;
 
@@ -2477,6 +2488,7 @@ async function loadInventory() {
         `).join('');
     } catch (e) { toast(e.message, 'error'); }
 }
+
 async function renderHomeInventoryPreview() {
     const el = document.getElementById('homeInventoryPreview');
     if (!el) return;
@@ -3199,6 +3211,7 @@ async function adminBroadcast() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
+/* ═══ BOOTSTRAP ═══ */
 function bootstrap() {
     console.log('INIT at start:', tg.initData?.length);
     setTimeout(() => console.log('INIT 1s:', tg.initData?.length), 1000);
