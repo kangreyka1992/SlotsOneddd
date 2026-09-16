@@ -2286,6 +2286,8 @@ async function loadCases() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
+
+
 async function openCaseInfo(id) {
     haptic();
     try {
@@ -2328,6 +2330,15 @@ function ciOpen(count) {
     const c = casesCache.find(x => x.id === currentCaseInfo.case_id);
     if (!c) { toast('Кейс не найден', 'error'); return; }
     openCase(c, count);
+}
+
+function closeCaseRoulette(force = false) {
+    if (caseRouletteBusy && !force) return;
+    const overlay = document.getElementById('caseRoulette');
+    if (!overlay) return;
+    overlay.classList.add('hidden');
+    overlay.classList.remove('csgo', 'zoom');
+    caseRouletteBusy = false;
 }
 
 /* ═══ CASE ROULETTE ═══ */
@@ -3089,7 +3100,6 @@ async function caseSellNow() {
     haptic('medium');
     try {
         const inv = await api('/api/cases/inventory');
-        // Ищем САМЫЙ СВЕЖИЙ предмет (по created_at desc), совпадающий по item_id
         const candidates = (inv.items || [])
             .filter(i => i.item_id === drop.itemId && !i.sold)
             .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
@@ -3102,7 +3112,7 @@ async function caseSellNow() {
         toast(`✅ Продано за ${fmt(d.sold_value)} 🪙`, 'success');
         SFX.cashout();
         updateBalance(d.balance);
-        closeCaseRoulette();
+        closeCaseRoulette(true);   // ← force
         loadProfile();
         loadInventory();
     } catch (e) {
@@ -3112,20 +3122,20 @@ async function caseSellNow() {
 
 function caseToUpgrade() {
     const drop = window._lastCaseDrop;
-    if (!drop) return;
+    if (!drop) { toast('Данные потеряны', 'error'); return; }
     haptic('medium');
-    closeCaseRoulette();
+    closeCaseRoulette(true);       // ← force
     showScreen('upgrader');
     loadUpgrader();
 }
 
 function caseOpenAgain() {
     const drop = window._lastCaseDrop;
-    if (!drop) return;
+    if (!drop) { toast('Данные потеряны', 'error'); return; }
     haptic('medium');
     const c = casesCache.find(x => x.id === drop.caseId);
     if (!c) { toast('Кейс не найден', 'error'); return; }
-    closeCaseRoulette();
+    closeCaseRoulette(true);       // ← force
     setTimeout(() => openCase(c, drop.count), 200);
 }
 
