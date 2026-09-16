@@ -1999,3 +1999,208 @@ select.input { text-align: left; letter-spacing: 0; }
     text-align: center;
     line-height: 1.3;
 }
+/* ═══════════ PAY (красивый дизайн) ═══════════ */
+
+/* Табы */
+.pay-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 18px;
+    background: var(--bg-card);
+    padding: 6px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+}
+.pay-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 10px 4px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    background: transparent;
+    border: none;
+}
+.pay-tab-icon { font-size: 18px; }
+.pay-tab-name { font-size: 11px; }
+.pay-tab.active {
+    background: linear-gradient(135deg, var(--accent), #e07a00);
+    color: #000;
+    box-shadow: 0 4px 14px var(--accent-glow);
+}
+.pay-tab.active .pay-tab-icon { filter: drop-shadow(0 0 6px rgba(0,0,0,0.3)); }
+
+/* Секция */
+.pay-method { display: none; animation: payFade 0.25s ease; }
+.pay-method.active { display: block; }
+
+@keyframes payFade {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Заголовок секции */
+.pay-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, var(--bg-card), var(--bg-elevated));
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
+}
+.pay-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at left, rgba(255,155,38,0.12), transparent 70%);
+    pointer-events: none;
+}
+.pay-header-icon {
+    font-size: 30px;
+    width: 48px; height: 48px;
+    display: grid; place-items: center;
+    background: rgba(255,155,38,0.12);
+    border-radius: 12px;
+    flex-shrink: 0;
+    z-index: 1;
+}
+.pay-header-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text-main);
+    z-index: 1;
+}
+.pay-header-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    z-index: 1;
+}
+.pay-header > div:nth-child(2) { flex: 1; z-index: 1; }
+
+/* Бейдж */
+.pay-badge {
+    padding: 4px 10px;
+    background: rgba(61, 214, 140, 0.15);
+    color: var(--green);
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+    z-index: 1;
+    border: 1px solid rgba(61, 214, 140, 0.3);
+}
+.pay-badge.hot {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+    animation: hotPulse 1.5s infinite;
+}
+@keyframes hotPulse {
+    0%, 100% { box-shadow: 0 0 0 rgba(239,68,68,0); }
+    50%      { box-shadow: 0 0 12px rgba(239,68,68,0.5); }
+}
+
+/* Сетка карточек */
+.pay-grid-inner {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+/* Карточка пополнения */
+.pay-card {
+    position: relative;
+    padding: 14px 12px;
+    background: linear-gradient(160deg, #1a1d24 0%, #14171d 100%);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+    overflow: hidden;
+    text-align: left;
+}
+.pay-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+.pay-card:active {
+    transform: scale(0.97);
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+}
+.pay-card:active::before { opacity: 1; }
+
+.pay-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.pay-card-amount {
+    font-size: 20px;
+    font-weight: 900;
+    font-family: var(--font-num);
+    color: var(--text-main);
+    letter-spacing: -0.5px;
+}
+.pay-card-icon {
+    font-size: 20px;
+    filter: drop-shadow(0 0 8px rgba(255,155,38,0.4));
+}
+.pay-card-bottom {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(255,255,255,0.06);
+}
+.pay-card-coins {
+    font-size: 14px;
+    font-weight: 800;
+    font-family: var(--font-num);
+    color: var(--accent);
+}
+.pay-card-coin-icon {
+    font-size: 13px;
+}
+.pay-card-badge {
+    position: absolute;
+    top: -1px; right: 8px;
+    padding: 3px 8px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    color: #000;
+    background: linear-gradient(135deg, var(--green), #00b894);
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 2px 8px rgba(61,214,140,0.4);
+}
+
+/* Инфо-плашка */
+.pay-info {
+    padding: 12px 14px;
+    background: rgba(255,155,38,0.06);
+    border: 1px solid rgba(255,155,38,0.15);
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+.pay-info b { color: var(--accent); }
