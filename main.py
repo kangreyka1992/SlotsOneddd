@@ -49,7 +49,7 @@ ADMIN_IDS = [7643224285]
 SELLER_WALLET = "0xFe06D515f0728567e34B94de549289791d9b1BA3"
 POLYGONSCAN_API_KEY = "Y2CVHHPY54VYJUTKG2FW7YZAI49EMYVXHN"   # https://polygonscan.com/myapikey
 USDC_POLYGON_CONTRACT = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
-CRYPTO_PER_USD = 100   # 1 USDC = 100 монет
+CRYPTO_PER_USD = 500   # 1 USDC = 500 монет
 
 # Хранилище ожидающих платежей {order_id: {...}}
 pending_payments: dict[str, dict] = {}
