@@ -20,6 +20,8 @@ from bot import bot, start_bot, RATE, STAR_PACKS
 from database import (
     get_balance, add_balance, set_balance, create_withdrawal,
     get_top_players, get_user_full_stats,
+    log_live_win,
+    get_live_feed,
     get_user_achievements, ACHIEVEMENTS,
     get_referral_stats, get_discount,
     log_game, unlock_achievement,
@@ -287,7 +289,23 @@ async def api_profile(request: Request):
         "referral": {"invited": invited, "bonuses": bonuses},
         "discount": discount,
     }
-
+@app.post("/api/feed/live")
+async def api_feed_live(request: Request):
+    """Реальная лента выигрышей"""
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+    feed = await get_live_feed(15)
+    return {
+        "feed": [
+            {
+                "username": f[0] or "Игрок",
+                "game": f[1],
+                "win": f[2],
+                "time": f[3],
+            }
+            for f in feed
+        ]
+    }
 
 @app.post("/api/achievements")
 async def api_ach(request: Request):
