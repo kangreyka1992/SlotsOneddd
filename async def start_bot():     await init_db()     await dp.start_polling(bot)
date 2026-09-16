@@ -1,10 +1,7 @@
 import asyncio
 import logging
 import os
-from urllib.parse import quote
 
-import aiohttp
-from aiohttp import web
 
 from aiogram import Bot, Dispatcher, Router, F, types
 from aiogram.filters import Command
@@ -307,22 +304,8 @@ async def on_payment(message: types.Message):
     )
 
 
-# ═══════════════════════════════════════════════
-# ← НОВОЕ: запуск бота + веб-сервера параллельно
-# ═══════════════════════════════════════════════
+
 async def start_bot():
     await init_db()
-
-    # Запускаем веб-сервер на порту 3000 (Bothost обычно слушает 3000)
-    runner = web.AppRunner(web_app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 8000)
-    await site.start()
-    logging.info("Web-сервер запущен на порту 8000")
-
-    # Запускаем polling бота
     await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
     asyncio.run(start_bot())
