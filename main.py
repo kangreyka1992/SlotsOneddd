@@ -2012,7 +2012,7 @@ async def api_cases_spin(request: Request):
 
     await add_balance(uid, -price_coins)
 
-        item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+    item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
 
     # подкрутка редкости
     winrate, _ = await get_winrate(uid)
