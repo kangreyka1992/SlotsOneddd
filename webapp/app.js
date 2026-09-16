@@ -1748,6 +1748,20 @@ function renderPay() {
         el.appendChild(btn);
     });
 }
+function copyToClipboard(text) {
+    try {
+        tg.showPopup({
+            title: 'Скопировано',
+            message: text,
+            buttons: [{type: 'close'}]
+        });
+        // Или через navigator.clipboard
+        navigator.clipboard.writeText(text);
+        toast('✅ Скопировано');
+    } catch (e) {
+        toast(text);
+    }
+}
 
 async function cryptoPay(amountUsd) {
     try {
@@ -1764,10 +1778,13 @@ async function cryptoPay(amountUsd) {
                 <img src="${d.qr_url}" style="width:220px; height:220px; background:#fff; padding:8px; border-radius:12px;">
 
                 <!-- ← КНОПКА ОТКРЫТИЯ В КОШЕЛЬКЕ -->
-                <a href="${d.deeplink}"
-                   style="display:block; margin-top:16px; padding:16px; background:linear-gradient(135deg,#ff9b26,#e07a00); color:#000; font-weight:800; border-radius:12px; text-decoration:none; font-size:15px;">
-                    💳 Открыть в кошельке
-                </a>
+               <button onclick="copyToClipboard('${d.wallet}')" style="...">
+                📋 Скопировать адрес
+                 
+                </button>
+                <button onclick="copyToClipboard('${d.amount}')" style="...">
+                📋 Скопировать сумму
+                </button>
 
                 <div style="margin-top:14px; font-size:13px; color:#8a92a3;">Адрес кошелька:</div>
                 <div style="font-family:monospace; font-size:12px; color:#ff9b26; word-break:break-all; padding:0 10px;">
