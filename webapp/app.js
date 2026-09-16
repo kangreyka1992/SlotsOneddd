@@ -3450,5 +3450,4 @@ function bootstrap() {
         }
     }, { passive: true });
 }
-loadQuests();
 bootstrap();
