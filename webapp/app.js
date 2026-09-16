@@ -47,6 +47,7 @@ let upgraderSelectedPks = new Set();
 let upgraderTargetIdx = -1;
 let upgraderTargets = [];
 let upgraderBusy = false;
+let upgraderFastMode = false;
 
 /* ═══ SOUND ═══ */
 let audioCtx = null;
@@ -2895,34 +2896,47 @@ async function upgraderPlay() {
     } else {
         finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
     }
-
-    // ⭐ ПЛАВНАЯ ПРОКРУТКА — 3 секунды с замедлением
-const baseTurns = 1 + Math.floor(Math.random() * 2);  // 1-2 оборота
-const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
-
-if (arrowEl) {
-    // Сбрасываем позицию
-    arrowEl.classList.remove('animate');
-    arrowEl.style.transition = 'none';
-    arrowEl.style.transform = 'rotate(0deg)';
-    void arrowEl.offsetWidth;
-
-    // Запускаем плавную прокрутку
-    requestAnimationFrame(() => {
-        arrowEl.style.transition = 'transform 1s cubic-bezier(0.15, 0.9, 0.15, 1)';
-        arrowEl.style.transform = `rotate(${finalAngle}deg)`;
-    });
+function toggleFastUpgrade() {
+    upgraderFastMode = !upgraderFastMode;
+    const btn = document.getElementById('upgFastBtn');
+    if (btn) {
+        btn.textContent = upgraderFastMode ? '⚡ БЫСТРО: ВКЛ' : '⚡ Быстрый апгрейд';
+        btn.classList.toggle('active', upgraderFastMode);
+    }
+    haptic();
+    toast(upgraderFastMode ? '⚡ Быстрый режим ВКЛ' : 'Обычный режим');
 }
+        // ⭐ ПРОКРУТКА — быстрая (1с) или обычная (3с)
+    const spinDuration = upgraderFastMode ? 0.4 : 3.0;
+    const spinMs = upgraderFastMode ? 400 : 3000;
+    const baseTurns = upgraderFastMode
+        ? 1 + Math.floor(Math.random() * 2)   // 1-2 оборота
+        : 4 + Math.floor(Math.random() * 3);  // 4-6 оборотов
 
-// Тикающий звук во время прокрутки
-const tickInt = setInterval(() => {
-    playTone(800 + Math.random() * 400, 0.02, 'square', 0.02);
-}, 100);
+    const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
 
-// Ждём 1 секунду (пока крутится)
-await new Promise(r => setTimeout(r, 1000));
+    if (arrowEl) {
+        arrowEl.classList.remove('animate');
+        arrowEl.style.transition = 'none';
+        arrowEl.style.transform = 'rotate(0deg)';
+        void arrowEl.offsetWidth;
 
-clearInterval(tickInt);
+        requestAnimationFrame(() => {
+            arrowEl.style.transition = `transform ${spinDuration}s cubic-bezier(0.15, 0.9, 0.15, 1)`;
+            arrowEl.style.transform = `rotate(${finalAngle}deg)`;
+        });
+    }
+
+    // Тикающий звук (только в обычном режиме)
+    let tickInt = null;
+    if (!upgraderFastMode) {
+        tickInt = setInterval(() => {
+            playTone(800 + Math.random() * 400, 0.02, 'square', 0.02);
+        }, 100);
+    }
+
+    await new Promise(r => setTimeout(r, spinMs));
+    if (tickInt) clearInterval(tickInt);
 
 // Показываем финальный процент
 percentEl.textContent = finalPercent.toFixed(2) + '%';
