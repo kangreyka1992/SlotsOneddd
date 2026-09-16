@@ -22,6 +22,9 @@ from database import (
     get_top_players, get_user_full_stats,
     log_live_win,
     get_live_feed,
+    get_daily_quests,
+    update_quest_progress,
+    claim_quest_reward,
     get_user_achievements, ACHIEVEMENTS,
     get_referral_stats, get_discount,
     log_game, unlock_achievement,
@@ -495,10 +498,15 @@ async def api_slots2_spin(request: Request):
 
     if total_win > 0:
         await add_balance(uid, total_win)
-
     await log_game(uid, total_bet, total_win)
     await log_house_flow(wagered=total_bet, paid=total_win)
     nb = await get_balance(uid)
+    await update_quest_progress(uid, "bets_count", 1)
+    await update_quest_progress(uid, "wagered", total_bet)
+    await update_quest_progress(uid, "game_slots2", 1)
+    if total_win > 0:
+        await update_quest_progress(uid, "wins", 1)
+    
     if total_win >= 1000:
         username = user.get("username") or user.get("first_name") or "Игрок"
         await log_live_win(uid, username, "Слоты 5×3", total_win)
@@ -657,6 +665,10 @@ async def api_mines_cashout(request: Request):
     prize = int(game["bet"] * (1 + step_mult * len(game["opened"])))
     bet = game["bet"]
     await add_balance(uid, prize)
+    await update_quest_progress(uid, "bets_count", 1)
+    await update_quest_progress(uid, "wagered", bet)
+    await update_quest_progress(uid, "game_crash", 1)
+    await update_quest_progress(uid, "wins", 1)
     await log_game(uid, bet, prize)
     await log_house_flow(wagered=bet, paid=prize)
     if prize >= 1000:
@@ -869,6 +881,10 @@ async def api_dice(request: Request):
         username = user.get("username") or "Игрок"
         await log_live_win(uid, username, "Кости", win)
     nb = await get_balance(uid)
+    await update_quest_progress(uid, "bets_count", 1)
+    await update_quest_progress(uid, "wagered", bet)
+    if win > 0:
+        await update_quest_progress(uid, "wins", 1)
     await unlock_achievement(uid, "first_bet")
     if win > 0:
         await unlock_achievement(uid, "first_win")
@@ -1022,6 +1038,10 @@ async def api_plinko(request: Request):
         username = user.get("username") or "Игрок"
         await log_live_win(uid, username, "Plinko", win)
     nb = await get_balance(uid)
+    await update_quest_progress(uid, "bets_count", 1)
+    await update_quest_progress(uid, "wagered", bet)
+    if win > bet:
+        await update_quest_progress(uid, "wins", 1)
 
     await unlock_achievement(uid, "first_bet")
     if win > bet:
@@ -1190,6 +1210,9 @@ async def api_penalti_kick(request: Request):
         bet = game["bet"]
         del penalti_games[uid]
         await add_balance(uid, prize)
+        await update_quest_progress(uid, "bets_count", 1)
+        await update_quest_progress(uid, "wagered", bet)
+        await update_quest_progress(uid, "wins", 1)
         await log_game(uid, bet, prize)
         await log_house_flow(wagered=bet, paid=prize)
         await unlock_achievement(uid, "first_bet")
@@ -1292,6 +1315,10 @@ async def api_coin_flip(request: Request):
         username = user.get("username") or "Игрок"
         await log_live_win(uid, username, "Монетка", win)
     nb = await get_balance(uid)
+    await update_quest_progress(uid, "bets_count", 1)
+    await update_quest_progress(uid, "wagered", bet)
+    if win > 0:
+        await update_quest_progress(uid, "wins", 1)
     await unlock_achievement(uid, "first_bet")
     if win > 0:
         await unlock_achievement(uid, "first_win")
@@ -1894,6 +1921,7 @@ async def api_cases_spin(request: Request):
     await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
     await log_game(uid, price_coins, 0)
     await log_house_flow(wagered=price_coins, paid=0)
+    await update_quest_progress(uid, "cases_opened", 1)
     if value >= 1000:
         username = user.get("username") or "Игрок"
         await log_live_win(uid, username, "Кейсы", value)
@@ -2209,6 +2237,7 @@ async def api_upgrader_play(request: Request):
 
     await log_game(uid, total_value, target_price_coins if win else 0)
     await log_house_flow(wagered=total_value, paid=target_price_coins if win else 0)
+    await update_quest_progress(uid, "upgrades", 1)
 
     return {
         "win": win,
@@ -2455,7 +2484,42 @@ async def api_daily(request: Request):
         await unlock_achievement(uid, "daily_7")
 
     return {"reward": reward, "streak": new_streak, "balance": nb}
+# ═══════════ ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ═══════════
 
+@app.post("/api/quests/list")
+async def api_quests_list(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    quests = await get_daily_quests(uid)
+    return {"quests": quests}
+
+
+@app.post("/api/quests/claim")
+async def api_quests_claim(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    quest_id = data.get("quest_id", "")
+
+    if not quest_id:
+        raise HTTPException(400, "Не указан quest_id")
+
+    success, reward, message = await claim_quest_reward(uid, quest_id)
+
+    if not success:
+        raise HTTPException(400, message)
+
+    new_balance = await add_balance(uid, reward)
+    await unlock_achievement(uid, "first_win")
+
+    return {
+        "ok": True,
+        "reward": reward,
+        "message": message,
+        "balance": new_balance,
+    }
 
 # ═══════════ ИНВОЙС (звёзды) ═══════════
 
