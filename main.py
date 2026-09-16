@@ -952,6 +952,9 @@ async def api_dice(request: Request):
 
     if bet <= 0 or bet > 10000000:
         raise HTTPException(400, "invalid_bet")
+        print(f"🎲 dice: uid={uid} bet={bet} choice={choice} balance={await get_balance(uid)}")
+    if bet <= 0 or bet > 10000000:
+        raise HTTPException(400, "invalid_bet")
 
     balance = await get_balance(uid)
     if balance < bet:
