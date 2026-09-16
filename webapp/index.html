@@ -671,11 +671,15 @@
 </div>
 <script>
   window.onerror = function(message, source, lineno, colno, error) {
-    document.body.innerHTML = '<div style="color:#ff6b6b; padding:20px; font-size:13px; background:#000; font-family:monospace; line-height:1.5; word-break:break-all;">' +
-      '<b>ОШИБКА:</b><br>' + message + '<br><br>' +
-      '<b>Файл:</b> ' + (source || '').split('/').pop() + '<br>' +
-      '<b>Строка:</b> ' + lineno + ':' + colno +
-      '</div>';
+    console.error('[JS ERROR]', message, '|', source, lineno + ':' + colno);
+    const el = document.getElementById('toast');
+    if (el) {
+      el.textContent = '⚠️ Ошибка: ' + message;
+      el.className = 'toast show error';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.className = 'toast', 4000);
+    }
+    return true;
   };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
