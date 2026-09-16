@@ -349,17 +349,32 @@ function renderGamesGrid() {
 const FEED_NAMES = ['Игрок', 'Lucky', 'Ace', 'King', 'Pro', 'Master', 'Winner', 'Star'];
 const FEED_GAMES = ['Слоты', 'Plinko', 'Crash', 'Mines', 'Кости', 'Penalti', 'Кейсы'];
 
+/* ═══ LIVE FEED (реальный) ═══ */
+async function loadLiveFeed() {
+    try {
+        const d = await api('/api/feed/live');
+        const el = document.getElementById('liveFeed');
+        if (!el) return;
+        
+        if (!d.feed || !d.feed.length) {
+            el.innerHTML = '<div class="feed-item" style="opacity:0.4;">Пока нет крупных выигрышей</div>';
+            return;
+        }
+        
+        el.innerHTML = d.feed.map(item => {
+            const name = item.username.startsWith('@') ? item.username : '@' + item.username;
+            return `<div class="feed-item">
+                🎉 <b>${name}</b> выиграл <b>${fmt(item.win)}</b> 🪙 в ${item.game}
+            </div>`;
+        }).join('');
+    } catch (e) {
+        console.error('Live feed error:', e);
+    }
+}
+
 function pushFeed() {
-    const el = document.getElementById('liveFeed');
-    if (!el) return;
-    const name = FEED_NAMES[Math.floor(Math.random() * FEED_NAMES.length)];
-    const game = FEED_GAMES[Math.floor(Math.random() * FEED_GAMES.length)];
-    const amount = [500, 1200, 5000, 15000, 50000, 120000][Math.floor(Math.random() * 6)];
-    const item = document.createElement('div');
-    item.className = 'feed-item';
-    item.innerHTML = `🎉 <b>@${name}${Math.floor(Math.random()*99)}</b> выиграл <b>${fmt(amount)}</b> 🪙 в ${game}`;
-    el.prepend(item);
-    while (el.children.length > 8) el.lastChild.remove();
+    // Оставляем для совместимости, но больше не используем
+    loadLiveFeed();
 }
 
 function startHeroTimer() {
@@ -3255,8 +3270,8 @@ function bootstrap() {
     loadFreeCaseStatus();
     startHeroTimer();
     initToolbarFilters();
-    pushFeed();
-    setInterval(pushFeed, 5000);
+    loadLiveFeed();
+    setInterval(loadLiveFeed, 10000);
     setInterval(renderHomeInventoryPreview, 30000);
 
     api('/api/penalti/reset').catch(() => {});
