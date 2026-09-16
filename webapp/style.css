@@ -1678,7 +1678,55 @@ select.input { text-align: left; letter-spacing: 0; }
   color: rgba(255,255,255,0.25);
   pointer-events: none;
 }
+/* Блокировка интерфейса во время апгрейда */
+.upgrade-blocker {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 5500;   /* выше всего, но ниже .upg-overlay (2600)? нет — выше */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+  touch-action: none;
+  user-select: none;
+}
+.upgrade-blocker.hidden { display: none; }
 
+.upgrade-blocker-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 32px;
+  background: rgba(20, 20, 24, 0.95);
+  border: 1px solid rgba(255, 87, 34, 0.4);
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(255, 87, 34, 0.35);
+}
+
+.upgrade-blocker-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(255, 87, 34, 0.15);
+  border-top-color: #ff5722;
+  border-radius: 50%;
+  animation: upgBlockSpin 0.8s linear infinite;
+}
+@keyframes upgBlockSpin {
+  to { transform: rotate(360deg); }
+}
+
+.upgrade-blocker-text {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ff5722;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-family: 'Inter', sans-serif;
+}
 /* ═══════════ CS:GO STYLE HEADER ═══════════ */
 .app-header {
   display: flex;
