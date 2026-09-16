@@ -2,6 +2,7 @@ import aiosqlite
 import datetime
 import os
 import random
+import time as _time
 
 DB_PATH = os.getenv("DB_PATH", "casino.db")
 
@@ -31,6 +32,7 @@ async def init_db():
                 win INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+
         """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS daily_quests (
@@ -55,6 +57,26 @@ async def init_db():
                 refunded INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS battle_pass (
+                user_id INTEGER PRIMARY KEY,
+                xp INTEGER DEFAULT 0,
+                level INTEGER DEFAULT 1,
+                season INTEGER NOT NULL,
+                premium INTEGER DEFAULT 0,
+                claimed_free TEXT DEFAULT '',
+                claimed_premium TEXT DEFAULT '',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS battle_pass_season (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                season INTEGER NOT NULL,
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                ends_at TIMESTAMP
+            )
+        """)
         """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS withdrawals (
@@ -893,3 +915,236 @@ async def claim_quest_reward(user_id: int, quest_id: str) -> tuple:
         await db.commit()
 
         return True, reward, "Награда получена!"
+
+SEASON_DURATION_DAYS = 30
+XP_PER_LEVEL = 1000
+MAX_LEVEL = 50
+
+
+def _current_season() -> int:
+    """Возвращает номер текущего сезона. Сезон = 30 дней от 1 января 2025."""
+    now = int(_time.time())
+    start = 1735689600   # 2025-01-01 00:00 UTC
+    days_passed = (now - start) // 86400
+    return (days_passed // SEASON_DURATION_DAYS) + 1
+
+
+BATTLE_PASS_REWARDS = [
+    # (level, free_coins, premium_coins, premium_bonus_type)
+    (1,   500,    1000,   None),
+    (2,   500,    1000,   None),
+    (3,   750,    1500,   None),
+    (4,   750,    1500,   None),
+    (5,   1000,   2000,   "case_starter"),
+    (6,   1000,   2000,   None),
+    (7,   1250,   2500,   None),
+    (8,   1250,   2500,   None),
+    (9,   1500,   3000,   None),
+    (10,  1500,   3000,   "case_bronze"),
+    (11,  1750,   3500,   None),
+    (12,  1750,   3500,   None),
+    (13,  2000,   4000,   None),
+    (14,  2000,   4000,   None),
+    (15,  2500,   5000,   "case_silver"),
+    (16,  2500,   5000,   None),
+    (17,  2750,   5500,   None),
+    (18,  2750,   5500,   None),
+    (19,  3000,   6000,   None),
+    (20,  3000,   6000,   "case_gold"),
+    (21,  3250,   6500,   None),
+    (22,  3250,   6500,   None),
+    (23,  3500,   7000,   None),
+    (24,  3500,   7000,   None),
+    (25,  4000,   8000,   "case_lucky"),
+    (26,  4000,   8000,   None),
+    (27,  4250,   8500,   None),
+    (28,  4250,   8500,   None),
+    (29,  4500,   9000,   None),
+    (30,  4500,   9000,   "case_diamond_small"),
+    (31,  4750,   9500,   None),
+    (32,  4750,   9500,   None),
+    (33,  5000,   10000,  None),
+    (34,  5000,   10000,  None),
+    (35,  5500,   11000,  "case_emerald"),
+    (36,  5500,   11000,  None),
+    (37,  5750,   11500,  None),
+    (38,  5750,   11500,  None),
+    (39,  6000,   12000,  None),
+    (40,  6000,   12000,  "case_ruby"),
+    (41,  6250,   12500,  None),
+    (42,  6250,   12500,  None),
+    (43,  6500,   13000,  None),
+    (44,  6500,   13000,  None),
+    (45,  7000,   14000,  "case_galaxy"),
+    (46,  7000,   14000,  None),
+    (47,  7500,   15000,  None),
+    (48,  8000,   16000,  None),
+    (49,  9000,   18000,  None),
+    (50,  15000,  30000,  "case_titan"),
+]
+
+
+async def get_battle_pass(user_id: int) -> dict:
+    """Возвращает состояние Battle Pass игрока."""
+    season = _current_season()
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT xp, level, season, premium, claimed_free, claimed_premium "
+            "FROM battle_pass WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+
+        # Если новый сезон — сбрасываем прогресс
+        if row and row[2] != season:
+            await db.execute(
+                "UPDATE battle_pass SET xp = 0, level = 1, season = ?, "
+                "claimed_free = '', claimed_premium = '' WHERE user_id = ?",
+                (season, user_id),
+            )
+            await db.commit()
+            row = (0, 1, season, row[3], "", "")
+
+        # Если игрока нет — создаём
+        if not row:
+            await db.execute(
+                "INSERT INTO battle_pass (user_id, xp, level, season, premium) "
+                "VALUES (?, 0, 1, ?, 0)",
+                (user_id, season),
+            )
+            await db.commit()
+            row = (0, 1, season, 0, "", "")
+
+        xp, level, season_db, premium, claimed_free, claimed_premium = row
+
+        claimed_free_set = set(claimed_free.split(",")) if claimed_free else set()
+        claimed_premium_set = set(claimed_premium.split(",")) if claimed_premium else set()
+
+        return {
+            "xp": xp,
+            "level": level,
+            "season": season_db,
+            "premium": bool(premium),
+            "claimed_free": list(claimed_free_set),
+            "claimed_premium": list(claimed_premium_set),
+            "xp_per_level": XP_PER_LEVEL,
+            "max_level": MAX_LEVEL,
+        }
+
+
+async def add_battle_pass_xp(user_id: int, amount: int) -> dict:
+    """Добавляет XP игроку и пересчитывает уровень."""
+    if amount <= 0:
+        return await get_battle_pass(user_id)
+
+    season = _current_season()
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Проверяем, что игрок есть
+        async with db.execute(
+            "SELECT xp, level, season FROM battle_pass WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+
+        if not row or row[2] != season:
+            await db.execute(
+                "INSERT INTO battle_pass (user_id, xp, level, season, premium) "
+                "VALUES (?, ?, 1, ?, 0) "
+                "ON CONFLICT(user_id) DO UPDATE SET xp = ?, level = 1, season = ?, "
+                "claimed_free = '', claimed_premium = ''",
+                (user_id, amount, season, amount, season),
+            )
+            await db.commit()
+            return await get_battle_pass(user_id)
+
+        new_xp = row[0] + amount
+        new_level = min(MAX_LEVEL, (new_xp // XP_PER_LEVEL) + 1)
+
+        await db.execute(
+            "UPDATE battle_pass SET xp = ?, level = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE user_id = ?",
+            (new_xp, new_level, user_id),
+        )
+        await db.commit()
+
+    return await get_battle_pass(user_id)
+
+
+async def claim_battle_pass_reward(user_id: int, level: int, premium: bool) -> tuple:
+    """Забирает награду с уровня. Возвращает (success, reward_coins, bonus_type, message)."""
+    season = _current_season()
+
+    if level < 1 or level > MAX_LEVEL:
+        return False, 0, None, "Неверный уровень"
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT xp, level, season, premium, claimed_free, claimed_premium "
+            "FROM battle_pass WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+
+        if not row:
+            return False, 0, None, "Battle Pass не найден"
+
+        xp, current_level, season_db, has_premium, claimed_free, claimed_premium = row
+
+        if season_db != season:
+            return False, 0, None, "Начался новый сезон — прогресс сброшен"
+
+        if level > current_level:
+            return False, 0, None, f"Уровень {level} ещё не достигнут"
+
+        if premium and not has_premium:
+            return False, 0, None, "Premium Pass не куплен"
+
+        claimed_set = set((claimed_premium if premium else claimed_free).split(",")) if (claimed_premium if premium else claimed_free) else set()
+        key = str(level)
+
+        if key in claimed_set:
+            return False, 0, None, "Награда уже получена"
+
+        # Берём награду из таблицы
+        reward_row = next((r for r in BATTLE_PASS_REWARDS if r[0] == level), None)
+        if not reward_row:
+            return False, 0, None, "Награда не найдена"
+
+        _, free_coins, premium_coins, bonus_type = reward_row
+        coins = premium_coins if premium else free_coins
+        bonus = bonus_type if premium else None
+
+        # Обновляем список полученных
+        claimed_set.add(key)
+        new_claimed = ",".join(sorted(claimed_set))
+
+        if premium:
+            await db.execute(
+                "UPDATE battle_pass SET claimed_premium = ? WHERE user_id = ?",
+                (new_claimed, user_id),
+            )
+        else:
+            await db.execute(
+                "UPDATE battle_pass SET claimed_free = ? WHERE user_id = ?",
+                (new_claimed, user_id),
+            )
+        await db.commit()
+
+        return True, coins, bonus, "Награда получена!"
+
+
+async def buy_premium_pass(user_id: int) -> bool:
+    """Помечает игрока как Premium. Вызывается после оплаты."""
+    season = _current_season()
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO battle_pass (user_id, xp, level, season, premium) "
+            "VALUES (?, 0, 1, ?, 1) "
+            "ON CONFLICT(user_id) DO UPDATE SET premium = 1, season = ?",
+            (user_id, season, season),
+        )
+        await db.commit()
+        return True
