@@ -3560,7 +3560,6 @@ function toggleUpgSort() {
     renderUpgraderInv();
 }
 /* ═══ БЫСТРЫЙ АПГРЕЙД ═══ */
-let upgraderFastMode = false;
 
 function toggleFastUpgrade() {
     upgraderFastMode = !upgraderFastMode;
@@ -3574,7 +3573,6 @@ function toggleFastUpgrade() {
 }
 
 /* ═══ БЫСТРЫЙ ПРОКРУТ КЕЙСОВ ═══ */
-let caseFastMode = false;
 
 function toggleFastCase() {
     caseFastMode = !caseFastMode;
