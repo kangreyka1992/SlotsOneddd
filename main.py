@@ -31,6 +31,13 @@ from database import (
     get_promo, promo_already_used, use_promo,
     get_daily_info, claim_daily,
     ensure_user,
+    get_battle_pass,
+    add_battle_pass_xp,
+    claim_battle_pass_reward,
+    buy_premium_pass,
+    BATTLE_PASS_REWARDS,
+    XP_PER_LEVEL,
+    MAX_LEVEL,
     get_stats, get_last_withdrawals, update_withdrawal,
     get_user_by_username, get_all_user_ids,
     create_promo, delete_promo, list_promos,
@@ -2534,7 +2541,90 @@ async def api_quests_claim(request: Request):
         "message": message,
         "balance": new_balance,
     }
+# ═══════════ BATTLE PASS ═══════════
 
+@app.post("/api/battlepass/status")
+async def api_bp_status(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    bp = await get_battle_pass(uid)
+    return {
+        "xp": bp["xp"],
+        "level": bp["level"],
+        "season": bp["season"],
+        "premium": bp["premium"],
+        "xp_per_level": XP_PER_LEVEL,
+        "max_level": MAX_LEVEL,
+        "claimed_free": bp["claimed_free"],
+        "claimed_premium": bp["claimed_premium"],
+        "rewards": [
+            {
+                "level": r[0],
+                "free_coins": r[1],
+                "premium_coins": r[2],
+                "bonus": r[3],
+            }
+            for r in BATTLE_PASS_REWARDS
+        ],
+    }
+
+
+@app.post("/api/battlepass/claim")
+async def api_bp_claim(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    level = int(data.get("level", 0))
+    premium = bool(data.get("premium", False))
+
+    success, coins, bonus, message = await claim_battle_pass_reward(uid, level, premium)
+
+    if not success:
+        raise HTTPException(400, message)
+
+    new_balance = await add_balance(uid, coins, None)
+
+    # Если это бонус-кейс — выдаём предмет
+    if bonus:
+        case_id = bonus.replace("case_", "")
+        case = next((c for c in CASES if c[0] == case_id), None)
+        if case:
+            price_coins = case[3] * RATE
+            item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+            value = int(price_coins * value_mult)
+            kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
+            await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
+
+    return {
+        "ok": True,
+        "coins": coins,
+        "bonus": bonus,
+        "message": message,
+        "balance": new_balance,
+    }
+
+
+@app.post("/api/battlepass/buy-premium")
+async def api_bp_buy_premium(request: Request):
+    """Создаёт счёт на покупку Premium Pass за 250 ⭐."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    from aiogram.types import LabeledPrice
+
+    link = await bot.create_invoice_link(
+        title="Premium Battle Pass",
+        description="Удвоенные награды за каждый уровень",
+        payload=f"battlepass_{uid}",
+        provider_token="",
+        currency="XTR",
+        prices=[LabeledPrice(label="Premium Pass", amount=250)],
+    )
+
+    return {"link": link, "stars": 250}
 # ═══════════ ИНВОЙС (звёзды) ═══════════
 
 @app.post("/api/invoice")
