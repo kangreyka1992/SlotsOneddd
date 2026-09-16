@@ -94,9 +94,6 @@
   <h3 class="section-title">🏆 Battle Pass</h3>
   <button class="section-link" onclick="showScreen('battlepass')">Открыть →</button>
 </div>
-<button class="btn-primary" onclick="showScreen('battlepass')" style="width:100%; margin-bottom:12px;">
-  🏆 Открыть Battle Pass
-</button>
 
 <!-- Админка (показывается только админу) -->
 <button class="admin-access-btn hidden" id="adminBtn" onclick="showScreen('admin')">
@@ -204,16 +201,23 @@
         <div class="profile-level">
           <div class="level-bar"><div class="level-fill" id="levelFill"></div></div>
           <div class="level-text" id="levelText">Уровень 1</div>
-        </div>
-        <div class="profile-balance" id="profileBalance">0</div>
-        <div class="profile-balance-label">🪙 Баланс</div>
-        <button class="btn-primary" onclick="showScreen('pay')" style="margin-top:12px;">
-        ⭐ Пополнить баланс
-        </button>
-        <button class="btn-primary" onclick="showScreen('quests')" style="margin-top:12px;">
-        📋 Ежедневные задания
-        </button>
       </div>
+      <div class="profile-balance" id="profileBalance">0</div>
+      <div class="profile-balance-label">🪙 Баланс</div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; margin-top:12px;">
+        <button class="btn-primary" onclick="showScreen('pay')">⭐ Пополнить</button>
+        <button class="btn-primary" onclick="showScreen('withdraw')">💸 Вывести</button>
+      </div>
+
+      <button class="btn-primary" onclick="showScreen('quests')" style="margin-top:10px; width:100%;">
+        📋 Ежедневные задания
+      </button>
+
+      <button class="btn-primary" onclick="showScreen('battlepass')" style="margin-top:10px; width:100%;">
+        🏆 Battle Pass
+      </button>
+    </div>
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
         <div class="stat-card"><div class="stat-val" id="statWagered">0</div><div class="stat-lbl">Поставлено</div></div>
@@ -571,23 +575,23 @@
 
   </main>
 
-  <nav class="bottom-nav">
-    <button class="nav-btn active" data-nav="home" onclick="showScreen('home')">
-      <span class="nav-icon">🎰</span><span class="nav-lbl">Игры</span>
-    </button>
-    <button class="nav-btn" data-nav="cases" onclick="showScreen('cases')">
-      <span class="nav-icon">📦</span><span class="nav-lbl">Кейсы</span>
-    </button>
-    <button class="nav-btn" data-nav="inventory" onclick="showScreen('inventory')">
-      <span class="nav-icon">🎒</span><span class="nav-lbl">Инвентарь</span>
-    </button>
-    <button class="nav-btn" data-nav="upgrader" onclick="showScreen('upgrader')">
-      <span class="nav-icon">⚡</span><span class="nav-lbl">Апгрейд</span>
-    </button>
-    <button class="nav-btn" data-nav="withdraw" onclick="showScreen('withdraw')">
-      <span class="nav-icon">💸</span><span class="nav-lbl">Вывод</span>
-    </button>
-  </nav>
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-nav="home" onclick="showScreen('home')">
+    <span class="nav-icon">🎰</span><span class="nav-lbl">Игры</span>
+  </button>
+  <button class="nav-btn" data-nav="cases" onclick="showScreen('cases')">
+    <span class="nav-icon">📦</span><span class="nav-lbl">Кейсы</span>
+  </button>
+  <button class="nav-btn" data-nav="inventory" onclick="showScreen('inventory')">
+    <span class="nav-icon">🎒</span><span class="nav-lbl">Инвентарь</span>
+  </button>
+  <button class="nav-btn" data-nav="upgrader" onclick="showScreen('upgrader')">
+    <span class="nav-icon">⚡</span><span class="nav-lbl">Апгрейд</span>
+  </button>
+  <button class="nav-btn" data-nav="battlepass" onclick="showScreen('battlepass')">
+    <span class="nav-icon">🏆</span><span class="nav-lbl">Батл-пас</span>
+  </button>
+</nav>
 
   <div class="toast" id="toast"></div>
 </div>
