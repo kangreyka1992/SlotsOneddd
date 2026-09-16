@@ -1055,8 +1055,10 @@ async function crashCashout() {
 /* ═══ КОСТИ ═══ */
 function diceStart(bet) {
     haptic();
+    if (!bet || bet <= 0) { toast('Некорректная ставка', 'error'); return; }
     diceBet = bet;
     lastBet = bet;
+    gameLocked = true;   // ✅ фиксируем игру
     document.getElementById('diceBets').classList.add('hidden');
     document.getElementById('diceDisplay').classList.remove('hidden');
     document.getElementById('diceResult').textContent = '';
@@ -1081,7 +1083,10 @@ async function rollDice(mode) {
     face.classList.remove('spinning');
 
     try {
-        const d = await gameApi('/api/dice/roll', { bet: diceBet, choice: mode });
+        if (!diceBet || diceBet <= 0) {
+            throw new Error('Ставка не выбрана');
+        }
+        const d = await api('/api/dice/roll', { bet: diceBet, choice: mode });
         const resultEmoji = ['', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'][d.roll];
         face.textContent = resultEmoji;
         updateBalance(d.balance);
