@@ -16,13 +16,12 @@ from database import (
     add_referral_bonus, set_discount, clear_discount,
     unlock_achievement, log_visit,
     get_user_full_stats, can_withdraw,
+    buy_premium_pass,
 )
 
 logging.basicConfig(level=logging.INFO)
 
 BOT_TOKEN = "8602932446:AAEtYr2rsT8jFSVjYErG9Q84duJ3dVfSyCo"
-
-# ⚠️ ЗАМЕНИ НА СВОЙ URL
 WEBAPP_URL = "https://bot-1789335277-8932-slotbots.bothost.tech"
 
 RATE = 100
@@ -144,8 +143,21 @@ async def debug_photo(message: types.Message):
 @router.message(F.successful_payment)
 async def on_payment(message: types.Message):
     p = message.successful_payment
-    parts = p.invoice_payload.split("_")
+    payload = p.invoice_payload
     uid = message.from_user.id
+
+    # === Premium Battle Pass ===
+    if payload.startswith("battlepass_"):
+        await buy_premium_pass(uid)
+        await message.answer(
+            "✅ <b>Premium Battle Pass активирован!</b>\n\n"
+            "Теперь вам доступны удвоенные награды на каждом уровне.",
+            parse_mode="HTML",
+        )
+        return
+
+    # === Обычное пополнение ===
+    parts = payload.split("_")
     coins = int(parts[2]) if len(parts) >= 3 else RATE
     disc = int(parts[3]) if len(parts) >= 4 else 0
 
@@ -182,9 +194,6 @@ async def on_payment(message: types.Message):
     )
 
 
-# ═══════════════════════════════════════════════
-# ВОТ ПРАВИЛЬНЫЙ start_bot — БЕЗ asyncio.run внутри
-# ═══════════════════════════════════════════════
 async def start_bot():
     await init_db()
     await dp.start_polling(bot)
