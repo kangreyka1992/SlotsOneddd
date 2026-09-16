@@ -73,7 +73,7 @@ async def create_paygate_link(user_id: int, amount_usd: float) -> str:
             f"https://checkout.paygate.to/process-payment.php"
             f"?address={quote(address_in, safe='')}"
             f"&amount={amount_usd}"
-            f"&provider=moonpay"
+            f"&provider=wert"
             f"&email=player{user_id}%40example.com"
             f"&currency=USD"
         )
