@@ -233,6 +233,26 @@
       <div class="quests-info">Обновляются каждые 24 часа</div>
       <div class="quests-list" id="questsList"></div>
     </section>
+        <section class="screen" id="screen-battlepass">
+      <h3 class="section-title">🏆 Battle Pass</h3>
+
+      <div class="bp-info" id="bpInfo">
+        <div class="bp-season">Сезон <span id="bpSeason">1</span></div>
+        <div class="bp-level">Уровень <span id="bpLevel">1</span></div>
+        <div class="bp-xp-bar">
+          <div class="bp-xp-fill" id="bpXpFill"></div>
+        </div>
+        <div class="bp-xp-text"><span id="bpXp">0</span> / <span id="bpXpMax">1000</span> XP</div>
+      </div>
+
+      <button class="bp-premium-btn" id="bpPremiumBtn" onclick="buyPremiumPass()">
+        ⭐ Купить Premium Pass (250 ⭐)
+      </button>
+      <button class="btn-primary" onclick="showScreen('battlepass')" style="margin-top:12px;">
+       🏆 Battle Pass
+      </button>
+      <div class="bp-rewards" id="bpRewards"></div>
+    </section>
     <section class="screen" id="screen-pay">
       <h3 class="section-title">⭐ Пополнение</h3>
       <div class="pay-grid" id="payGrid"></div>
