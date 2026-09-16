@@ -2700,24 +2700,26 @@ function updateUpgraderChance() {
 
     const CIRC = 534;
 
+    // Если ничего не выбрано — показываем 0%
     if (upgraderSelectedPks.size === 0 || upgraderTargetIdx < 0) {
         percentEl.textContent = '0%';
         percentEl.className = 'upg-percent';
         successEl.style.strokeDashoffset = CIRC;
         failEl.style.strokeDashoffset = 0;
+        // Стрелка стоит на 0
+        const arrowEl = document.getElementById('upgArrowSpin');
+        if (arrowEl) {
+            arrowEl.classList.remove('animate');
+            arrowEl.style.transform = 'rotate(0deg)';
+        }
         return;
     }
 
     const total = getSelectedTotal();
     const target = upgraderTargets[upgraderTargetIdx];
-    if (!target) {
-        percentEl.textContent = '0%';
-        percentEl.className = 'upg-percent';
-        successEl.style.strokeDashoffset = CIRC;
-        failEl.style.strokeDashoffset = 0;
-        return;
-    }
+    if (!target) return;
 
+    // Если цель дешевле ставки — показываем прочерк
     if (target.price_coins <= total) {
         percentEl.textContent = '—';
         percentEl.className = 'upg-percent red';
@@ -2729,15 +2731,23 @@ function updateUpgraderChance() {
     const chance = Math.min(0.95, Math.max(0.01, total / target.price_coins));
     const percent = chance * 100;
 
+    // Показываем процент
     percentEl.textContent = percent.toFixed(2) + '%';
-
     percentEl.classList.remove('green', 'yellow', 'red');
     if (percent < 30) percentEl.classList.add('red');
     else if (percent < 65) percentEl.classList.add('yellow');
     else percentEl.classList.add('green');
 
+    // Заполняем круг
     successEl.style.strokeDashoffset = CIRC - CIRC * chance;
     failEl.style.strokeDashoffset = -(CIRC * chance);
+
+    // ⭐ СТРЕЛКА СТОИТ НА МЕСТЕ (не крутится)
+    const arrowEl = document.getElementById('upgArrowSpin');
+    if (arrowEl) {
+        arrowEl.classList.remove('animate');
+        arrowEl.style.transform = 'rotate(0deg)';
+    }
 }
 
 function upgraderQuickMult(mult) {
@@ -2833,48 +2843,39 @@ async function upgraderPlay() {
         finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
     }
 
-    const baseTurns = 6 + Math.floor(Math.random() * 2);
-    const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
+    // ⭐ ПЛАВНАЯ ПРОКРУТКА — 3 секунды с замедлением
+const baseTurns = 3 + Math.floor(Math.random() * 2);  // 3-4 оборота
+const finalAngle = baseTurns * 360 + (finalPercent / 100) * 360;
 
-    if (arrowEl) {
-        arrowEl.classList.remove('animate');
-        arrowEl.style.transform = 'rotate(0deg)';
-        void arrowEl.offsetWidth;
-        arrowEl.classList.add('animate');
+if (arrowEl) {
+    // Сбрасываем позицию
+    arrowEl.classList.remove('animate');
+    arrowEl.style.transition = 'none';
+    arrowEl.style.transform = 'rotate(0deg)';
+    void arrowEl.offsetWidth;
+
+    // Запускаем плавную прокрутку
+    requestAnimationFrame(() => {
+        arrowEl.style.transition = 'transform 3s cubic-bezier(0.15, 0.9, 0.15, 1)';
         arrowEl.style.transform = `rotate(${finalAngle}deg)`;
-    }
+    });
+}
 
-    const startTime = performance.now();
-    const duration = 6000;
-    let rafId = null;
+// Тикающий звук во время прокрутки
+const tickInt = setInterval(() => {
+    playTone(800 + Math.random() * 400, 0.02, 'square', 0.02);
+}, 100);
 
-    function updatePercentWhileSpinning() {
-        const t = (performance.now() - startTime) / duration;
-        if (t >= 1) return;
-        const randomPercent = Math.random() * 100;
-        percentEl.textContent = randomPercent.toFixed(2) + '%';
-        percentEl.classList.remove('green', 'yellow', 'red');
-        if (randomPercent < 30) percentEl.classList.add('red');
-        else if (randomPercent < 65) percentEl.classList.add('yellow');
-        else percentEl.classList.add('green');
-        rafId = requestAnimationFrame(updatePercentWhileSpinning);
-    }
-    rafId = requestAnimationFrame(updatePercentWhileSpinning);
+// Ждём 3 секунды (пока крутится)
+await new Promise(r => setTimeout(r, 3000));
 
-    const tickInt = setInterval(() => {
-        playTone(800 + Math.random() * 400, 0.02, 'square', 0.02);
-    }, 70);
+clearInterval(tickInt);
 
-    await new Promise(r => setTimeout(r, duration + 100));
-
-    if (rafId) cancelAnimationFrame(rafId);
-    clearInterval(tickInt);
-
-    percentEl.textContent = finalPercent.toFixed(2) + '%';
-    percentEl.classList.remove('green', 'yellow', 'red');
-    if (d.win) percentEl.classList.add('green');
-    else percentEl.classList.add('red');
-
+// Показываем финальный процент
+percentEl.textContent = finalPercent.toFixed(2) + '%';
+percentEl.classList.remove('green', 'yellow', 'red');
+if (d.win) percentEl.classList.add('green');
+else percentEl.classList.add('red');
     const overlay = document.createElement('div');
     overlay.className = 'upg-overlay';
     document.body.appendChild(overlay);
