@@ -78,18 +78,21 @@ async def init_db():
             )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS withdrawals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                username TEXT NOT NULL,
-                stars INTEGER NOT NULL,
-                coins_spent INTEGER NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
-                tx_hash TEXT,
-                error TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+    CREATE TABLE IF NOT EXISTS withdrawals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        method TEXT NOT NULL DEFAULT 'stars',
+        stars INTEGER NOT NULL DEFAULT 0,
+        amount REAL NOT NULL DEFAULT 0,
+        details TEXT,
+        coins_spent INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        tx_hash TEXT,
+        error TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+""")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS promocodes (
                 code TEXT PRIMARY KEY,
@@ -264,12 +267,22 @@ async def save_payment(user_id: int, charge_id: str, stars: int, coins: int):
         await db.commit()
 
 
-async def create_withdrawal(user_id: int, username: str, stars: int, coins: int) -> int:
+async def create_withdrawal(user_id: int, username: str, method: str,
+                            amount: float, coins: int, details: str = None) -> int:
+    """
+    method: 'stars' | 'sbp' | 'usdc' | 'ton'
+    amount: количество звёзд / рублей / USDC / TON
+    coins: сколько монет списали
+    details: реквизиты (номер карты, кошелёк и т.п.)
+    """
     async with aiosqlite.connect(DB_PATH) as db:
+        # для совместимости — если stars, пишем в stars
+        stars_val = int(amount) if method == 'stars' else 0
         cursor = await db.execute(
-            "INSERT INTO withdrawals (user_id, username, stars, coins_spent) "
-            "VALUES (?, ?, ?, ?)",
-            (user_id, username, stars, coins),
+            "INSERT INTO withdrawals "
+            "(user_id, username, method, stars, amount, details, coins_spent) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user_id, username, method, stars_val, amount, details, coins),
         )
         await db.commit()
         return cursor.lastrowid
@@ -305,9 +318,10 @@ async def get_all_user_ids():
 async def get_stats():
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT COUNT(*), COALESCE(SUM(balance), 0) FROM users"
+            "SELECT COUNT(*), COALESCE(SUM(stars), 0) FROM withdrawals "
+            "WHERE status = 'done'"
         ) as cur:
-            users_count, total_coins = await cur.fetchone()
+            withdraw_count, withdraw_stars = await cur.fetchone()
         async with db.execute(
             "SELECT COUNT(*), COALESCE(SUM(stars), 0) FROM withdrawals "
             "WHERE status = 'done'"
@@ -327,10 +341,11 @@ async def get_stats():
         }
 
 
-async def get_last_withdrawals(limit: int = 10):
+async def get_last_withdrawals(limit: int = 30):
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT id, user_id, username, stars, coins_spent, status, created_at "
+            "SELECT id, user_id, username, method, stars, amount, details, "
+            "coins_spent, status, created_at "
             "FROM withdrawals ORDER BY id DESC LIMIT ?",
             (limit,),
         ) as cur:
