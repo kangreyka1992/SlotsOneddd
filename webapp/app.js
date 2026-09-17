@@ -12,8 +12,7 @@ const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
 
 const GIFT_GIFS = {
-    // тестовый режим — лягушка для всего
-    '*': 'pepe_gift.gif',
+    '*': 'pepe_gift.gif',   // ← без img/, файл в корне
 };
 
 let profile = { balance: 0, stats: {}, referral: {} };
@@ -2699,10 +2698,6 @@ async function openCase(c, count = 1) {
         }
         haptic('success');
 
-        const GIFT_GIFS = {
-            'pepe_gift': 'pepe_gift.gif',
-            // сюда добавляешь остальные: 'rock': 'img/rock.gif', ...
-        };
         if (r) {
             const gifPath = GIFT_GIFS[r.item_id];
             const iconHtml = gifPath
