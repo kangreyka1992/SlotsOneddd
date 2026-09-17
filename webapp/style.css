@@ -1736,6 +1736,9 @@ select.input { text-align: left; letter-spacing: 0; }
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 60;
 }
 .app-header-left { display: flex; align-items: center; gap: 10px; }
 .app-logo {
@@ -3265,10 +3268,9 @@ body.upgrade-running .bottom-nav {
 .hall-user { font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; }
 .hall-game { font-size: 11px; color: #8a92a3; padding: 2px 8px; background: rgba(255,255,255,0.05); border-radius: 6px; }
 .fixed-banners {
-    position: sticky;
-    top: 0;
-    z-index: 40;
+    flex-shrink: 0;
     background: var(--bg-glass);
     backdrop-filter: blur(20px);
+    z-index: 40;
 }
 .hall-win { font-family: var(--font-num); font-weight: 900; color: #3dd68c; }
