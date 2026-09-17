@@ -12,7 +12,7 @@ const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
 
 const GIFT_GIFS = {
-    '*': 'pepe_gift.gif',   // ← без img/, файл в корне
+    '*': 'img/pepe_gift.gif',
 };
 
 let profile = { balance: 0, stats: {}, referral: {} };
