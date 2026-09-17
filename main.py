@@ -8,6 +8,8 @@ import time
 import datetime
 from contextlib import asynccontextmanager
 from urllib.parse import parse_qsl, quote
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
 
 import aiohttp
 from fastapi import FastAPI, Request, HTTPException
@@ -263,7 +265,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-app.mount("/webapp", StaticFiles(directory="webapp", html=True), name="webapp")
+class NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+app.mount("/webapp", NoCacheStaticFiles(directory="webapp", html=True), name="webapp")
 
 
 @app.get("/")
