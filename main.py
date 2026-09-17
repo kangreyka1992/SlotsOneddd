@@ -58,22 +58,18 @@ MIN_WITHDRAW = 15
 BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
 
-
 # ═══════════ КУРСЫ ВЫВОДА ═══════════
 WITHDRAW_RATES = {
-    'stars': {'rate': 125,   'min': 15,   'unit': '⭐'},
-    'sbp':   {'rate': 1000,  'min': 500,  'unit': '₽'},
-    'usdc':  {'rate': 100,   'min': 5,    'unit': 'USDC'},
-    'ton':   {'rate': 5000,  'min': 1,    'unit': 'TON'},
+    'stars': {'rate': 125,  'min': 15,  'unit': '⭐'},
+    'sbp':   {'rate': 1000, 'min': 500, 'unit': '₽'},
+    'usdc':  {'rate': 100,  'min': 5,   'unit': 'USDC'},
+    'ton':   {'rate': 5000, 'min': 1,   'unit': 'TON'},
 }
+
+
 # ═══════════ ПОДКРУТКА ШАНСОВ ═══════════
 
 async def _apply_winrate(uid: int, base_win: bool) -> bool:
-    """
-    base_win — «честный» результат (True=победа).
-    Возвращает итоговый результат с учётом настроек винрейта.
-    winrate: 0..100 (50 = честно, >50 подыгрываем, <50 мешаем)
-    """
     winrate, _ = await get_winrate(uid)
 
     if winrate >= 50:
@@ -89,11 +85,11 @@ async def _apply_winrate(uid: int, base_win: bool) -> bool:
 
 
 async def _apply_payout(uid: int, win_amount: int) -> int:
-    """Урезает/увеличивает выплату согласно payout_mult."""
     _, payout_mult = await get_winrate(uid)
     if payout_mult == 1.0 or win_amount <= 0:
         return win_amount
     return max(0, int(win_amount * payout_mult))
+
 
 # ═══════════ CRYPTO DIRECT (Polygon USDC) ═══════════
 SELLER_WALLET = "0xFe06D515f0728567e34B94de549289791d9b1BA3"
@@ -130,10 +126,44 @@ def admin_only(init_data: str) -> dict:
     return user
 
 
+async def _notify_admin_withdraw(wid: int, method: str, amount: float,
+                                 unit: str, need: int, uid: int,
+                                 extra: str = ""):
+    """Отправляет админу уведомление о новой заявке на вывод."""
+    try:
+        text = (
+            f"💸 <b>Новая заявка №{wid}</b>\n"
+            f"Метод: <b>{method}</b>\n"
+            f"Сумма: <b>{amount} {unit}</b>\n"
+            f"Монет: <b>{need}</b> 🪙\n"
+            f"Юзер: <code>{uid}</code>"
+        )
+        if extra:
+            text += f"\n{extra}"
+        await bot.send_message(ADMIN_IDS[0], text, parse_mode="HTML")
+    except Exception as e:
+        print(f"notify admin error: {e}")
+
+
+def _calc_withdraw_need(method: str, amount: float) -> int:
+    cfg = WITHDRAW_RATES.get(method)
+    if not cfg:
+        raise HTTPException(400, "Неизвестный метод вывода")
+    return int(amount * cfg['rate'])
+
+
+def _validate_withdraw_amount(method: str, amount: float) -> None:
+    cfg = WITHDRAW_RATES.get(method)
+    if not cfg:
+        raise HTTPException(400, "Неизвестный метод вывода")
+    if amount < cfg['min']:
+        raise HTTPException(400, f"Минимум {cfg['min']} {cfg['unit']}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(start_bot())
-    print("🚀 Бот и веб-сервер запущены")
+    print("🚀 Бот и веб-сервер запущены", flush=True)
     yield
     task.cancel()
 
@@ -256,7 +286,6 @@ async def api_crypto_check(request: Request):
                 order["coins"] = coins
 
                 bal = await add_balance(uid, coins, None)
-                # ✅ ФИКС: сохраняем платёж, чтобы has_deposited работал
                 await save_payment(
                     uid,
                     f"crypto_{order_id}",
@@ -404,7 +433,6 @@ async def api_slots(request: Request):
     symbols = ["🍒", "🍋", "🍊", "💎", "🤑", "7️⃣"]
     result = [random.choice(symbols) for _ in range(3)]
 
-    # честный выигрыш
     base_win = 0
     jackpot = False
     if result[0] == result[1] == result[2]:
@@ -419,7 +447,6 @@ async def api_slots(request: Request):
     elif result[0] == result[1] or result[1] == result[2] or result[0] == result[2]:
         base_win = bet * 2
 
-    # ✅ ФИКС: подкрутка применяется ОДИН РАЗ
     base_win_bool = base_win > 0
     final_win_bool = await _apply_winrate(uid, base_win_bool)
 
@@ -826,7 +853,6 @@ async def api_crash_start(request: Request):
     else:
         crash_at = min(100.0, max(1.01, 0.95 / (1 - r)))
 
-    # ✅ ФИКС: ограничиваем подкрутку сверху ×3.0
     winrate, _ = await get_winrate(uid)
     if winrate > 50:
         bonus = (winrate - 50) / 50.0 * 2.0
@@ -2548,22 +2574,6 @@ async def api_cases_free_open(request: Request):
 
 # ═══════════ ВЫВОД: ОБЩИЕ ФУНКЦИИ ═══════════
 
-def _calc_withdraw_need(method: str, amount: float) -> int:
-    """Сколько монет списать за вывод."""
-    cfg = WITHDRAW_RATES.get(method)
-    if not cfg:
-        raise HTTPException(400, "Неизвестный метод вывода")
-    return int(amount * cfg['rate'])
-
-
-def _validate_withdraw_amount(method: str, amount: float) -> None:
-    cfg = WITHDRAW_RATES.get(method)
-    if not cfg:
-        raise HTTPException(400, "Неизвестный метод вывода")
-    if amount < cfg['min']:
-        raise HTTPException(400, f"Минимум {cfg['min']} {cfg['unit']}")
-
-
 @app.post("/api/withdraw/methods")
 async def api_withdraw_methods(request: Request):
     data = await request.json()
@@ -2586,7 +2596,7 @@ async def api_withdraw_methods(request: Request):
     }
 
 
-# ═══════════ ВЫВОД: STARS (старый метод) ═══════════
+# ═══════════ ВЫВОД: STARS ═══════════
 
 @app.post("/api/withdraw/stars")
 async def api_withdraw_stars(request: Request):
@@ -2617,6 +2627,8 @@ async def api_withdraw_stars(request: Request):
     await add_balance(uid, -need)
     wid = await create_withdrawal(uid, username, 'stars', amount, need)
 
+    await _notify_admin_withdraw(wid, 'stars', amount, '⭐', need, uid)
+
     return {"status": "pending", "id": wid,
             "message": f"Заявка №{wid} создана (Stars)",
             "balance": await get_balance(uid)}
@@ -2641,7 +2653,6 @@ async def api_withdraw_sbp(request: Request):
     amount = float(data.get("amount", 0))
     _validate_withdraw_amount('sbp', amount)
 
-    # реквизиты СБП
     card = str(data.get("card", "")).strip()
     bank = str(data.get("bank", "")).strip()
     full_name = str(data.get("full_name", "")).strip()
@@ -2662,6 +2673,11 @@ async def api_withdraw_sbp(request: Request):
     wid = await create_withdrawal(
         uid, user.get("username") or str(uid),
         'sbp', amount, need, details
+    )
+
+    await _notify_admin_withdraw(
+        wid, 'СБП', amount, '₽', need, uid,
+        extra=f"Карта: <code>{card}</code>\nФИО: <b>{full_name}</b>\nБанк: <b>{bank}</b>"
     )
 
     return {"status": "pending", "id": wid,
@@ -2705,6 +2721,11 @@ async def api_withdraw_usdc(request: Request):
         'usdc', amount, need, details
     )
 
+    await _notify_admin_withdraw(
+        wid, 'USDC (Polygon)', amount, 'USDC', need, uid,
+        extra=f"Кошелёк: <code>{wallet}</code>"
+    )
+
     return {"status": "pending", "id": wid,
             "message": f"Заявка №{wid} создана (USDC)",
             "balance": await get_balance(uid)}
@@ -2744,6 +2765,11 @@ async def api_withdraw_ton(request: Request):
     wid = await create_withdrawal(
         uid, user.get("username") or str(uid),
         'ton', amount, need, details
+    )
+
+    await _notify_admin_withdraw(
+        wid, 'TON', amount, 'TON', need, uid,
+        extra=f"Кошелёк: <code>{wallet}</code>"
     )
 
     return {"status": "pending", "id": wid,
@@ -3342,5 +3368,5 @@ async def api_admin_broadcast(request: Request):
 if __name__ == "__main__":
     import os
     port = int(os.getenv("PORT", 8000))
-    print(f"🚀 Запуск на порту {port}")
+    print(f"🚀 Запуск на порту {port}", flush=True)
     uvicorn.run(app, host="0.0.0.0", port=port)
