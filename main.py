@@ -696,7 +696,7 @@ async def api_slots2_spin(request: Request):
     elif not final_win_bool and base_win_bool:
         total_win = 0
         line_wins = []
-    total_win = await _apply_payout(uid, total_win)
+    # total_win = await _apply_payout(uid, total_win)
 
     if total_win > 0:
         await add_balance(uid, total_win)
