@@ -65,6 +65,17 @@ const TOPUP_RATES = {
     stars: 10,
 };
 
+/* ═══ TELEGRAM-STYLE ICONS ═══ */
+function iconWrap(emoji, kind = 'gift', size = '', rarity = '') {
+    const sizeCls = size ? ` ${size}` : '';
+    const rarityAttr = rarity ? ` data-rarity="${rarity}"` : '';
+    return `<div class="tg-icon ${kind}${sizeCls}"${rarityAttr}>${emoji}</div>`;
+}
+
+function kindFromRarity(rarity) {
+    return ['epic', 'legendary', 'mythic'].includes(rarity) ? 'nft' : 'gift';
+}
+
 /* ═══ SOUND ═══ */
 let audioCtx = null;
 
@@ -479,18 +490,22 @@ function applyCasesFilter(filter) {
         return 'common';
     };
 
-    grid.innerHTML = filtered.slice(0, 12).map(c => `
-        <div class="case-card" onclick="openCaseInfo('${c.id}')">
-            <div class="case-image">
-                <div class="case-emoji">${c.emoji}</div>
+    grid.innerHTML = filtered.slice(0, 12).map(c => {
+        const isNft = c.price_stars >= 500;
+        const kind = isNft ? 'nft' : 'gift';
+        return `
+            <div class="case-card" onclick="openCaseInfo('${c.id}')">
+                <div class="case-image">
+                    ${iconWrap(c.emoji, kind, 'lg')}
+                </div>
+                <div class="case-rarity-bar" data-rarity="${rarityFromPrice(c.price_coins)}"></div>
+                <div class="case-card-info">
+                    <div class="case-name">${c.name}</div>
+                    <div class="case-price">${fmt(c.price_coins)} 🪙</div>
+                </div>
             </div>
-            <div class="case-rarity-bar" data-rarity="${rarityFromPrice(c.price_coins)}"></div>
-            <div class="case-card-info">
-                <div class="case-name">${c.name}</div>
-                <div class="case-price">${fmt(c.price_coins)} 🪙</div>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 /* ═══ PROFILE ═══ */
@@ -2477,18 +2492,22 @@ async function loadCases() {
             return 'common';
         };
 
-        const cardHtml = (c) => `
-            <div class="case-card" onclick="openCaseInfo('${c.id}')">
-                <div class="case-image">
-                    <div class="case-emoji">${c.emoji}</div>
+        const cardHtml = (c) => {
+            const isNft = c.price_stars >= 500;
+            const kind = isNft ? 'nft' : 'gift';
+            return `
+                <div class="case-card" onclick="openCaseInfo('${c.id}')">
+                    <div class="case-image">
+                        ${iconWrap(c.emoji, kind, 'lg')}
+                    </div>
+                    <div class="case-rarity-bar" data-rarity="${rarityFromPrice(c.price_coins)}"></div>
+                    <div class="case-card-info">
+                        <div class="case-name">${c.name}</div>
+                        <div class="case-price">${fmt(c.price_coins)} 🪙</div>
+                    </div>
                 </div>
-                <div class="case-rarity-bar" data-rarity="${rarityFromPrice(c.price_coins)}"></div>
-                <div class="case-card-info">
-                    <div class="case-name">${c.name}</div>
-                    <div class="case-price">${fmt(c.price_coins)} 🪙</div>
-                </div>
-            </div>
-        `;
+            `;
+        };
 
         if (el) el.innerHTML = d.cases.map(cardHtml).join('');
         if (homeEl) homeEl.innerHTML = d.cases.slice(0, 6).map(cardHtml).join('');
@@ -2511,19 +2530,22 @@ async function openCaseInfo(id) {
         };
 
         const el = document.getElementById('ciContents');
-        el.innerHTML = d.items.map(i => `
-            <div class="ci-item" data-rarity="${i.rarity}">
-                <div class="ci-emoji">${i.emoji}</div>
-                <div>
-                    <div class="ci-name">${i.name}</div>
-                    <div class="ci-rarity" style="color:${rarityColors[i.rarity]}">${i.rarity_emoji} ${i.rarity_name}</div>
+        el.innerHTML = d.items.map(i => {
+            const kind = kindFromRarity(i.rarity);
+            return `
+                <div class="ci-item" data-rarity="${i.rarity}">
+                    ${iconWrap(i.emoji, kind, 'sm', i.rarity)}
+                    <div>
+                        <div class="ci-name">${i.name}</div>
+                        <div class="ci-rarity" style="color:${rarityColors[i.rarity]}">${i.rarity_emoji} ${i.rarity_name}</div>
+                    </div>
+                    <div style="text-align:right">
+                        <div class="ci-price">${fmt(i.value)} 🪙</div>
+                        <div class="ci-chance">${i.chance}%</div>
+                    </div>
                 </div>
-                <div style="text-align:right">
-                    <div class="ci-price">${fmt(i.value)} 🪙</div>
-                    <div class="ci-chance">${i.chance}%</div>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         document.getElementById('caseInfo').classList.remove('hidden');
     } catch (e) { toast(e.message, 'error'); }
@@ -2593,13 +2615,16 @@ async function openCase(c, count = 1) {
         return;
     }
 
-    track.innerHTML = data.track.map(item => `
-        <div class="cr-item" data-rarity="${item.rarity}">
-            <div class="cr-emoji">${item.emoji}</div>
-            <div class="cr-name">${item.name}</div>
-            <div class="cr-price">${fmt(item.value)}</div>
-        </div>
-    `).join('');
+    track.innerHTML = data.track.map(item => {
+        const kind = kindFromRarity(item.rarity);
+        return `
+            <div class="cr-item" data-rarity="${item.rarity}">
+                ${iconWrap(item.emoji, kind, 'sm', item.rarity)}
+                <div class="cr-name">${item.name}</div>
+                <div class="cr-price">${fmt(item.value)}</div>
+            </div>
+        `;
+    }).join('');
 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
@@ -2668,7 +2693,7 @@ async function openCase(c, count = 1) {
         const sellPrice = document.getElementById('crSellPrice');
 
         if (r) {
-            rewardEmoji.textContent = r.emoji;
+            rewardEmoji.innerHTML = iconWrap(r.emoji, kindFromRarity(r.rarity), '', r.rarity);
             rewardName.textContent = r.name;
             rewardPrice.textContent = `${fmt(r.value)} 🪙`;
             rewardBox.classList.remove('hidden');
@@ -2751,16 +2776,19 @@ async function loadInventory() {
             invSortDesc ? b.value - a.value : a.value - b.value
         );
 
-        listEl.innerHTML = sortedItems.map(i => `
-            <div class="inventory-item" data-rarity="${i.rarity}">
-                <div class="inv-emoji">${i.emoji}</div>
-                <div class="inv-info">
-                    <div class="inv-name">${i.name} ${i.kind === 'nft' ? '🎨' : ''}</div>
-                    <div class="inv-rarity" style="color:${rarityColors[i.rarity]}">${i.rarity}</div>
+        listEl.innerHTML = sortedItems.map(i => {
+            const kind = kindFromRarity(i.rarity);
+            return `
+                <div class="inventory-item" data-rarity="${i.rarity}">
+                    ${iconWrap(i.emoji, kind, 'sm', i.rarity)}
+                    <div class="inv-info">
+                        <div class="inv-name">${i.name} ${i.kind === 'nft' ? '🎨' : ''}</div>
+                        <div class="inv-rarity" style="color:${rarityColors[i.rarity]}">${i.rarity}</div>
+                    </div>
+                    <button class="inv-sell-btn" onclick="sellItem(${i.id})">+${fmt(i.value)}</button>
                 </div>
-                <button class="inv-sell-btn" onclick="sellItem(${i.id})">+${fmt(i.value)}</button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -2847,13 +2875,16 @@ function renderUpgraderInv() {
         el.innerHTML = '<div class="upg-inv-empty">Инвентарь пуст</div>';
         return;
     }
-    el.innerHTML = sorted.map(i => `
-        <div class="upg-inv-item ${upgraderSelectedPks.has(i.id) ? 'selected' : ''}" onclick="selectUpgraderItem(${i.id})">
-            <div class="upg-inv-item-emoji">${i.emoji}</div>
-            <div class="upg-inv-item-name">${i.name}</div>
-            <div class="upg-inv-item-price">${fmt(i.value)}</div>
-        </div>
-    `).join('');
+    el.innerHTML = sorted.map(i => {
+        const kind = kindFromRarity(i.rarity);
+        return `
+            <div class="upg-inv-item ${upgraderSelectedPks.has(i.id) ? 'selected' : ''}" onclick="selectUpgraderItem(${i.id})">
+                ${iconWrap(i.emoji, kind, 'sm', i.rarity)}
+                <div class="upg-inv-item-name">${i.name}</div>
+                <div class="upg-inv-item-price">${fmt(i.value)}</div>
+            </div>
+        `;
+    }).join('');
 }
 
 function selectUpgraderItem(pk) {
@@ -2899,7 +2930,7 @@ function renderUpgraderMyItem() {
     const total = getSelectedTotal();
     const first = items[0];
     el.innerHTML = `
-        <div class="upg-slot-emoji">${first.emoji}</div>
+        <div class="upg-slot-emoji">${iconWrap(first.emoji, kindFromRarity(first.rarity), '', first.rarity)}</div>
         <div class="upg-slot-name">${items.length > 1 ? `+${items.length - 1} ещё` : first.name}</div>
         <div class="upg-slot-price">${fmt(total)} 🪙</div>
     `;
@@ -2924,7 +2955,7 @@ function renderUpgraderTarget() {
     const t = upgraderTargets[upgraderTargetIdx];
     el.innerHTML = `
         <button class="upg-nav upg-nav-prev" onclick="upgraderNav(-1)">‹</button>
-        <div class="upg-slot-emoji">${t.emoji}</div>
+        <div class="upg-slot-emoji">${iconWrap(t.emoji, kindFromRarity(t.rarity), '', t.rarity)}</div>
         <div class="upg-slot-name">${t.name}</div>
         <div class="upg-slot-price">${fmt(t.price_coins)} 🪙</div>
         <button class="upg-nav upg-nav-next" onclick="upgraderNav(1)">›</button>
@@ -2936,13 +2967,16 @@ function renderUpgraderTarget() {
 function renderUpgraderTargetsList() {
     const el = document.getElementById('upgTargetsList');
     if (!el) return;
-    el.innerHTML = upgraderTargets.map((t, i) => `
-        <div class="upg-target-item ${i === upgraderTargetIdx ? 'selected' : ''}" onclick="selectUpgraderTarget(${i})">
-            <div class="upg-target-item-emoji">${t.emoji}</div>
-            <div class="upg-target-item-name">${t.name}</div>
-            <div class="upg-target-item-price">${fmt(t.price_coins)}</div>
-        </div>
-    `).join('');
+    el.innerHTML = upgraderTargets.map((t, i) => {
+        const kind = kindFromRarity(t.rarity);
+        return `
+            <div class="upg-target-item ${i === upgraderTargetIdx ? 'selected' : ''}" onclick="selectUpgraderTarget(${i})">
+                ${iconWrap(t.emoji, kind, 'sm', t.rarity)}
+                <div class="upg-target-item-name">${t.name}</div>
+                <div class="upg-target-item-price">${fmt(t.price_coins)}</div>
+            </div>
+        `;
+    }).join('');
 }
 
 function upgraderNav(dir) {
@@ -3218,7 +3252,7 @@ async function openFreeCase() {
 
         overlay.innerHTML = `
             <div class="case-result">
-                <div class="case-result-emoji" style="color:${color}">${d.emoji}</div>
+                <div class="case-result-emoji">${iconWrap(d.emoji, kindFromRarity(d.rarity), '', d.rarity)}</div>
                 <div class="case-result-rarity" style="color:${color}">${d.rarity_emoji} ${d.rarity_name}</div>
                 <div class="case-result-name">${d.name}</div>
                 <div class="case-result-kind">${kindLabel}</div>
@@ -3498,17 +3532,20 @@ async function loadUserInventory() {
             el.innerHTML = '<div class="admin-row">Инвентарь пуст</div>';
             return;
         }
-        el.innerHTML = d.items.map(i => `
-            <div class="adm-inv-item" data-rarity="${i.rarity}">
-                <div class="adm-inv-emoji">${i.emoji}</div>
-                <div class="adm-inv-info">
-                    <div class="adm-inv-name">${i.name} ${i.kind === 'nft' ? '🎨' : ''}</div>
-                    <div class="adm-inv-rarity">${i.rarity}</div>
+        el.innerHTML = d.items.map(i => {
+            const kind = kindFromRarity(i.rarity);
+            return `
+                <div class="adm-inv-item" data-rarity="${i.rarity}">
+                    ${iconWrap(i.emoji, kind, 'sm', i.rarity)}
+                    <div class="adm-inv-info">
+                        <div class="adm-inv-name">${i.name} ${i.kind === 'nft' ? '🎨' : ''}</div>
+                        <div class="adm-inv-rarity">${i.rarity}</div>
+                    </div>
+                    <div class="adm-inv-value">${fmt(i.value)} 🪙</div>
+                    <button class="adm-inv-steal" onclick="stealItem(${i.id}, ${d.user_id})">Забрать</button>
                 </div>
-                <div class="adm-inv-value">${fmt(i.value)} 🪙</div>
-                <button class="adm-inv-steal" onclick="stealItem(${i.id}, ${d.user_id})">Забрать</button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -3666,7 +3703,6 @@ async function loadHourlyStatus() {
             banner.classList.remove('ready');
             text.textContent = `⏳ Бонус через ${formatCooldown(d.seconds_left)} · серия ${d.streak}`;
 
-            // Тикаем каждую секунду
             if (hourlyTimer) clearInterval(hourlyTimer);
             let left = d.seconds_left;
             hourlyTimer = setInterval(() => {
