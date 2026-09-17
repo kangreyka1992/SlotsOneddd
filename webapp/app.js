@@ -2700,7 +2700,7 @@ async function openCase(c, count = 1) {
         const sellPrice = document.getElementById('crSellPrice');
 
         if (r) {
-            rewardEmoji.innerHTML = iconWrap('pepe_gift.gif', 'gift', 'sm', 'legendary', true);
+            rewardEmoji.innerHTML = iconWrap('pepe_gift.gif', 'gift', '', 'legendary', true);
             rewardName.textContent = r.name;
             rewardPrice.textContent = `${fmt(r.value)} 🪙`;
             rewardBox.classList.remove('hidden');
