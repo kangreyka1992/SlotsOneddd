@@ -11,6 +11,11 @@ const BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000];
 const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
 
+const GIFT_GIFS = {
+    // тестовый режим — лягушка для всего
+    '*': 'pepe_gift.gif',
+};
+
 let profile = { balance: 0, stats: {}, referral: {} };
 let minesState = null;
 let crashInterval = null;
@@ -2694,18 +2699,22 @@ async function openCase(c, count = 1) {
         }
         haptic('success');
 
-        const rewardEmoji = document.getElementById('crRewardEmoji');
-        const rewardName = document.getElementById('crRewardName');
-        const rewardPrice = document.getElementById('crRewardPrice');
-        const sellPrice = document.getElementById('crSellPrice');
-
+        const GIFT_GIFS = {
+            'pepe_gift': 'pepe_gift.gif',
+            // сюда добавляешь остальные: 'rock': 'img/rock.gif', ...
+        };
         if (r) {
-            rewardEmoji.innerHTML = iconWrap('pepe_gift.gif', 'gift', '', 'legendary', true);
-            rewardName.textContent = r.name;
-            rewardPrice.textContent = `${fmt(r.value)} 🪙`;
-            rewardBox.classList.remove('hidden');
-            sellPrice.textContent = fmt(r.value);
-        }
+            const gifPath = GIFT_GIFS[r.item_id];
+            const iconHtml = gifPath
+                ? iconWrap(gifPath, 'gift', '', r.rarity, true)
+                : iconWrap(r.emoji, kindFromRarity(r.rarity), '', r.rarity);
+
+        rewardEmoji.innerHTML = iconHtml;
+        rewardName.textContent = r.name;
+        rewardPrice.textContent = `${fmt(r.value)} 🪙`;
+        rewardBox.classList.remove('hidden');
+        sellPrice.textContent = fmt(r.value);
+    }
 
         status.textContent = count === 1
             ? `${r.emoji} ${r.name} · ${fmt(r.value)} 🪙`
