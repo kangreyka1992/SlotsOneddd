@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=340">
+<link rel="stylesheet" href="style.css?v=350">
 <style>
 /* ═══════════ НОВЫЕ ЭФФЕКТЫ ═══════════ */
 
@@ -255,9 +255,94 @@
 </header>
 
   <div class="live-feed" id="liveFeed"></div>
+  <!-- Баннер джекпота -->
+<div class="jackpot-banner" id="jackpotBanner">
+    <div class="jackpot-icon">🎰</div>
+    <div class="jackpot-info">
+        <div class="jackpot-label">ДЖЕКПОТ</div>
+        <div class="jackpot-value">0</div>
+    </div>
+    <div class="jackpot-icon">💰</div>
+</div>
 
+<!-- Ежечасный бонус -->
+<div class="hourly-banner hidden" id="hourlyBanner" onclick="claimHourly()">
+    <div class="hourly-icon">⏰</div>
+    <div class="hourly-text" id="hourlyText">Загрузка...</div>
+</div>
   <main class="screens">
+   <!-- Колесо -->
+<section class="screen" id="screen-wheel">
+  <h3 class="section-title">🎡 Колесо Фортуны</h3>
+  <div class="wheel-info">
+    <div class="inv-stat">
+      <div class="inv-stat-val" id="wheelSpins">0</div>
+      <div class="inv-stat-lbl">Доступно прокрутов</div>
+    </div>
+  </div>
+  <div class="wheel-container">
+    <div class="wheel-visual" id="wheelVisual">🎡</div>
+    <div class="wheel-result hidden" id="wheelResult"></div>
+  </div>
+  <button class="btn-primary" id="wheelSpinBtn" onclick="spinWheel()">🎡 Крутить</button>
+  <div class="topup-info" style="margin-top:12px;">
+    💡 Прокрут получаешь за активность и раз в сутки
+  </div>
+</section>
 
+<!-- Кэшбэк -->
+<section class="screen" id="screen-cashback">
+  <h3 class="section-title">💰 Кэшбэк</h3>
+  <div class="cashback-card" id="cashbackInfo">Загрузка...</div>
+  <div class="topup-info" style="margin-top:12px;">
+    💡 Получай % от проигранных монет каждую неделю
+  </div>
+</section>
+
+<!-- Рефералы -->
+<section class="screen" id="screen-referral">
+  <h3 class="section-title">👥 Рефералы</h3>
+  <div class="inventory-stats" id="referralStats"></div>
+
+  <div class="promo-box" style="margin-top:12px;">
+    <input class="input" id="referralLink" readonly>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button class="btn-primary" onclick="copyReferralLink()">📋 Копировать</button>
+      <button class="btn-primary" onclick="shareReferralLink()">📤 Поделиться</button>
+    </div>
+  </div>
+
+  <div class="topup-info" style="margin-top:16px;">
+    💰 Получай <b>5%</b> от каждой ставки реферала<br>
+    🎁 Бонус <b>+5000 🪙</b> за депозит реферала на 100+ ⭐
+  </div>
+</section>
+
+<!-- Кастомизация -->
+<section class="screen" id="screen-customize">
+  <h3 class="section-title">🎨 Кастомизация профиля</h3>
+
+  <h4 class="admin-subtitle">👤 Аватарки</h4>
+  <div class="customize-grid" id="customizeAvatars"></div>
+
+  <h4 class="admin-subtitle" style="margin-top:20px;">🖼 Рамки</h4>
+  <div class="customize-grid" id="customizeFrames"></div>
+
+  <h4 class="admin-subtitle" style="margin-top:20px;">📛 Титулы</h4>
+  <div class="customize-grid" id="customizeTitles"></div>
+</section>
+
+<!-- Турнир -->
+<section class="screen" id="screen-tournament">
+  <h3 class="section-title">🏆 Турнир недели</h3>
+  <div id="tournamentBody">Загрузка...</div>
+</section>
+
+<!-- Зал славы -->
+<section class="screen" id="screen-hall">
+  <h3 class="section-title">🏅 Зал славы</h3>
+  <div id="hallList">Загрузка...</div>
+</section>
    <section class="screen active" id="screen-home">
 
   <!-- Плавающий фон -->
@@ -460,6 +545,19 @@
         🏆 Battle Pass
       </button>
     </div>
+      <!-- Добавь ПОСЛЕ кнопки "Battle Pass" -->
+<button class="btn-primary" onclick="showScreen('referral')" style="margin-top:10px; width:100%;">
+  👥 Рефералы
+</button>
+<button class="btn-primary" onclick="showScreen('cashback')" style="margin-top:10px; width:100%;">
+  💰 Кэшбэк
+</button>
+<button class="btn-primary" onclick="showScreen('customize')" style="margin-top:10px; width:100%;">
+  🎨 Кастомизация
+</button>
+<button class="btn-primary" onclick="showScreen('hall')" style="margin-top:10px; width:100%;">
+  🏅 Зал славы
+</button>
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
         <div class="stat-card"><div class="stat-val" id="statWagered">0</div><div class="stat-lbl">Поставлено</div></div>
@@ -1042,14 +1140,14 @@
   <button class="nav-btn" data-nav="cases" onclick="showScreen('cases')">
     <span class="nav-icon">📦</span><span class="nav-lbl">Кейсы</span>
   </button>
-  <button class="nav-btn" data-nav="inventory" onclick="showScreen('inventory')">
-    <span class="nav-icon">🎒</span><span class="nav-lbl">Инвентарь</span>
+  <button class="nav-btn" data-nav="wheel" onclick="showScreen('wheel')">
+    <span class="nav-icon">🎡</span><span class="nav-lbl">Колесо</span>
   </button>
-  <button class="nav-btn" data-nav="upgrader" onclick="showScreen('upgrader')">
-    <span class="nav-icon">⚡</span><span class="nav-lbl">Апгрейд</span>
+  <button class="nav-btn" data-nav="tournament" onclick="showScreen('tournament')">
+    <span class="nav-icon">🏆</span><span class="nav-lbl">Турнир</span>
   </button>
-  <button class="nav-btn" data-nav="battlepass" onclick="showScreen('battlepass')">
-    <span class="nav-icon">🏆</span><span class="nav-lbl">Батл-пас</span>
+  <button class="nav-btn" data-nav="profile" onclick="showScreen('profile')">
+    <span class="nav-icon">👤</span><span class="nav-lbl">Профиль</span>
   </button>
 </nav>
 
@@ -1119,6 +1217,6 @@
   };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=340"></script>
+<script src="app.js?v=350"></script>
 </body>
 </html>
