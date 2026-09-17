@@ -9,66 +9,195 @@ DB_PATH = os.getenv("DB_PATH", "casino.db")
 
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
-        # ═══ СТАРЫЕ ТАБЛИЦЫ ═══
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS users (...)
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                balance INTEGER NOT NULL DEFAULT 0,
+                username TEXT,
+                daily_last TIMESTAMP,
+                daily_streak INTEGER DEFAULT 0,
+                total_wagered INTEGER DEFAULT 0,
+                total_won INTEGER DEFAULT 0,
+                games_played INTEGER DEFAULT 0,
+                referrals INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS live_feed (...)
+            CREATE TABLE IF NOT EXISTS live_feed (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                game TEXT NOT NULL,
+                win INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS daily_quests (...)
+            CREATE TABLE IF NOT EXISTS daily_quests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                quest_id TEXT NOT NULL,
+                progress INTEGER DEFAULT 0,
+                target INTEGER NOT NULL,
+                reward INTEGER NOT NULL,
+                claimed INTEGER DEFAULT 0,
+                quest_date TEXT NOT NULL,
+                UNIQUE(user_id, quest_id, quest_date)
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS payments (...)
+            CREATE TABLE IF NOT EXISTS payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                charge_id TEXT NOT NULL UNIQUE,
+                stars INTEGER NOT NULL,
+                coins INTEGER NOT NULL,
+                refunded INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS battle_pass (...)
+            CREATE TABLE IF NOT EXISTS battle_pass (
+                user_id INTEGER PRIMARY KEY,
+                xp INTEGER DEFAULT 0,
+                level INTEGER DEFAULT 1,
+                season INTEGER NOT NULL,
+                premium INTEGER DEFAULT 0,
+                claimed_free TEXT DEFAULT '',
+                claimed_premium TEXT DEFAULT '',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS battle_pass_season (...)
+            CREATE TABLE IF NOT EXISTS battle_pass_season (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                season INTEGER NOT NULL,
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                ends_at TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS withdrawals (...)
+            CREATE TABLE IF NOT EXISTS withdrawals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                username TEXT NOT NULL,
+                method TEXT NOT NULL DEFAULT 'stars',
+                stars INTEGER NOT NULL DEFAULT 0,
+                amount REAL NOT NULL DEFAULT 0,
+                details TEXT,
+                coins_spent INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                tx_hash TEXT,
+                error TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS promocodes (...)
+            CREATE TABLE IF NOT EXISTS promocodes (
+                code TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                value INTEGER NOT NULL,
+                max_uses INTEGER DEFAULT 0,
+                used_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS promo_used (...)
+            CREATE TABLE IF NOT EXISTS promo_used (
+                user_id INTEGER NOT NULL,
+                code TEXT NOT NULL,
+                used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, code)
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS user_discounts (...)
+            CREATE TABLE IF NOT EXISTS user_discounts (
+                user_id INTEGER PRIMARY KEY,
+                percent INTEGER NOT NULL,
+                expires_at TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS referrals (...)
+            CREATE TABLE IF NOT EXISTS referrals (
+                user_id INTEGER PRIMARY KEY,
+                referrer_id INTEGER NOT NULL,
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS referral_stats (...)
+            CREATE TABLE IF NOT EXISTS referral_stats (
+                user_id INTEGER PRIMARY KEY,
+                invited_count INTEGER DEFAULT 0,
+                bonus_discounts INTEGER DEFAULT 0
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS achievements (...)
+            CREATE TABLE IF NOT EXISTS achievements (
+                user_id INTEGER NOT NULL,
+                ach_id TEXT NOT NULL,
+                unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, ach_id)
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS admin_logs (...)
+            CREATE TABLE IF NOT EXISTS admin_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                target_id INTEGER,
+                details TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS user_visits (...)
+            CREATE TABLE IF NOT EXISTS user_visits (
+                user_id INTEGER NOT NULL,
+                visit_date TEXT NOT NULL,
+                PRIMARY KEY (user_id, visit_date)
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS user_items (...)
+            CREATE TABLE IF NOT EXISTS user_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                item_id TEXT NOT NULL,
+                case_id TEXT NOT NULL,
+                rarity TEXT NOT NULL,
+                emoji TEXT NOT NULL,
+                name TEXT NOT NULL,
+                value INTEGER NOT NULL,
+                kind TEXT NOT NULL DEFAULT 'gift',
+                sold INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS free_case (...)
+            CREATE TABLE IF NOT EXISTS free_case (
+                user_id INTEGER PRIMARY KEY,
+                last_claim TIMESTAMP,
+                streak INTEGER DEFAULT 0
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS house_flow (...)
+            CREATE TABLE IF NOT EXISTS house_flow (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                wagered INTEGER NOT NULL DEFAULT 0,
+                paid INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS winrate_settings (...)
+            CREATE TABLE IF NOT EXISTS winrate_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE,
+                winrate REAL NOT NULL DEFAULT 50.0,
+                payout_mult REAL NOT NULL DEFAULT 1.0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
 
-        # ═══ НОВЫЕ ТАБЛИЦЫ ДЛЯ ФИЧ ═══
+        # ═══════════ НОВЫЕ ТАБЛИЦЫ ДЛЯ ФИЧ ═══════════
         await db.execute("""
             CREATE TABLE IF NOT EXISTS jackpot (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -162,30 +291,7 @@ async def init_db():
             )
         """)
 
-        # ═══ ВСЁ СОХРАНЯЕМ ═══
         await db.commit()
-
-
-async def has_deposited(user_id: int, min_stars: int) -> bool:
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT SUM(stars) FROM payments WHERE user_id = ?",
-            (user_id,)
-        ) as cur:
-            row = await cur.fetchone()
-            total_stars = row[0] if row and row[0] else 0
-            return total_stars >= min_stars
-
-
-async def ensure_user(user_id: int, username: str = None):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT INTO users (user_id, balance, username) VALUES (?, 0, ?) "
-            "ON CONFLICT(user_id) DO UPDATE SET username = COALESCE(?, username)",
-            (user_id, username, username),
-        )
-        await db.commit()
-
 
 async def get_balance(user_id: int) -> int:
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1180,110 +1286,6 @@ async def clear_winrate(user_id):
             await db.execute("DELETE FROM winrate_settings WHERE user_id = ?", (user_id,))
         await db.commit()
 
-# ═══════════ НОВЫЕ ТАБЛИЦЫ ДЛЯ ФИЧ ═══════════
-
-await db.execute("""
-    CREATE TABLE IF NOT EXISTS jackpot (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        amount INTEGER NOT NULL DEFAULT 100000,
-        last_winner INTEGER,
-        last_won_at TIMESTAMP
-    )
-""")
-await db.execute("INSERT OR IGNORE INTO jackpot (id, amount) VALUES (1, 100000)")
-
-await db.execute("""
-    CREATE TABLE IF NOT EXISTS hourly_bonus (
-        user_id INTEGER PRIMARY KEY,
-        last_claim TIMESTAMP,
-        streak INTEGER DEFAULT 0
-    )
-""")
-
-await db.execute("""
-    CREATE TABLE IF NOT EXISTS cashback (
-        user_id INTEGER PRIMARY KEY,
-        lost_total INTEGER DEFAULT 0,
-        claimed_at TIMESTAMP
-    )
-""")
-
-await db.execute("""
-    CREATE TABLE IF NOT EXISTS referral_earnings (
-        user_id INTEGER PRIMARY KEY,
-        earned_total INTEGER DEFAULT 0,
-        from_bets INTEGER DEFAULT 0,
-        from_deposits INTEGER DEFAULT 0
-    )
-""")
-
-await db.execute("""
-    CREATE TABLE IF NOT EXISTS profiles (
-        user_id INTEGER PRIMARY KEY,
-        avatar TEXT DEFAULT 'default',
-        frame TEXT DEFAULT 'none',
-        title TEXT DEFAULT 'Новичок',
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-""")
-
-await db.execute("""
-    CREATE TABLE IF NOT EXISTS tournaments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        game TEXT NOT NULL,
-        prize_pool INTEGER NOT NULL,
-        starts_at TIMESTAMP,
-        ends_at TIMESTAMP,
-        status TEXT DEFAULT 'active'
-    )
-""")
-
-await db.execute("""
-    CREATE TABLE IF NOT EXISTS tournament_scores (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tournament_id INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
-        score INTEGER DEFAULT 0,
-        UNIQUE(tournament_id, user_id)
-    )
-""")
-
-await db.execute("""
-    CREATE TABLE IF NOT EXISTS user_levels (
-        user_id INTEGER PRIMARY KEY,
-        xp INTEGER DEFAULT 0,
-        level INTEGER DEFAULT 1
-    )
-""")
-
-await db.execute("""
-    CREATE TABLE IF NOT EXISTS hall_of_fame (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        username TEXT,
-        game TEXT NOT NULL,
-        win INTEGER NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-""")
-
-await db.execute("""
-    CREATE TABLE IF NOT EXISTS wheel_spins (
-        user_id INTEGER PRIMARY KEY,
-        spins_available INTEGER DEFAULT 0,
-        last_daily TIMESTAMP
-    )
-""")
-
-await db.commit()
-
-async def list_winrates():
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT user_id, winrate, payout_mult, updated_at "
-            "FROM winrate_settings ORDER BY updated_at DESC LIMIT 50"
-        ) as cur:
-            return await cur.fetchall()
 # ═══════════ ДЖЕКПОТ ═══════════
 
 async def get_jackpot() -> int:
