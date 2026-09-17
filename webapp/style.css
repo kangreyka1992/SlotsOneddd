@@ -3068,3 +3068,53 @@ body.upgrade-running .bottom-nav {
   margin-top: 4px;
   font-family: var(--font-num);
 }
+/* СБП реквизиты */
+.sbp-requisites {
+  background: var(--bg-card);
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sbp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+}
+.sbp-row-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sbp-row-value {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
+  font-family: var(--font-num);
+  text-align: right;
+  word-break: break-all;
+}
+.sbp-row-value.money {
+  color: #a78bfa;
+}
+.sbp-row-copy {
+  padding: 6px 10px;
+  background: rgba(124, 92, 255, 0.15);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #a78bfa;
+  white-space: nowrap;
+}
+.sbp-row-copy:active {
+  transform: scale(0.94);
+  background: rgba(124, 92, 255, 0.3);
+}
