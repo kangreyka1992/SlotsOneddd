@@ -184,15 +184,7 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS winrate_settings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER UNIQUE,
-                winrate REAL NOT NULL DEFAULT 50.0,
-                payout_mult REAL NOT NULL DEFAULT 1.0,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        # ✅ ФИКС: убрали дубликат
         await db.execute("""
             CREATE TABLE IF NOT EXISTS winrate_settings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -203,6 +195,7 @@ async def init_db():
             )
         """)
         await db.commit()
+
 
 async def has_deposited(user_id: int, min_stars: int) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
@@ -780,6 +773,8 @@ async def get_house_stats():
                 "profit": profit,
                 "rtp": round(rtp, 2),
             }
+
+
 async def log_live_win(user_id: int, username: str, game: str, win: int):
     """Записывает крупный выигрыш в ленту"""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -788,7 +783,6 @@ async def log_live_win(user_id: int, username: str, game: str, win: int):
             (user_id, username, game, win),
         )
         await db.commit()
-        # Оставляем только последние 100 записей
         await db.execute(
             "DELETE FROM live_feed WHERE id NOT IN "
             "(SELECT id FROM live_feed ORDER BY id DESC LIMIT 100)"
@@ -805,6 +799,8 @@ async def get_live_feed(limit: int = 15):
             (limit,),
         ) as cur:
             return await cur.fetchall()
+
+
 DAILY_QUEST_POOL = [
     {"id": "bet_10",       "name": "🎯 Сделай 10 ставок",                "target": 10,     "reward": 500,   "type": "bets_count"},
     {"id": "bet_50",       "name": "🎯 Сделай 50 ставок",                "target": 50,     "reward": 2000,  "type": "bets_count"},
@@ -822,11 +818,9 @@ DAILY_QUEST_POOL = [
 
 
 async def get_daily_quests(user_id: int) -> list:
-    """Возвращает 3 задания игрока на сегодня. Если их нет — генерирует."""
     today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
 
     async with aiosqlite.connect(DB_PATH) as db:
-        # Проверяем, есть ли уже задания на сегодня
         async with db.execute(
             "SELECT quest_id, progress, target, reward, claimed "
             "FROM daily_quests WHERE user_id = ? AND quest_date = ?",
@@ -851,7 +845,6 @@ async def get_daily_quests(user_id: int) -> list:
                 })
             return quests
 
-        # Генерируем 3 новых задания
         new_quests = random.sample(DAILY_QUEST_POOL, 3)
         for q in new_quests:
             await db.execute(
@@ -876,7 +869,6 @@ async def get_daily_quests(user_id: int) -> list:
 
 
 async def update_quest_progress(user_id: int, quest_type: str, amount: int = 1):
-    """Обновляет прогресс всех активных заданий данного типа."""
     today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
 
     async with aiosqlite.connect(DB_PATH) as db:
@@ -903,7 +895,6 @@ async def update_quest_progress(user_id: int, quest_type: str, amount: int = 1):
 
 
 async def claim_quest_reward(user_id: int, quest_id: str) -> tuple:
-    """Забирает награду за задание. Возвращает (success, reward, message)."""
     today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
 
     async with aiosqlite.connect(DB_PATH) as db:
@@ -933,13 +924,13 @@ async def claim_quest_reward(user_id: int, quest_id: str) -> tuple:
 
         return True, reward, "Награда получена!"
 
+
 SEASON_DURATION_DAYS = 30
 XP_PER_LEVEL = 1000
 MAX_LEVEL = 50
 
 
 def _current_season() -> int:
-    """Возвращает номер текущего сезона. Сезон = 30 дней от 1 января 2025."""
     now = int(_time.time())
     start = 1735689600   # 2025-01-01 00:00 UTC
     days_passed = (now - start) // 86400
@@ -947,7 +938,6 @@ def _current_season() -> int:
 
 
 BATTLE_PASS_REWARDS = [
-    # (level, free_coins, premium_coins, premium_bonus_type)
     (1,   500,    1000,   None),
     (2,   500,    1000,   None),
     (3,   750,    1500,   None),
@@ -1002,7 +992,6 @@ BATTLE_PASS_REWARDS = [
 
 
 async def get_battle_pass(user_id: int) -> dict:
-    """Возвращает состояние Battle Pass игрока."""
     season = _current_season()
 
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1013,7 +1002,6 @@ async def get_battle_pass(user_id: int) -> dict:
         ) as cur:
             row = await cur.fetchone()
 
-        # Если новый сезон — сбрасываем прогресс
         if row and row[2] != season:
             await db.execute(
                 "UPDATE battle_pass SET xp = 0, level = 1, season = ?, "
@@ -1023,7 +1011,6 @@ async def get_battle_pass(user_id: int) -> dict:
             await db.commit()
             row = (0, 1, season, row[3], "", "")
 
-        # Если игрока нет — создаём
         if not row:
             await db.execute(
                 "INSERT INTO battle_pass (user_id, xp, level, season, premium) "
@@ -1051,14 +1038,12 @@ async def get_battle_pass(user_id: int) -> dict:
 
 
 async def add_battle_pass_xp(user_id: int, amount: int) -> dict:
-    """Добавляет XP игроку и пересчитывает уровень."""
     if amount <= 0:
         return await get_battle_pass(user_id)
 
     season = _current_season()
 
     async with aiosqlite.connect(DB_PATH) as db:
-        # Проверяем, что игрок есть
         async with db.execute(
             "SELECT xp, level, season FROM battle_pass WHERE user_id = ?",
             (user_id,),
@@ -1090,7 +1075,6 @@ async def add_battle_pass_xp(user_id: int, amount: int) -> dict:
 
 
 async def claim_battle_pass_reward(user_id: int, level: int, premium: bool) -> tuple:
-    """Забирает награду с уровня. Возвращает (success, reward_coins, bonus_type, message)."""
     season = _current_season()
 
     if level < 1 or level > MAX_LEVEL:
@@ -1124,7 +1108,6 @@ async def claim_battle_pass_reward(user_id: int, level: int, premium: bool) -> t
         if key in claimed_set:
             return False, 0, None, "Награда уже получена"
 
-        # Берём награду из таблицы
         reward_row = next((r for r in BATTLE_PASS_REWARDS if r[0] == level), None)
         if not reward_row:
             return False, 0, None, "Награда не найдена"
@@ -1133,7 +1116,6 @@ async def claim_battle_pass_reward(user_id: int, level: int, premium: bool) -> t
         coins = premium_coins if premium else free_coins
         bonus = bonus_type if premium else None
 
-        # Обновляем список полученных
         claimed_set.add(key)
         new_claimed = ",".join(sorted(claimed_set))
 
@@ -1153,7 +1135,6 @@ async def claim_battle_pass_reward(user_id: int, level: int, premium: bool) -> t
 
 
 async def buy_premium_pass(user_id: int) -> bool:
-    """Помечает игрока как Premium. Вызывается после оплаты."""
     season = _current_season()
 
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1165,6 +1146,8 @@ async def buy_premium_pass(user_id: int) -> bool:
         )
         await db.commit()
         return True
+
+
 async def set_winrate(user_id, winrate: float, payout_mult: float = 1.0):
     """user_id=None → глобально."""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1190,7 +1173,6 @@ async def set_winrate(user_id, winrate: float, payout_mult: float = 1.0):
 async def get_winrate(user_id):
     """Возвращает (winrate, payout_mult) с учётом приоритета."""
     async with aiosqlite.connect(DB_PATH) as db:
-        # сначала персональный
         async with db.execute(
             "SELECT winrate, payout_mult FROM winrate_settings WHERE user_id = ?",
             (user_id,),
@@ -1199,7 +1181,6 @@ async def get_winrate(user_id):
             if row:
                 return row[0], row[1]
 
-        # потом глобальный (id=1, user_id IS NULL)
         async with db.execute(
             "SELECT winrate, payout_mult FROM winrate_settings WHERE id = 1 AND user_id IS NULL"
         ) as cur:
@@ -1207,7 +1188,7 @@ async def get_winrate(user_id):
             if row:
                 return row[0], row[1]
 
-    return 50.0, 1.0   # дефолт
+    return 50.0, 1.0
 
 
 async def clear_winrate(user_id):
