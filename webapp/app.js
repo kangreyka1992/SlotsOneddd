@@ -41,8 +41,7 @@ let caseRouletteBusy = false;
 let caseFastMode = false;
 let currentCaseInfo = null;
 let adminStatsTimer = null;
-let upgraderExtraCoins = 0;   // доп. монеты с баланса
-
+let upgraderExtraCoins = 0;
 
 /* UPGRADER */
 let upgraderItems = [];
@@ -51,6 +50,25 @@ let upgraderTargetIdx = -1;
 let upgraderTargets = [];
 let upgraderBusy = false;
 let upgraderFastMode = false;
+
+/* WITHDRAW */
+const WITHDRAW_METHODS = {
+    stars: { rate: 125,  min: 15,   unit: '⭐',   name: 'Stars' },
+    sbp:   { rate: 1000, min: 500,  unit: '₽',    name: 'СБП' },
+    usdc:  { rate: 100,  min: 5,    unit: 'USDC', name: 'USDC' },
+    ton:   { rate: 5000, min: 1,    unit: 'TON',  name: 'TON' },
+};
+let currentWithdrawMethod = 'stars';
+
+/* TOPUP */
+const TOPUP_RATES = {
+    ton: 500,
+    sbp: 5,
+    stars: 10,
+};
+const SBP_PHONE = '+7 (961)-480-26-06';
+const SBP_NAME = 'Андрей З.';
+const SBP_BANK = 'Сбер-Банк';
 
 /* ═══ SOUND ═══ */
 let audioCtx = null;
@@ -78,62 +96,7 @@ function playTone(freq, duration, type = 'sine', vol = 0.08) {
         osc.stop(audioCtx.currentTime + duration);
     } catch (e) {}
 }
-function upgraderSetExtra(amount) {
-    const max = Math.max(0, profile.balance || 0);
-    upgraderExtraCoins = Math.max(0, Math.min(max, Math.floor(amount || 0)));
 
-    const input = document.getElementById('upgExtraCoins');
-    if (input) input.value = upgraderExtraCoins || '';
-
-    const balEl = document.getElementById('upgExtraBalance');
-    if (balEl) balEl.textContent = fmt(max);
-
-    upgraderUpdateSummary();
-    updateUpgraderChance();
-}
-
-function upgraderAddCoins(mode) {
-    haptic();
-    const balance = profile.balance || 0;
-    const skinsTotal = getSelectedTotal();
-
-    if (mode === 0) {
-        upgraderSetExtra(0);
-        return;
-    }
-    if (mode === -1) {
-        // сброс
-        upgraderSetExtra(0);
-        return;
-    }
-    if (mode === 1) {
-        // ×2 — добавить столько же, сколько скинов дают
-        upgraderSetExtra(Math.min(balance, upgraderExtraCoins + (skinsTotal || 100)));
-        return;
-    }
-    // mode = 0.25 / 0.5 — процент от ТЕКУЩЕЙ ставки (скины + уже введённые монеты)
-    const current = skinsTotal + upgraderExtraCoins;
-    const add = Math.floor(current * mode);
-    upgraderSetExtra(upgraderExtraCoins + add);
-}
-
-function upgraderExtraChanged() {
-    const input = document.getElementById('upgExtraCoins');
-    if (!input) return;
-    const val = Math.floor(Number(input.value) || 0);
-    upgraderSetExtra(val);
-}
-
-function upgraderUpdateSummary() {
-    const skinsTotal = getSelectedTotal();
-    const extra = upgraderExtraCoins;
-    const total = skinsTotal + extra;
-
-    const sum = document.getElementById('upgExtraSummary');
-    if (sum) {
-        sum.innerHTML = `Ставка: <b>${fmt(skinsTotal)}</b> 🪙 (скины) + <b>${fmt(extra)}</b> 🪙 (монеты) = <b>${fmt(total)}</b> 🪙`;
-    }
-}
 const SFX = {
     click:   () => playTone(880, 0.06, 'square', 0.05),
     spin:    () => playTone(440, 0.1, 'sawtooth', 0.04),
@@ -348,6 +311,12 @@ function showScreen(name) {
     if (name === 'battlepass') loadBattlePass();
     if (name === 'inventory') loadInventory();
     if (name === 'upgrader') loadUpgrader();
+    if (name === 'wheel') loadWheel();
+    if (name === 'tournament') loadTournament();
+    if (name === 'referral') loadReferralStats();
+    if (name === 'cashback') loadCashback();
+    if (name === 'customize') loadCustomize();
+    if (name === 'hall') loadHall();
 }
 
 let balanceAnimId = null;
@@ -389,7 +358,7 @@ function updateBalance(b) {
     }
 }
 
-/* ═══ CAROUSEL + GRID ═══ */
+/* ═══ GAMES META ═══ */
 const GAMES_META = {
     slots2:  { name: 'Слоты 5×3', desc: 'До ×50',   icon: '🎰', cls: 'slots',  sub: '20 линий, джекпот' },
     crash:   { name: 'Crash',     desc: 'До ×100',  icon: '📈', cls: 'rocket', sub: 'Успей забрать' },
@@ -401,20 +370,6 @@ const GAMES_META = {
     coin:    { name: 'Монетка',   desc: '×1.95',    icon: '🪙', cls: '',       sub: '50/50' },
     duel:    { name: 'PvP Дуэль', desc: '×1.96',    icon: '⚔️', cls: '',       sub: 'Против игрока' },
 };
-
-function renderCarousel() {
-    const el = document.getElementById('gameCarousel');
-    if (!el) return;
-    const featured = ['slots2', 'crash', 'mines', 'plinko'];
-    el.innerHTML = featured.map(g => {
-        const m = GAMES_META[g];
-        return `<div class="carousel-card ${m.cls}" onclick="openGame('${g}')">
-            <div class="carousel-emoji">${m.icon}</div>
-            <div class="carousel-title">${m.name}</div>
-            <div class="carousel-sub">${m.sub}</div>
-        </div>`;
-    }).join('');
-}
 
 function renderGamesGrid() {
     const el = document.getElementById('gamesGrid');
@@ -431,10 +386,6 @@ function renderGamesGrid() {
 }
 
 /* ═══ LIVE FEED ═══ */
-const FEED_NAMES = ['Игрок', 'Lucky', 'Ace', 'King', 'Pro', 'Master', 'Winner', 'Star'];
-const FEED_GAMES = ['Слоты', 'Plinko', 'Crash', 'Mines', 'Кости', 'Penalti', 'Кейсы'];
-
-/* ═══ LIVE FEED (реальный) ═══ */
 async function loadLiveFeed() {
     try {
         const d = await api('/api/feed/live');
@@ -455,11 +406,6 @@ async function loadLiveFeed() {
     } catch (e) {
         console.error('Live feed error:', e);
     }
-}
-
-function pushFeed() {
-    // Оставляем для совместимости, но больше не используем
-    loadLiveFeed();
 }
 
 function startHeroTimer() {
@@ -540,7 +486,16 @@ async function loadProfile() {
         if (nameEl) nameEl.textContent = displayName;
         if (profileNameEl) profileNameEl.textContent = displayName;
         const avatarEl = document.getElementById('profileAvatar');
-        if (avatarEl) avatarEl.textContent = (d.username || 'И')[0].toUpperCase();
+        if (avatarEl) {
+            // Применяем кастомную аватарку, если есть
+            const av = d.profile?.avatar;
+            const emojiMap = {
+                default: '👤', cat: '🐱', dragon: '🐉', unicorn: '🦄',
+                alien: '👽', robot: '🤖', phoenix: '🦅', skull: '💀',
+                crown: '👑', god: '⚡',
+            };
+            avatarEl.textContent = emojiMap[av] || (d.username || 'И')[0].toUpperCase();
+        }
 
         const sg = document.getElementById('statGames');
         const sw = document.getElementById('statWagered');
@@ -567,7 +522,7 @@ async function loadProfile() {
 }
 
 /* ═══ GAMES ═══ */
-async function openGame(game) {                    // ✅ добавь async
+async function openGame(game) {
     if (gameLocked) {
         toast('⏳ Дождись окончания игры', 'error');
         return;
@@ -583,7 +538,6 @@ async function openGame(game) {                    // ✅ добавь async
 
     showScreen('game');
 
-    // ✅ Обновляем профиль перед рендером кнопок
     try { await loadProfile(); } catch (e) {}
     updateBalance(profile.balance);
 
@@ -674,7 +628,6 @@ function renderBets(containerId, onPick, multiplier = 1) {
     if (!el) return;
     el.innerHTML = '';
 
-    // ✅ Если профиль не загружен — ждём
     if (!profile || profile.balance === undefined) {
         el.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Загрузка...</div>';
         return;
@@ -688,10 +641,6 @@ function renderBets(containerId, onPick, multiplier = 1) {
         btn.onclick = () => {
             if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
             if (cost > profile.balance) { toast('Недостаточно монет', 'error'); return; }
-        SFX.click(); haptic(); onPick(b);
-};
-        btn.onclick = () => {
-            if (gameLocked) { toast('⏳ Дождись окончания игры', 'error'); return; }
             SFX.click(); haptic(); onPick(b);
         };
         el.appendChild(btn);
@@ -1155,7 +1104,7 @@ function diceStart(bet) {
     if (!bet || bet <= 0) { toast('Некорректная ставка', 'error'); return; }
     diceBet = bet;
     lastBet = bet;
-    gameLocked = true;   // ✅ фиксируем игру
+    gameLocked = true;
     document.getElementById('diceBets').classList.add('hidden');
     document.getElementById('diceDisplay').classList.remove('hidden');
     document.getElementById('diceResult').textContent = '';
@@ -1405,40 +1354,23 @@ function initPenalti() {
     renderBets('penaltiBets', penaltiStart);
 }
 
-const PENALTI_ZONE_POS = [
-    { left: 16.6, top: 16.6 },
-    { left: 50.0, top: 16.6 },
-    { left: 83.3, top: 16.6 },
-    { left: 16.6, top: 50.0 },
-    { left: 50.0, top: 50.0 },
-    { left: 83.3, top: 50.0 },
-    { left: 16.6, top: 83.3 },
-    { left: 50.0, top: 83.3 },
-    { left: 83.3, top: 83.3 },
-];
-
-function zonePercent(zone) {
-    return PENALTI_ZONE_POS[zone] || PENALTI_ZONE_POS[4];
-}
-
 function zoneToScene(zone) {
-    const goal = document.getElementById('goalFrame');
+    const grid = document.getElementById('goalGrid');
     const scene = document.getElementById('penaltiScene');
-    const z = zonePercent(zone);
+    if (!grid || !scene) return { left: 50, top: 50 };
 
-    // goal: absolute внутри scene с left:8%, right:8%, top:14%, height:60%
-    // scene: relative. Используем offset-координаты.
-    const goalW = goal.offsetWidth;
-    const goalH = goal.offsetHeight;
-    const goalLeft = goal.offsetLeft;
-    const goalTop = goal.offsetTop;
+    const cell = grid.children[zone];
+    if (!cell) return { left: 50, top: 50 };
 
-    const leftPx = goalLeft + (goalW * z.left / 100);
-    const topPx  = goalTop  + (goalH * z.top  / 100);
+    const cellRect = cell.getBoundingClientRect();
+    const sceneRect = scene.getBoundingClientRect();
+
+    const leftPx = cellRect.left - sceneRect.left + cellRect.width / 2;
+    const topPx  = cellRect.top  - sceneRect.top  + cellRect.height / 2;
 
     return {
-        left: (leftPx / scene.offsetWidth) * 100,
-        top:  (topPx  / scene.offsetHeight) * 100,
+        left: (leftPx / sceneRect.width) * 100,
+        top:  (topPx  / sceneRect.height) * 100,
     };
 }
 
@@ -1906,7 +1838,7 @@ async function buyStars(stars) {
     }
 }
 
-/* ═══ ПОПОЛНЕНИЕ ═══ */
+/* ═══ PAY (старый экран) ═══ */
 function renderPay() {
     const el = document.getElementById('payGrid');
     if (!el) return;
@@ -1987,273 +1919,7 @@ function switchPayTab(method) {
         m.classList.toggle('active', m.id === `pay-method-${method}`);
     });
 }
-/* ═══ ЭКРАН ПОПОЛНЕНИЯ БАЛАНСА ═══ */
 
-// Курсы (настрой под себя)
-const TOPUP_RATES = {
-    ton: 500,      // 1 TON = 200 монет
-    sbp: 5,        // 1 ₽ = 1 монета  ← настрой под себя
-    stars: 10,    // 1 ⭐ = 10 монет
-};
-
-// Реквизиты для оплаты (замени на свои)
-const SBP_PHONE = '+7 (961)-480-26-06';
-const SBP_NAME = 'Андрей З.';
-const SBP_BANK = 'Сбер-Банк';
-
-function switchTopupTab(method) {
-    haptic();
-    document.querySelectorAll('.topup-tab').forEach(t => {
-        t.classList.toggle('active', t.dataset.method === method);
-    });
-    document.querySelectorAll('.topup-method').forEach(m => {
-        m.classList.toggle('active', m.id === `topup-${method}`);
-    });
-}
-
-function topupQuick(method, amount) {
-    haptic();
-    const inputId = method === 'ton' ? 'tonAmount'
-                  : method === 'crypto' ? 'cryptoAmount'
-                  : 'starsAmount';
-    const input = document.getElementById(inputId);
-    if (!input) return;
-
-    const current = Number(input.value) || 0;
-    const newVal = current + amount;
-
-    if (method === 'stars' && newVal > 10000) {
-        input.value = 10000;
-    } else {
-        input.value = newVal;
-    }
-
-    topupRecalc(method);
-}
-
-function topupRecalc(method) {
-    const inputId = method === 'ton' ? 'tonAmount'
-                  : method === 'sbp' ? 'sbpAmount'
-                  : 'starsAmount';
-    const input = document.getElementById(inputId);
-    if (!input) return;
-
-    const infoId = method === 'ton' ? 'tonInfo'
-                 : method === 'sbp' ? 'sbpInfo'
-                 : 'starsInfo';
-    const info = document.getElementById(infoId);
-    const goBtn = document.querySelector(`#topup-${method} .topup-go`);
-
-    const amount = Number(input.value) || 0;
-
-    if (amount <= 0) {
-        info.innerHTML = `Введите сумму для пополнения`;
-        if (goBtn) goBtn.disabled = true;
-        return;
-    }
-
-    const rate = TOPUP_RATES[method] || 0;
-    const coins = Math.floor(amount * rate);
-
-    const unit = method === 'ton' ? 'TON'
-               : method === 'sbp' ? '₽'
-               : '⭐';
-
-    info.innerHTML = `Зачислится: <b>${fmt(coins)}</b> 🪙 · Курс: 1 ${unit} = <b>${fmt(rate)}</b> 🪙`;
-
-    let valid = true;
-    if (method === 'ton' && amount < 0.1) valid = false;
-    if (method === 'sbp' && amount < 100) valid = false;
-    if (method === 'stars' && (amount < 10 || amount > 10000)) valid = false;
-
-    if (goBtn) goBtn.disabled = !valid;
-}
-
-async function topupPay(method) {
-    if (method === 'ton') return topupTON();
-    if (method === 'sbp') return topupSBP();
-    if (method === 'stars') return topupStars();
-}
-
-/* TON */
-async function topupTON() {
-    haptic('medium');
-    const amount = Number(document.getElementById('tonAmount').value) || 0;
-    if (amount < 0.1) { toast('Минимум 0.1 TON', 'error'); return; }
-
-    toast('💎 Откройте @wallet и переведите TON', 'success');
-    // Здесь можно открыть deeplink: ton://transfer/...
-    try {
-        const d = await api('/api/crypto/create', {
-            amount_usd: amount,
-            currency: 'ton',
-        });
-        if (d.wallet) {
-            copyToClipboard(d.wallet);
-            toast('📋 Адрес скопирован — переведите TON', 'success');
-        }
-    } catch (e) {
-        toast(e.message, 'error');
-    }
-}
-
-/* СБП */
-async function topupSBP() {
-    haptic('medium');
-    const amount = Number(document.getElementById('sbpAmount').value) || 0;
-    if (amount < 100) { toast('Минимум 100 ₽', 'error'); return; }
-
-    const rate = TOPUP_RATES.sbp;
-    const coins = Math.floor(amount * rate);
-
-    // Создаём заявку на сервере (можно через /api/crypto/create с типом sbp)
-    let orderId = null;
-    try {
-        const d = await api('/api/sbp/create', { amount_rub: amount });
-        orderId = d.order_id;
-    } catch (e) {
-        // Если API нет — просто игнорируем, покажем реквизиты
-        console.warn('SBP order create failed:', e.message);
-    }
-
-    // Показываем окно с реквизитами
-    const overlay = document.createElement('div');
-    overlay.className = 'case-opening';
-    overlay.innerHTML = `
-        <div style="color:#fff; text-align:center; max-width:92%;">
-            <div style="font-size:22px; font-weight:800; margin-bottom:12px;">
-                🇷🇺 Оплата через СБП
-            </div>
-            <div style="font-size:14px; color:#8a92a3; margin-bottom:14px;">
-                Сумма: <b style="color:#fff;">${fmt(amount)} ₽</b><br>
-                Зачислится: <b style="color:#3dd68c;">${fmt(coins)} 🪙</b>
-            </div>
-
-            <div class="sbp-requisites">
-                <div class="sbp-row">
-                    <div>
-                        <div class="sbp-row-label">Банк</div>
-                        <div class="sbp-row-value">${SBP_BANK}</div>
-                    </div>
-                </div>
-                <div class="sbp-row">
-                    <div>
-                        <div class="sbp-row-label">Телефон</div>
-                        <div class="sbp-row-value">${SBP_PHONE}</div>
-                    </div>
-                    <button class="sbp-row-copy" onclick="copyToClipboard('${SBP_PHONE.replace(/[^0-9+]/g, '')}')">
-                        📋 Копировать
-                    </button>
-                </div>
-                <div class="sbp-row">
-                    <div>
-                        <div class="sbp-row-label">Получатель</div>
-                        <div class="sbp-row-value">${SBP_NAME}</div>
-                    </div>
-                </div>
-                <div class="sbp-row">
-                    <div>
-                        <div class="sbp-row-label">Сумма</div>
-                        <div class="sbp-row-value money">${fmt(amount)} ₽</div>
-                    </div>
-                    <button class="sbp-row-copy" onclick="copyToClipboard('${amount}')">
-                        📋 Копировать
-                    </button>
-                </div>
-                ${orderId ? `
-                <div class="sbp-row">
-                    <div>
-                        <div class="sbp-row-label">Комментарий к переводу</div>
-                        <div class="sbp-row-value">ID: ${profile.user_id || '—'}</div>
-                    </div>
-                    <button class="sbp-row-copy" onclick="copyToClipboard('${profile.user_id || ''}')">
-                        📋 Копировать
-                    </button>
-                </div>` : ''}
-            </div>
-
-            <div style="background:rgba(124,92,255,0.1); padding:12px; border-radius:10px; text-align:left; font-size:11px; line-height:1.7; color:#e8eaed; margin-bottom:12px;">
-                <b>📋 Как оплатить:</b><br>
-                1. Открой приложение <b>${SBP_BANK}</b><br>
-                2. Переведи <b>${fmt(amount)} ₽</b> по номеру <b>${SBP_PHONE}</b><br>
-                3. В комментарии укажи <b>ID: ${profile.user_id || '—'}</b><br>
-                4. Отправь <b>скриншот чека</b> в поддержку <b>@Gapp_Soul</b><br>
-                5. Зачисление в течение <b>5–30 минут</b>
-            </div>
-
-            <button class="btn-secondary" onclick="this.closest('.case-opening').remove()" style="margin-top:4px; width:100%;">
-                Закрыть
-            </button>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-
-    toast('📋 Переведи по реквизитам и отправь чек', 'success');
-}
-
-/* Stars — можно вызвать с явной суммой или без */
-async function topupStars(starsOverride = null) {
-    haptic('medium');
-
-    let amount;
-    if (starsOverride !== null) {
-        amount = Number(starsOverride) || 0;
-    } else {
-        amount = Number(document.getElementById('starsAmount').value) || 0;
-    }
-
-    if (amount < 10 || amount > 10000) {
-        toast('Stars: 10 – 10 000', 'error');
-        return;
-    }
-
-    try {
-        const d = await api('/api/invoice', { stars: amount });
-        tg.openInvoice(d.link, (status) => {
-            if (status === 'paid') {
-                toast('✅ Оплата успешна', 'success');
-                SFX.cashout();
-                setTimeout(() => {
-                    loadProfile();
-                    updateBalance(profile.balance);
-                }, 1500);
-            } else if (status === 'cancelled') {
-                toast('❌ Оплата отменена', 'error');
-            }
-        });
-    } catch (e) {
-        toast(e.message, 'error');
-    }
-}
-
-/* Подарки */
-function renderTopupGifts() {
-    const el = document.getElementById('giftsGrid');
-    if (!el) return;
-
-    const GIFTS = [
-        { emoji: '🧸', name: 'Мишка',   price: 15,  coins: 1500 },
-        { emoji: '🌹', name: 'Роза',    price: 25,  coins: 2500 },
-        { emoji: '🎂', name: 'Торт',    price: 50,  coins: 5000 },
-        { emoji: '🚀', name: 'Ракета',  price: 100, coins: 10000 },
-        { emoji: '💎', name: 'Алмаз',   price: 250, coins: 25000 },
-        { emoji: '👑', name: 'Корона',  price: 500, coins: 50000 },
-    ];
-
-    el.innerHTML = GIFTS.map(g => `
-        <div class="topup-gift" onclick="topupGift(${g.price}, ${g.coins})">
-            <div class="topup-gift-emoji">${g.emoji}</div>
-            <div class="topup-gift-name">${g.name}</div>
-            <div class="topup-gift-price">${g.price} ⭐</div>
-        </div>
-    `).join('');
-}
-
-function topupGift(stars, coins) {
-    haptic('medium');
-    toast(`🎁 Подарок за ${stars} ⭐ → +${fmt(coins)} 🪙`, 'success');
-    topupStars(stars);   // ⬅️ передаём сумму ПОДАРКА, а не из input
-}
 function renderStarsButtons() {
     const el = document.getElementById('payGridStars');
     if (!el) return;
@@ -2369,10 +2035,10 @@ function sbpPay(rub, coins) {
             <div style="background:#1a1d24; padding:16px; border-radius:12px; text-align:left; font-size:13px; line-height:1.7; color:#e8eaed;">
                 <b>📋 Инструкция:</b><br>
                 1. Переведите <b>${rub} ₽</b> по номеру:<br>
-                <b style="color:#ff9b26;">+7 (XXX) XXX-XX-XX</b><br>
-                <span style="color:#8a92a3; font-size:11px;">(получатель: Ivan I.)</span><br><br>
+                <b style="color:#ff9b26;">${SBP_PHONE}</b><br>
+                <span style="color:#8a92a3; font-size:11px;">(получатель: ${SBP_NAME})</span><br><br>
                 2. В комментарии укажите <b>ID: ${profile.user_id || '—'}</b><br><br>
-                3. Отправьте <b>скриншот чека</b> в поддержку: <b>@ТвойПоддержка</b><br><br>
+                3. Отправьте <b>скриншот чека</b> в поддержку: <b>@Gapp_Soul</b><br><br>
                 4. Зачисление в течение <b>5-30 минут</b>.
             </div>
             <button class="btn-secondary" onclick="this.closest('.case-opening').remove()" style="margin-top:16px;">
@@ -2454,24 +2120,242 @@ async function cryptoPay(amountUsd) {
     }
 }
 
+/* ═══ TOPUP ═══ */
+function switchTopupTab(method) {
+    haptic();
+    document.querySelectorAll('.topup-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.method === method);
+    });
+    document.querySelectorAll('.topup-method').forEach(m => {
+        m.classList.toggle('active', m.id === `topup-${method}`);
+    });
+}
+
+function topupQuick(method, amount) {
+    haptic();
+    const inputId = method === 'ton' ? 'tonAmount'
+                  : method === 'sbp' ? 'sbpAmount'
+                  : 'starsAmount';
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    const current = Number(input.value) || 0;
+    const newVal = current + amount;
+
+    if (method === 'stars' && newVal > 10000) {
+        input.value = 10000;
+    } else {
+        input.value = newVal;
+    }
+
+    topupRecalc(method);
+}
+
+function topupRecalc(method) {
+    const inputId = method === 'ton' ? 'tonAmount'
+                  : method === 'sbp' ? 'sbpAmount'
+                  : 'starsAmount';
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    const infoId = method === 'ton' ? 'tonInfo'
+                 : method === 'sbp' ? 'sbpInfo'
+                 : 'starsInfo';
+    const info = document.getElementById(infoId);
+    const goBtn = document.querySelector(`#topup-${method} .topup-go`);
+
+    const amount = Number(input.value) || 0;
+
+    if (amount <= 0) {
+        info.innerHTML = `Введите сумму для пополнения`;
+        if (goBtn) goBtn.disabled = true;
+        return;
+    }
+
+    const rate = TOPUP_RATES[method] || 0;
+    const coins = Math.floor(amount * rate);
+
+    const unit = method === 'ton' ? 'TON'
+               : method === 'sbp' ? '₽'
+               : '⭐';
+
+    info.innerHTML = `Зачислится: <b>${fmt(coins)}</b> 🪙 · Курс: 1 ${unit} = <b>${fmt(rate)}</b> 🪙`;
+
+    let valid = true;
+    if (method === 'ton' && amount < 0.1) valid = false;
+    if (method === 'sbp' && amount < 100) valid = false;
+    if (method === 'stars' && (amount < 10 || amount > 10000)) valid = false;
+
+    if (goBtn) goBtn.disabled = !valid;
+}
+
+async function topupPay(method) {
+    if (method === 'ton') return topupTON();
+    if (method === 'sbp') return topupSBP();
+    if (method === 'stars') return topupStars();
+}
+
+async function topupTON() {
+    haptic('medium');
+    const amount = Number(document.getElementById('tonAmount').value) || 0;
+    if (amount < 0.1) { toast('Минимум 0.1 TON', 'error'); return; }
+
+    toast('💎 Откройте @wallet и переведите TON', 'success');
+    try {
+        const d = await api('/api/crypto/create', {
+            amount_usd: amount,
+            currency: 'ton',
+        });
+        if (d.wallet) {
+            copyToClipboard(d.wallet);
+            toast('📋 Адрес скопирован — переведите TON', 'success');
+        }
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+async function topupSBP() {
+    haptic('medium');
+    const amount = Number(document.getElementById('sbpAmount').value) || 0;
+    if (amount < 100) { toast('Минимум 100 ₽', 'error'); return; }
+
+    const rate = TOPUP_RATES.sbp;
+    const coins = Math.floor(amount * rate);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'case-opening';
+    overlay.innerHTML = `
+        <div style="color:#fff; text-align:center; max-width:92%;">
+            <div style="font-size:22px; font-weight:800; margin-bottom:12px;">
+                🇷🇺 Оплата через СБП
+            </div>
+            <div style="font-size:14px; color:#8a92a3; margin-bottom:14px;">
+                Сумма: <b style="color:#fff;">${fmt(amount)} ₽</b><br>
+                Зачислится: <b style="color:#3dd68c;">${fmt(coins)} 🪙</b>
+            </div>
+
+            <div class="sbp-requisites">
+                <div class="sbp-row">
+                    <div>
+                        <div class="sbp-row-label">Банк</div>
+                        <div class="sbp-row-value">${SBP_BANK}</div>
+                    </div>
+                </div>
+                <div class="sbp-row">
+                    <div>
+                        <div class="sbp-row-label">Телефон</div>
+                        <div class="sbp-row-value">${SBP_PHONE}</div>
+                    </div>
+                    <button class="sbp-row-copy" onclick="copyToClipboard('${SBP_PHONE.replace(/[^0-9+]/g, '')}')">
+                        📋 Копировать
+                    </button>
+                </div>
+                <div class="sbp-row">
+                    <div>
+                        <div class="sbp-row-label">Получатель</div>
+                        <div class="sbp-row-value">${SBP_NAME}</div>
+                    </div>
+                </div>
+                <div class="sbp-row">
+                    <div>
+                        <div class="sbp-row-label">Сумма</div>
+                        <div class="sbp-row-value money">${fmt(amount)} ₽</div>
+                    </div>
+                    <button class="sbp-row-copy" onclick="copyToClipboard('${amount}')">
+                        📋 Копировать
+                    </button>
+                </div>
+            </div>
+
+            <div style="background:rgba(124,92,255,0.1); padding:12px; border-radius:10px; text-align:left; font-size:11px; line-height:1.7; color:#e8eaed; margin-bottom:12px;">
+                <b>📋 Как оплатить:</b><br>
+                1. Открой приложение <b>${SBP_BANK}</b><br>
+                2. Переведи <b>${fmt(amount)} ₽</b> по номеру <b>${SBP_PHONE}</b><br>
+                3. В комментарии укажи <b>ID: ${profile.user_id || '—'}</b><br>
+                4. Отправь <b>скриншот чека</b> в поддержку <b>@Gapp_Soul</b><br>
+                5. Зачисление в течение <b>5–30 минут</b>
+            </div>
+
+            <button class="btn-secondary" onclick="this.closest('.case-opening').remove()" style="margin-top:4px; width:100%;">
+                Закрыть
+            </button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    toast('📋 Переведи по реквизитам и отправь чек', 'success');
+}
+
+async function topupStars(starsOverride = null) {
+    haptic('medium');
+
+    let amount;
+    if (starsOverride !== null) {
+        amount = Number(starsOverride) || 0;
+    } else {
+        amount = Number(document.getElementById('starsAmount').value) || 0;
+    }
+
+    if (amount < 10 || amount > 10000) {
+        toast('Stars: 10 – 10 000', 'error');
+        return;
+    }
+
+    try {
+        const d = await api('/api/invoice', { stars: amount });
+        tg.openInvoice(d.link, (status) => {
+            if (status === 'paid') {
+                toast('✅ Оплата успешна', 'success');
+                SFX.cashout();
+                setTimeout(() => {
+                    loadProfile();
+                    updateBalance(profile.balance);
+                }, 1500);
+            } else if (status === 'cancelled') {
+                toast('❌ Оплата отменена', 'error');
+            }
+        });
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+function renderTopupGifts() {
+    const el = document.getElementById('giftsGrid');
+    if (!el) return;
+
+    const GIFTS = [
+        { emoji: '🧸', name: 'Мишка',   price: 15,  coins: 1500 },
+        { emoji: '🌹', name: 'Роза',    price: 25,  coins: 2500 },
+        { emoji: '🎂', name: 'Торт',    price: 50,  coins: 5000 },
+        { emoji: '🚀', name: 'Ракета',  price: 100, coins: 10000 },
+        { emoji: '💎', name: 'Алмаз',   price: 250, coins: 25000 },
+        { emoji: '👑', name: 'Корона',  price: 500, coins: 50000 },
+    ];
+
+    el.innerHTML = GIFTS.map(g => `
+        <div class="topup-gift" onclick="topupGift(${g.price}, ${g.coins})">
+            <div class="topup-gift-emoji">${g.emoji}</div>
+            <div class="topup-gift-name">${g.name}</div>
+            <div class="topup-gift-price">${g.price} ⭐</div>
+        </div>
+    `).join('');
+}
+
+function topupGift(stars, coins) {
+    haptic('medium');
+    toast(`🎁 Подарок за ${stars} ⭐ → +${fmt(coins)} 🪙`, 'success');
+    topupStars(stars);
+}
+
 /* ═══ ВЫВОД ═══ */
-
-const WITHDRAW_METHODS = {
-    stars: { rate: 125,  min: 15,   unit: '⭐',   name: 'Stars' },
-    sbp:   { rate: 1000, min: 500,  unit: '₽',    name: 'СБП' },
-    usdc:  { rate: 100,  min: 5,    unit: 'USDC', name: 'USDC' },
-    ton:   { rate: 5000, min: 1,    unit: 'TON',  name: 'TON' },
-};
-
-let currentWithdrawMethod = 'stars';
-
 async function loadWithdrawStatus() {
     try {
         const d = await api('/api/withdraw/status');
         withdrawAllowed = d.allowed;
         withdrawDays = d.days;
 
-        // Показываем/скрываем предупреждение
         const warnContainer = document.getElementById('withdrawWarnContainer');
         if (warnContainer) {
             if (!withdrawAllowed) {
@@ -2487,7 +2371,6 @@ async function loadWithdrawStatus() {
             }
         }
 
-        // Обновляем инфу по текущему методу
         withdrawRecalc(currentWithdrawMethod);
     } catch (e) {
         toast(e.message, 'error');
@@ -2625,7 +2508,6 @@ async function withdrawGo(method) {
         toast(`✅ ${d.message}`, 'success');
         SFX.cashout();
         loadProfile();
-        // Очищаем поля
         ['wdStarsAmount','wdSbpAmount','wdUsdcAmount','wdTonAmount',
          'wdSbpCard','wdSbpBank','wdSbpName','wdUsdcWallet','wdTonWallet']
             .forEach(id => {
@@ -2636,15 +2518,6 @@ async function withdrawGo(method) {
     } catch (e) {
         toast(e.message, 'error');
     }
-}
-async function withdrawStars(stars) {
-    haptic();
-    try {
-        const d = await api('/api/withdraw', { stars });
-        updateBalance(d.balance);
-        toast(d.message, 'success');
-        loadProfile();
-    } catch (e) { toast(e.message, 'error'); }
 }
 
 /* ═══ ТОП ═══ */
@@ -2729,7 +2602,6 @@ async function claimDaily() {
 
 /* ═══ CASES ═══ */
 async function loadCases() {
-    // Skeleton пока грузится
     const grid = document.getElementById('casesGrid');
     const homeGrid = document.getElementById('homeCasesGrid');
     if (grid) grid.innerHTML = Array(6).fill('<div class="case-card loading"></div>').join('');
@@ -2770,8 +2642,6 @@ async function loadCases() {
         toast(e.message, 'error');
     }
 }
-
-
 
 async function openCaseInfo(id) {
     haptic();
@@ -2826,7 +2696,6 @@ function closeCaseRoulette(force = false) {
     caseRouletteBusy = false;
 }
 
-/* ═══ CASE ROULETTE ═══ */
 async function openCase(c, count = 1) {
     if (caseRouletteBusy) return;
     haptic('medium');
@@ -2846,7 +2715,6 @@ async function openCase(c, count = 1) {
     const actionsBox = document.getElementById('crActions');
     const multi = document.getElementById('crMulti');
 
-    // Сброс UI
     title.textContent = `${c.emoji} ${c.name}` + (count > 1 ? ` · ×${count}` : '');
     status.textContent = 'Крутим...';
     status.className = 'cr-status';
@@ -2859,7 +2727,6 @@ async function openCase(c, count = 1) {
     track.innerHTML = '';
     overlay.classList.remove('hidden');
 
-    // Запрос на сервер
     let data;
     try {
         const url = count > 1 ? '/api/cases/spin_multi' : '/api/cases/spin';
@@ -2872,7 +2739,6 @@ async function openCase(c, count = 1) {
         return;
     }
 
-    // Трек
     track.innerHTML = data.track.map(item => `
         <div class="cr-item" data-rarity="${item.rarity}">
             <div class="cr-emoji">${item.emoji}</div>
@@ -2920,7 +2786,6 @@ async function openCase(c, count = 1) {
 
         if (t < 1) { requestAnimationFrame(animate); return; }
 
-        // ═══ ПРОКРУТ ЗАКОНЧЕН ═══
         const items = track.querySelectorAll('.cr-item');
         const winnerEl = items[data.win_pos];
         if (winnerEl) winnerEl.classList.add('winner');
@@ -2930,42 +2795,37 @@ async function openCase(c, count = 1) {
             ? r.value
             : data.results.reduce((s, x) => s + x.value, 0);
 
-        // Звук + конфетти
         if (r.rarity === 'mythic' || r.rarity === 'legendary') {
-    SFX.jackpot(); confettiJackpot();
-    // SHOCKWAVE
-    const wave = document.createElement('div');
-    wave.className = 'shockwave';
-    document.body.appendChild(wave);
-    setTimeout(() => wave.remove(), 1200);
-} else if (r.rarity === 'epic') {
+            SFX.jackpot(); confettiJackpot();
+            const wave = document.createElement('div');
+            wave.className = 'shockwave';
+            document.body.appendChild(wave);
+            setTimeout(() => wave.remove(), 1200);
+        } else if (r.rarity === 'epic') {
             SFX.win(); confettiBurst('#7c5cff');
         } else {
             SFX.cashout();
         }
         haptic('success');
 
-        // Показываем награду
         const rewardEmoji = document.getElementById('crRewardEmoji');
         const rewardName = document.getElementById('crRewardName');
         const rewardPrice = document.getElementById('crRewardPrice');
         const sellPrice = document.getElementById('crSellPrice');
 
         if (r) {
-    rewardEmoji.textContent = r.emoji;
-    rewardName.textContent = r.name;
-    rewardPrice.textContent = `${fmt(r.value)} 🪙`;
-    rewardBox.classList.remove('hidden');
-    sellPrice.textContent = fmt(r.value);
-}
+            rewardEmoji.textContent = r.emoji;
+            rewardName.textContent = r.name;
+            rewardPrice.textContent = `${fmt(r.value)} 🪙`;
+            rewardBox.classList.remove('hidden');
+            sellPrice.textContent = fmt(r.value);
+        }
 
-        // Статус
         status.textContent = count === 1
             ? `${r.emoji} ${r.name} · ${fmt(r.value)} 🪙`
             : `🏆 ${r.name} · ${fmt(r.value)} 🪙`;
         status.className = 'cr-status win';
 
-        // Мульти
         if (count > 1) {
             multi.innerHTML = data.results.map(x => `
                 <div class="cr-multi-item" data-rarity="${x.rarity}">
@@ -2977,25 +2837,21 @@ async function openCase(c, count = 1) {
             multi.classList.remove('hidden');
         }
 
-        // Показываем кнопки через 600мс
-        // ✅ Сначала сохраняем данные
-window._lastCaseDrop = {
-    caseId: c.id,
-    casePrice: c.price_coins,
-    itemId: r.item_id,
-    itemValue: r.value,
-    itemName: r.name,
-    itemEmoji: r.emoji,
-    rarity: r.rarity,
-    count: count,
-};
+        window._lastCaseDrop = {
+            caseId: c.id,
+            casePrice: c.price_coins,
+            itemId: r.item_id,
+            itemValue: r.value,
+            itemName: r.name,
+            itemEmoji: r.emoji,
+            rarity: r.rarity,
+            count: count,
+        };
 
-// Потом показываем кнопки
-setTimeout(() => {
-    actionsBox.classList.remove('hidden');
-}, 600);
+        setTimeout(() => {
+            actionsBox.classList.remove('hidden');
+        }, 600);
 
-        // Обновляем баланс
         updateBalance(data.balance);
         loadProfile();
         addHistory('case', count === 1 ? c.price_coins : totalCost, totalWin);
@@ -3005,6 +2861,7 @@ setTimeout(() => {
 
     requestAnimationFrame(animate);
 }
+
 /* ═══ INVENTORY ═══ */
 async function loadInventory() {
     try {
@@ -3111,12 +2968,12 @@ async function sellAllItems() {
 /* ═══ UPGRADER ═══ */
 async function loadUpgrader() {
     try {
-        const [inv, tg] = await Promise.all([
+        const [inv, targets] = await Promise.all([
             api('/api/cases/inventory'),
             api('/api/upgrader/targets'),
         ]);
         upgraderItems = inv.items || [];
-        upgraderTargets = tg.targets || [];
+        upgraderTargets = targets.targets || [];
         upgraderSelectedPks.clear();
         upgraderTargetIdx = upgraderTargets.length > 1 ? 1 : 0;
         renderUpgraderInv();
@@ -3134,23 +2991,16 @@ function renderUpgraderInv() {
     );
     if (!sorted.length) {
         el.innerHTML = '<div class="upg-inv-empty">Инвентарь пуст</div>';
-        const cnt = document.getElementById('upgSelectedCount');
-        if (cnt) cnt.textContent = '';
         return;
     }
-        el.innerHTML = sorted.map(i => `
+    el.innerHTML = sorted.map(i => `
         <div class="upg-inv-item ${upgraderSelectedPks.has(i.id) ? 'selected' : ''}" onclick="selectUpgraderItem(${i.id})">
             <div class="upg-inv-item-emoji">${i.emoji}</div>
             <div class="upg-inv-item-name">${i.name}</div>
             <div class="upg-inv-item-price">${fmt(i.value)}</div>
         </div>
     `).join('');
-    const cntEl = document.getElementById('upgSelectedCount');
-    if (cntEl) {
-        cntEl.textContent = upgraderSelectedPks.size > 0 ? `выбрано: ${upgraderSelectedPks.size}` : '';
-    }
 }
-
 
 function selectUpgraderItem(pk) {
     haptic();
@@ -3161,7 +3011,6 @@ function selectUpgraderItem(pk) {
     }
     renderUpgraderInv();
     renderUpgraderMyItem();
-    upgraderUpdateSummary();   // ← добавили
     updateUpgraderChance();
 }
 
@@ -3169,7 +3018,6 @@ function selectUpgraderTarget(idx) {
     haptic();
     upgraderTargetIdx = idx;
     renderUpgraderTarget();
-    upgraderUpdateSummary();   // ← добавили
     updateUpgraderChance();
 }
 
@@ -3194,8 +3042,7 @@ function renderUpgraderMyItem() {
         `;
         return;
     }
-    const total = getSelectedTotal() + upgraderExtraCoins;
-    // Показываем первый предмет крупно + счётчик
+    const total = getSelectedTotal();
     const first = items[0];
     el.innerHTML = `
         <div class="upg-slot-emoji">${first.emoji}</div>
@@ -3204,12 +3051,10 @@ function renderUpgraderMyItem() {
     `;
 }
 
-
 function renderUpgraderTarget() {
     const el = document.getElementById('upgTargetCard');
     if (!el) return;
 
-    // Если целей нет
     if (upgraderTargetIdx < 0 || !upgraderTargets.length) {
         el.innerHTML = `
             <button class="upg-nav upg-nav-prev" onclick="upgraderNav(-1)">‹</button>
@@ -3231,7 +3076,6 @@ function renderUpgraderTarget() {
         <button class="upg-nav upg-nav-next" onclick="upgraderNav(1)">›</button>
     `;
 
-    // Обновляем список всех целей (новая функция)
     renderUpgraderTargetsList();
 }
 
@@ -3247,29 +3091,10 @@ function renderUpgraderTargetsList() {
     `).join('');
 }
 
-function selectUpgraderTarget(idx) {
-    haptic();
-    upgraderTargetIdx = idx;
-    renderUpgraderTarget();
-    updateUpgraderChance();
-}
-
 function upgraderNav(dir) {
     if (!upgraderTargets.length) return;
     haptic();
     upgraderTargetIdx = (upgraderTargetIdx + dir + upgraderTargets.length) % upgraderTargets.length;
-    renderUpgraderTarget();
-    updateUpgraderChance();
-}
-
-function upgraderRandomTarget() {
-    if (!upgraderTargets.length) return;
-    haptic();
-    let newIdx = upgraderTargetIdx;
-    while (newIdx === upgraderTargetIdx && upgraderTargets.length > 1) {
-        newIdx = Math.floor(Math.random() * upgraderTargets.length);
-    }
-    upgraderTargetIdx = newIdx;
     renderUpgraderTarget();
     updateUpgraderChance();
 }
@@ -3282,18 +3107,11 @@ function updateUpgraderChance() {
 
     const CIRC = 534;
 
-    // Если ничего не выбрано — показываем 0%
     if (upgraderSelectedPks.size === 0 || upgraderTargetIdx < 0) {
         percentEl.textContent = '0%';
         percentEl.className = 'upg-percent';
         successEl.style.strokeDashoffset = CIRC;
         failEl.style.strokeDashoffset = 0;
-        // Стрелка стоит на 0
-        const arrowEl = document.getElementById('upgArrowSpin');
-        if (arrowEl) {
-            arrowEl.classList.remove('animate');
-            arrowEl.style.transform = 'rotate(0deg)';
-        }
         return;
     }
 
@@ -3301,7 +3119,6 @@ function updateUpgraderChance() {
     const target = upgraderTargets[upgraderTargetIdx];
     if (!target) return;
 
-    // Если цель дешевле ставки — показываем прочерк
     if (target.price_coins <= total) {
         percentEl.textContent = '—';
         percentEl.className = 'upg-percent red';
@@ -3313,23 +3130,14 @@ function updateUpgraderChance() {
     const chance = Math.min(0.95, Math.max(0.01, total / target.price_coins));
     const percent = chance * 100;
 
-    // Показываем процент
     percentEl.textContent = percent.toFixed(2) + '%';
     percentEl.classList.remove('green', 'yellow', 'red');
     if (percent < 30) percentEl.classList.add('red');
     else if (percent < 65) percentEl.classList.add('yellow');
     else percentEl.classList.add('green');
 
-    // Заполняем круг
     successEl.style.strokeDashoffset = CIRC - CIRC * chance;
     failEl.style.strokeDashoffset = -(CIRC * chance);
-
-    // ⭐ СТРЕЛКА СТОИТ НА МЕСТЕ (не крутится)
-    const arrowEl = document.getElementById('upgArrowSpin');
-    if (arrowEl) {
-        arrowEl.classList.remove('animate');
-        arrowEl.style.transform = 'rotate(0deg)';
-    }
 }
 
 function upgraderQuickMult(mult) {
@@ -3356,38 +3164,13 @@ function upgraderQuickMult(mult) {
     updateUpgraderChance();
 }
 
-function upgraderQuickChance(percent) {
-    haptic();
-    if (upgraderSelectedPks.size === 0) {
-        toast('Выбери предметы', 'error');
-        return;
-    }
-    const total = getSelectedTotal();
-    const desiredValue = total / (percent / 100);
-    let bestIdx = -1;
-    let bestDiff = Infinity;
-    upgraderTargets.forEach((t, i) => {
-        if (t.price_coins <= total) return;
-        const diff = Math.abs(t.price_coins - desiredValue);
-        if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
-    });
-    if (bestIdx < 0) {
-        toast('Нет подходящей цели', 'error');
-        return;
-    }
-    upgraderTargetIdx = bestIdx;
-    renderUpgraderTarget();
-    updateUpgraderChance();
-}
-
 async function upgraderPlay() {
     if (upgraderBusy) return;
 
-    const skinsTotal = getSelectedTotal();
-    const extra = upgraderExtraCoins || 0;
+    const total = getSelectedTotal();
 
-    if (upgraderSelectedPks.size === 0 && extra <= 0) {
-        toast('Выбери предметы или введи сумму монет', 'error');
+    if (upgraderSelectedPks.size === 0) {
+        toast('Выбери предметы', 'error');
         return;
     }
     if (upgraderTargetIdx < 0) {
@@ -3396,19 +3179,12 @@ async function upgraderPlay() {
     }
 
     const target = upgraderTargets[upgraderTargetIdx];
-    const total = skinsTotal + extra;
 
     if (target.price_coins <= total) {
         toast('⚠️ Цель дешевле ставки — так нельзя', 'error');
         return;
     }
 
-    if (extra > (profile.balance || 0)) {
-        toast('Недостаточно монет', 'error');
-        return;
-    }
-
-    // ═══ БЛОКИРУЕМ ИНТЕРФЕЙС (без оверлея) ═══
     upgraderBusy = true;
     document.body.classList.add('upgrade-running');
     haptic('medium');
@@ -3424,7 +3200,7 @@ async function upgraderPlay() {
         d = await api('/api/upgrader/play', {
             item_pks: Array.from(upgraderSelectedPks),
             target_idx: upgraderTargetIdx,
-            extra_coins: extra,
+            extra_coins: 0,
         });
     } catch (e) {
         toast(e.message, 'error');
@@ -3432,11 +3208,6 @@ async function upgraderPlay() {
         document.body.classList.remove('upgrade-running');
         if (goBtn) goBtn.disabled = false;
         return;
-    }
-
-    // ═══ Списываем доп. монеты локально для UI ═══
-    if (extra > 0) {
-        profile.balance = Math.max(0, (profile.balance || 0) - extra);
     }
 
     const chance = Math.min(0.95, Math.max(0.01, d.total_value / d.target.price_coins));
@@ -3449,7 +3220,6 @@ async function upgraderPlay() {
         finalPercent = chancePercent + Math.random() * (100 - chancePercent) * 0.95;
     }
 
-    // ⭐ ПОЛНОЦЕННАЯ ПРОКРУТКА СТРЕЛКИ
     const spinDuration = upgraderFastMode ? 0.4 : 3.0;
     const spinMs = upgraderFastMode ? 400 : 3000;
     const baseTurns = upgraderFastMode
@@ -3470,7 +3240,6 @@ async function upgraderPlay() {
         });
     }
 
-    // Тикающий звук
     let tickInt = null;
     if (!upgraderFastMode) {
         tickInt = setInterval(() => {
@@ -3481,13 +3250,11 @@ async function upgraderPlay() {
     await new Promise(r => setTimeout(r, spinMs));
     if (tickInt) clearInterval(tickInt);
 
-    // Финальный процент
     percentEl.textContent = finalPercent.toFixed(2) + '%';
     percentEl.classList.remove('green', 'yellow', 'red');
     if (d.win) percentEl.classList.add('green');
     else percentEl.classList.add('red');
 
-    // ═══ СНИМАЕМ БЛОКИРОВКУ — теперь можно смотреть результат ═══
     document.body.classList.remove('upgrade-running');
 
     const overlay = document.createElement('div');
@@ -3502,7 +3269,6 @@ async function upgraderPlay() {
             <div class="upg-result-text win">УСПЕХ!</div>
             <div class="upg-result-name">${d.target.name}</div>
             <div class="upg-result-price">+${fmt(d.target.price_coins)} 🪙</div>
-            ${extra > 0 ? `<div class="upg-result-name" style="font-size:12px;opacity:0.7;">Ставка: ${fmt(skinsTotal)} (скины) + ${fmt(extra)} (монеты)</div>` : ''}
         `;
     } else {
         SFX.lose();
@@ -3511,7 +3277,6 @@ async function upgraderPlay() {
             <div class="upg-result-text lose">НЕ ПОВЕЗЛО</div>
             <div class="upg-result-name">Предметы потеряны</div>
             <div class="upg-result-price">−${fmt(d.total_value)} 🪙</div>
-            ${extra > 0 ? `<div class="upg-result-name" style="font-size:12px;opacity:0.7;">Ставка: ${fmt(skinsTotal)} (скины) + ${fmt(extra)} (монеты)</div>` : ''}
         `;
     }
 
@@ -3524,14 +3289,10 @@ async function upgraderPlay() {
         overlay.remove();
         upgraderBusy = false;
         if (goBtn) goBtn.disabled = false;
-
-        upgraderExtraCoins = 0;
-        const input = document.getElementById('upgExtraCoins');
-        if (input) input.value = '';
-
         loadUpgrader();
     }, 2500);
 }
+
 /* ═══ БЕСПЛАТНЫЙ КЕЙС ═══ */
 async function loadFreeCaseStatus() {
     try {
@@ -3627,7 +3388,6 @@ async function openFreeCase() {
 }
 
 /* ═══ CS:GO КНОПКИ ПОД ДРОПОМ ═══ */
-
 async function caseSellNow() {
     const drop = window._lastCaseDrop;
     if (!drop) { toast('Данные потеряны', 'error'); return; }
@@ -3646,7 +3406,7 @@ async function caseSellNow() {
         toast(`✅ Продано за ${fmt(d.sold_value)} 🪙`, 'success');
         SFX.cashout();
         updateBalance(d.balance);
-        closeCaseRoulette(true);   // ← force
+        closeCaseRoulette(true);
         loadProfile();
         loadInventory();
     } catch (e) {
@@ -3658,7 +3418,7 @@ function caseToUpgrade() {
     const drop = window._lastCaseDrop;
     if (!drop) { toast('Данные потеряны', 'error'); return; }
     haptic('medium');
-    closeCaseRoulette(true);       // ← force
+    closeCaseRoulette(true);
     showScreen('upgrader');
     loadUpgrader();
 }
@@ -3669,7 +3429,7 @@ function caseOpenAgain() {
     haptic('medium');
     const c = casesCache.find(x => x.id === drop.caseId);
     if (!c) { toast('Кейс не найден', 'error'); return; }
-    closeCaseRoulette(true);       // ← force
+    closeCaseRoulette(true);
     setTimeout(() => openCase(c, drop.count), 200);
 }
 
@@ -3872,109 +3632,7 @@ async function loadAdminLogs() {
         });
     } catch (e) { toast(e.message, 'error'); }
 }
-/* ═══ BATTLE PASS ═══ */
-let bpData = null;
 
-async function loadBattlePass() {
-    try {
-        const d = await api('/api/battlepass/status');
-        bpData = d;
-
-        document.getElementById('bpSeason').textContent = d.season;
-        document.getElementById('bpLevel').textContent = d.level;
-        document.getElementById('bpXp').textContent = fmt(d.xp);
-        document.getElementById('bpXpMax').textContent = fmt(d.xp_per_level);
-
-        let currentXp;
-        if (d.level >= d.max_level) {
-            currentXp = d.xp_per_level;
-        } else {
-            currentXp = d.xp - (d.level - 1) * d.xp_per_level;
-        }
-        const percent = Math.min(100, Math.max(0, (currentXp / d.xp_per_level) * 100));
-        document.getElementById('bpXpFill').style.width = percent + '%';
-
-        const premiumBtn = document.getElementById('bpPremiumBtn');
-        if (d.premium) {
-            premiumBtn.textContent = '✅ Premium активен';
-            premiumBtn.classList.add('active');
-            premiumBtn.disabled = true;
-        }
-
-        renderBattlePassRewards(d);
-    } catch (e) {
-        console.error('BP load error:', e);
-    }
-}
-
-function renderBattlePassRewards(d) {
-    const el = document.getElementById('bpRewards');
-    if (!el) return;
-
-    el.innerHTML = d.rewards.map(r => {
-        const reached = d.level >= r.level;
-        const claimedFree = d.claimed_free.includes(String(r.level));
-        const claimedPremium = d.claimed_premium.includes(String(r.level));
-
-        const emoji = r.bonus ? '📦' : '🪙';
-        const freeText = r.bonus ? 'Кейс' : `+${fmt(r.free_coins)} 🪙`;
-        const premiumText = r.bonus ? 'Кейс ×2' : `+${fmt(r.premium_coins)} 🪙`;
-
-        let buttons = '';
-        if (reached && !claimedFree) {
-            buttons = `<button class="bp-reward-btn" onclick="claimBpReward(${r.level}, false)">Забрать</button>`;
-        } else if (claimedFree) {
-            buttons = `<button class="bp-reward-btn" disabled>✅</button>`;
-        } else {
-            buttons = `<span style="color:#666;font-size:11px;">Ур. ${r.level}</span>`;
-        }
-
-        return `
-            <div class="bp-reward ${reached ? 'reached' : 'locked'}">
-                <div class="bp-reward-emoji">${emoji}</div>
-                <div class="bp-reward-info">
-                    <div class="bp-reward-level">Уровень ${r.level}</div>
-                    <div class="bp-reward-content">${freeText}</div>
-                </div>
-                ${buttons}
-            </div>
-        `;
-    }).join('');
-}
-
-async function claimBpReward(level, premium) {
-    haptic('medium');
-    try {
-        const d = await api('/api/battlepass/claim', { level, premium });
-        toast(`✅ +${fmt(d.coins)} 🪙${d.bonus ? ' + кейс' : ''}`, 'success');
-        SFX.cashout();
-        confettiBurst('#ffc107');
-        updateBalance(d.balance);
-        loadBattlePass();
-        if (d.bonus) loadInventory();
-    } catch (e) {
-        toast(e.message, 'error');
-    }
-}
-
-async function buyPremiumPass() {
-    haptic('medium');
-    try {
-        const d = await api('/api/battlepass/buy-premium');
-        tg.openInvoice(d.link, (status) => {
-            if (status === 'paid') {
-                toast('✅ Premium активирован', 'success');
-                SFX.jackpot();
-                confettiJackpot();
-                setTimeout(loadBattlePass, 1500);
-            } else if (status === 'cancelled') {
-                toast('❌ Отменено', 'error');
-            }
-        });
-    } catch (e) {
-        toast(e.message, 'error');
-    }
-}
 /* ═══ ADMIN INVENTORY ═══ */
 async function loadUserInventory() {
     const target = document.getElementById('invTarget').value.trim();
@@ -4022,66 +3680,7 @@ async function adminBroadcast() {
         document.getElementById('broadcastText').value = '';
     } catch (e) { toast(e.message, 'error'); }
 }
-/* ═══ DAILY QUESTS ═══ */
-async function loadQuests() {
-    try {
-        const d = await api('/api/quests/list');
-        const el = document.getElementById('questsList');
-        if (!el) return;
 
-        if (!d.quests || !d.quests.length) {
-            el.innerHTML = '<div class="quests-info">Задания загружаются...</div>';
-            return;
-        }
-
-        el.innerHTML = d.quests.map(q => {
-            const progress = Math.min(q.progress, q.target);
-            const percent = (progress / q.target) * 100;
-            const done = progress >= q.target;
-            const claimed = q.claimed;
-            const cardCls = claimed ? 'claimed' : (done ? 'done' : '');
-
-            return `
-                <div class="quest-card ${cardCls}">
-                    <div class="quest-header">
-                        <span class="quest-name">${q.name}</span>
-                        <span class="quest-reward">+${fmt(q.reward)} 🪙</span>
-                    </div>
-                    <div class="quest-progress-bar">
-                        <div class="quest-progress-fill" style="width:${percent}%"></div>
-                    </div>
-                    <div class="quest-progress-text">
-                        <span>${progress}/${q.target}</span>
-                        <span>${percent.toFixed(0)}%</span>
-                    </div>
-                    ${done && !claimed ? `
-                        <button class="quest-claim-btn" onclick="claimQuest('${q.id}')">
-                            🎁 Забрать
-                        </button>
-                    ` : (claimed ? `
-                        <button class="quest-claim-btn" disabled>✅ Получено</button>
-                    ` : '')}
-                </div>
-            `;
-        }).join('');
-    } catch (e) {
-        console.error('Quests load error:', e);
-    }
-}
-
-async function claimQuest(questId) {
-    haptic('medium');
-    try {
-        const d = await api('/api/quests/claim', { quest_id: questId });
-        toast(`✅ +${fmt(d.reward)} 🪙`, 'success');
-        SFX.cashout();
-        confettiBurst('#4ade80');
-        updateBalance(d.balance);
-        loadQuests();
-    } catch (e) {
-        toast(e.message, 'error');
-    }
-}
 /* ═══ ПОДКРУТКА ШАНСОВ ═══ */
 async function adminSetWinrate() {
     haptic();
@@ -4143,6 +3742,8 @@ async function adminClearWinrateFor(userId) {
         loadAdminWinrates();
     } catch (e) { toast(e.message, 'error'); }
 }
+
+/* ═══ SORT ═══ */
 let invSortDesc = true;
 let upgSortDesc = true;
 
@@ -4159,8 +3760,8 @@ function toggleUpgSort() {
     if (el) el.textContent = upgSortDesc ? '💎 Дорогие ↓' : '💎 Дешёвые ↑';
     renderUpgraderInv();
 }
-/* ═══ БЫСТРЫЙ АПГРЕЙД ═══ */
 
+/* ═══ БЫСТРЫЕ РЕЖИМЫ ═══ */
 function toggleFastUpgrade() {
     upgraderFastMode = !upgraderFastMode;
     const btn = document.getElementById('upgFastBtn');
@@ -4172,8 +3773,6 @@ function toggleFastUpgrade() {
     toast(upgraderFastMode ? '⚡ Быстрый режим ВКЛ' : 'Обычный режим');
 }
 
-/* ═══ БЫСТРЫЙ ПРОКРУТ КЕЙСОВ ═══ */
-
 function toggleFastCase() {
     caseFastMode = !caseFastMode;
     const btn = document.getElementById('casesFastBtn');
@@ -4184,9 +3783,464 @@ function toggleFastCase() {
     haptic();
     toast(caseFastMode ? '⚡ Быстрый прокрут ВКЛ' : 'Обычный прокрут');
 }
+
+/* ═══ JACKPOT ═══ */
+async function updateJackpot() {
+    try {
+        const d = await api('/api/jackpot/info');
+        const els = document.querySelectorAll('.jackpot-value');
+        els.forEach(el => el.textContent = fmt(d.amount));
+    } catch (e) {}
+}
+
+/* ═══ HOURLY BONUS ═══ */
+async function loadHourlyStatus() {
+    try {
+        const d = await api('/api/hourly/status');
+        const banner = document.getElementById('hourlyBanner');
+        const text = document.getElementById('hourlyText');
+        if (!banner || !text) return;
+
+        if (d.can_claim) {
+            banner.classList.remove('hidden');
+            text.textContent = `🎁 Забрать бонус · ×${d.next_mult.toFixed(1)} (${fmt(d.next_reward)} 🪙)`;
+            banner.classList.add('ready');
+        } else {
+            banner.classList.remove('hidden');
+            banner.classList.remove('ready');
+            text.textContent = `⏳ Бонус через ${formatCooldown(d.seconds_left)} · серия ${d.streak}`;
+        }
+    } catch (e) {}
+}
+
+async function claimHourly() {
+    haptic('medium');
+    try {
+        const d = await api('/api/hourly/claim');
+        toast(`🎁 +${fmt(d.reward)} 🪙 (серия ${d.streak}, ×${d.mult})`, 'success');
+        updateBalance(d.balance);
+        SFX.cashout();
+        confettiBurst('#ffc107');
+        loadHourlyStatus();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+/* ═══ WHEEL ═══ */
+async function loadWheel() {
+    try {
+        const d = await api('/api/wheel/status');
+        const spinsEl = document.getElementById('wheelSpins');
+        if (spinsEl) spinsEl.textContent = d.spins;
+
+        const btn = document.getElementById('wheelSpinBtn');
+        if (btn) btn.disabled = d.spins <= 0;
+    } catch (e) {}
+}
+
+async function spinWheel() {
+    haptic('medium');
+    const wheel = document.getElementById('wheelVisual');
+    if (wheel) wheel.classList.add('spinning');
+
+    try {
+        const d = await api('/api/wheel/spin');
+        await new Promise(r => setTimeout(r, 2000));
+
+        if (wheel) wheel.classList.remove('spinning');
+
+        const resultEl = document.getElementById('wheelResult');
+        if (resultEl) {
+            resultEl.innerHTML = `
+                <div style="font-size:80px;">🎁</div>
+                <div style="font-size:20px;font-weight:800;color:#ffc107;">${d.result_text}</div>
+            `;
+            resultEl.classList.remove('hidden');
+        }
+
+        updateBalance(d.balance);
+        SFX.jackpot();
+        confettiJackpot();
+        haptic('success');
+
+        setTimeout(() => {
+            if (resultEl) resultEl.classList.add('hidden');
+            loadWheel();
+        }, 3000);
+    } catch (e) {
+        if (wheel) wheel.classList.remove('spinning');
+        toast(e.message, 'error');
+    }
+}
+
+/* ═══ КЭШБЭК ═══ */
+async function loadCashback() {
+    try {
+        const d = await api('/api/cashback/info');
+        const el = document.getElementById('cashbackInfo');
+        if (!el) return;
+
+        el.innerHTML = `
+            <div class="cashback-tier">${d.tier}</div>
+            <div class="cashback-amount">${fmt(d.lost)} 🪙</div>
+            <div class="cashback-label">Проиграно за неделю</div>
+            <div class="cashback-percent">Кэшбэк: <b>${d.percent}%</b></div>
+            ${d.can_claim
+                ? `<button class="btn-primary" onclick="claimCashback()">💰 Забрать ${fmt(d.reward)} 🪙</button>`
+                : `<div class="withdraw-hint">Нечего забирать</div>`}
+        `;
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+async function claimCashback() {
+    haptic('medium');
+    try {
+        const d = await api('/api/cashback/claim');
+        toast(`💰 Кэшбэк +${fmt(d.reward)} 🪙`, 'success');
+        updateBalance(d.balance);
+        SFX.cashout();
+        confettiBurst('#00d68f');
+        loadCashback();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+/* ═══ РЕФЕРАЛКА ═══ */
+async function loadReferralStats() {
+    try {
+        const d = await api('/api/referral/stats');
+        const el = document.getElementById('referralStats');
+        if (!el) return;
+
+        el.innerHTML = `
+            <div class="inv-stat">
+                <div class="inv-stat-val">${d.invited}</div>
+                <div class="inv-stat-lbl">Приглашено</div>
+            </div>
+            <div class="inv-stat">
+                <div class="inv-stat-val">${fmt(d.earnings.earned)}</div>
+                <div class="inv-stat-lbl">Заработано 🪙</div>
+            </div>
+        `;
+
+        const linkEl = document.getElementById('referralLink');
+        if (linkEl) linkEl.value = d.link;
+    } catch (e) {
+        console.error('Referral stats error:', e);
+    }
+}
+
+function copyReferralLink() {
+    const el = document.getElementById('referralLink');
+    if (el && el.value) {
+        copyToClipboard(el.value);
+    } else {
+        toast('Ссылка не загружена', 'error');
+    }
+}
+
+function shareReferralLink() {
+    const el = document.getElementById('referralLink');
+    if (!el || !el.value) {
+        toast('Ссылка не загружена', 'error');
+        return;
+    }
+    const text = `🎰 Играю в крутое казино! Забирай бонус новичка:\n${el.value}`;
+    const url = `https://t.me/share/url?url=${encodeURIComponent(el.value)}&text=${encodeURIComponent(text)}`;
+    tg.openTelegramLink(url);
+}
+
+/* ═══ КАСТОМИЗАЦИЯ ═══ */
+async function loadCustomize() {
+    try {
+        const d = await api('/api/profile/customize/list');
+        window.currentCustomize = d;
+
+        const avEl = document.getElementById('customizeAvatars');
+        if (avEl) {
+            avEl.innerHTML = d.avatars.map(a => `
+                <div class="customize-item ${d.current.avatar === a.id ? 'selected' : ''}"
+                     onclick="buyCustomize('avatar', '${a.id}', ${a.price})">
+                    <div class="customize-emoji">${a.emoji}</div>
+                    <div class="customize-name">${a.name}</div>
+                    <div class="customize-price">${a.price === 0 ? 'Бесплатно' : fmt(a.price) + ' 🪙'}</div>
+                </div>
+            `).join('');
+        }
+
+        const frEl = document.getElementById('customizeFrames');
+        if (frEl) {
+            frEl.innerHTML = d.frames.map(f => `
+                <div class="customize-item ${d.current.frame === f.id ? 'selected' : ''}"
+                     onclick="buyCustomize('frame', '${f.id}', ${f.price})">
+                    <div class="customize-frame" style="border-color:${f.color}; border-width:3px; border-style:solid; border-radius:50%; width:40px; height:40px;"></div>
+                    <div class="customize-name">${f.name}</div>
+                    <div class="customize-price">${f.price === 0 ? 'Бесплатно' : fmt(f.price) + ' 🪙'}</div>
+                </div>
+            `).join('');
+        }
+
+        const tiEl = document.getElementById('customizeTitles');
+        if (tiEl) {
+            tiEl.innerHTML = d.titles.map(t => `
+                <div class="customize-item ${d.current.title === t.name ? 'selected' : ''}"
+                     onclick="buyCustomize('title', '${t.id}', ${t.price})">
+                    <div class="customize-title">${t.name}</div>
+                    <div class="customize-price">${t.price === 0 ? 'Бесплатно' : fmt(t.price) + ' 🪙'}</div>
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+async function buyCustomize(kind, itemId, price) {
+    haptic();
+    if (price > profile.balance) {
+        toast(`Нужно ${fmt(price)} 🪙`, 'error');
+        return;
+    }
+    if (price > 0 && !confirm(`Купить за ${fmt(price)} 🪙?`)) return;
+
+    try {
+        const d = await api('/api/profile/customize/buy', { kind, item_id: itemId });
+        toast('✅ Куплено!', 'success');
+        updateBalance(d.balance);
+        SFX.cashout();
+        loadCustomize();
+        loadProfile();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+/* ═══ ТУРНИР ═══ */
+async function loadTournament() {
+    try {
+        const d = await api('/api/tournament/active');
+        const el = document.getElementById('tournamentBody');
+        if (!el) return;
+
+        if (!d.active) {
+            el.innerHTML = '<div class="history-item">Турнир скоро начнётся</div>';
+            return;
+        }
+
+        const t = d.tournament;
+
+        el.innerHTML = `
+            <div class="tournament-header">
+                <div class="tournament-game">🎮 Игра: <b>${t.game}</b></div>
+                <div class="tournament-prize">🏆 Приз: <b>${fmt(t.prize_pool)} 🪙</b></div>
+            </div>
+            <div class="tournament-list">
+                ${d.leaderboard.map(p => `
+                    <div class="tournament-item ${p.user_id === profile.user_id ? 'me' : ''}">
+                        <div class="tour-place">${p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : p.rank}</div>
+                        <div class="tour-name">@${p.username}</div>
+                        <div class="tour-score">${fmt(p.score)} 🪙</div>
+                    </div>
+                `).join('') || '<div class="history-item">Пока нет участников</div>'}
+            </div>
+            ${d.my_rank ? `<div class="tournament-my">Ваше место: <b>#${d.my_rank}</b> · ${fmt(d.my_score)} 🪙</div>` : ''}
+        `;
+    } catch (e) {}
+}
+
+/* ═══ ЗАЛ СЛАВЫ ═══ */
+async function loadHall() {
+    try {
+        const d = await api('/api/hall/list');
+        const el = document.getElementById('hallList');
+        if (!el) return;
+        if (!d.records || !d.records.length) {
+            el.innerHTML = '<div class="history-item">Пока нет крупных выигрышей</div>';
+            return;
+        }
+        el.innerHTML = d.records.map(r => `
+            <div class="hall-item">
+                <div class="hall-user">@${r.username}</div>
+                <div class="hall-game">${r.game}</div>
+                <div class="hall-win">+${fmt(r.win)} 🪙</div>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Hall error:', e);
+        const el = document.getElementById('hallList');
+        if (el) el.innerHTML = '<div class="history-item">Ошибка загрузки</div>';
+    }
+}
+
+/* ═══ QUESTS ═══ */
+async function loadQuests() {
+    try {
+        const d = await api('/api/quests/list');
+        const el = document.getElementById('questsList');
+        if (!el) return;
+
+        if (!d.quests || !d.quests.length) {
+            el.innerHTML = '<div class="quests-info">Задания загружаются...</div>';
+            return;
+        }
+
+        el.innerHTML = d.quests.map(q => {
+            const progress = Math.min(q.progress, q.target);
+            const percent = (progress / q.target) * 100;
+            const done = progress >= q.target;
+            const claimed = q.claimed;
+            const cardCls = claimed ? 'claimed' : (done ? 'done' : '');
+
+            return `
+                <div class="quest-card ${cardCls}">
+                    <div class="quest-header">
+                        <span class="quest-name">${q.name}</span>
+                        <span class="quest-reward">+${fmt(q.reward)} 🪙</span>
+                    </div>
+                    <div class="quest-progress-bar">
+                        <div class="quest-progress-fill" style="width:${percent}%"></div>
+                    </div>
+                    <div class="quest-progress-text">
+                        <span>${progress}/${q.target}</span>
+                        <span>${percent.toFixed(0)}%</span>
+                    </div>
+                    ${done && !claimed ? `
+                        <button class="quest-claim-btn" onclick="claimQuest('${q.id}')">
+                            🎁 Забрать
+                        </button>
+                    ` : (claimed ? `
+                        <button class="quest-claim-btn" disabled>✅ Получено</button>
+                    ` : '')}
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error('Quests load error:', e);
+    }
+}
+
+async function claimQuest(questId) {
+    haptic('medium');
+    try {
+        const d = await api('/api/quests/claim', { quest_id: questId });
+        toast(`✅ +${fmt(d.reward)} 🪙`, 'success');
+        SFX.cashout();
+        confettiBurst('#4ade80');
+        updateBalance(d.balance);
+        loadQuests();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+/* ═══ BATTLE PASS ═══ */
+let bpData = null;
+
+async function loadBattlePass() {
+    try {
+        const d = await api('/api/battlepass/status');
+        bpData = d;
+
+        document.getElementById('bpSeason').textContent = d.season;
+        document.getElementById('bpLevel').textContent = d.level;
+        document.getElementById('bpXp').textContent = fmt(d.xp);
+        document.getElementById('bpXpMax').textContent = fmt(d.xp_per_level);
+
+        let currentXp;
+        if (d.level >= d.max_level) {
+            currentXp = d.xp_per_level;
+        } else {
+            currentXp = d.xp - (d.level - 1) * d.xp_per_level;
+        }
+        const percent = Math.min(100, Math.max(0, (currentXp / d.xp_per_level) * 100));
+        document.getElementById('bpXpFill').style.width = percent + '%';
+
+        const premiumBtn = document.getElementById('bpPremiumBtn');
+        if (d.premium) {
+            premiumBtn.textContent = '✅ Premium активен';
+            premiumBtn.classList.add('active');
+            premiumBtn.disabled = true;
+        }
+
+        renderBattlePassRewards(d);
+    } catch (e) {
+        console.error('BP load error:', e);
+    }
+}
+
+function renderBattlePassRewards(d) {
+    const el = document.getElementById('bpRewards');
+    if (!el) return;
+
+    el.innerHTML = d.rewards.map(r => {
+        const reached = d.level >= r.level;
+        const claimedFree = d.claimed_free.includes(String(r.level));
+
+        const emoji = r.bonus ? '📦' : '🪙';
+        const freeText = r.bonus ? 'Кейс' : `+${fmt(r.free_coins)} 🪙`;
+
+        let buttons = '';
+        if (reached && !claimedFree) {
+            buttons = `<button class="bp-reward-btn" onclick="claimBpReward(${r.level}, false)">Забрать</button>`;
+        } else if (claimedFree) {
+            buttons = `<button class="bp-reward-btn" disabled>✅</button>`;
+        } else {
+            buttons = `<span style="color:#666;font-size:11px;">Ур. ${r.level}</span>`;
+        }
+
+        return `
+            <div class="bp-reward ${reached ? 'reached' : 'locked'}">
+                <div class="bp-reward-emoji">${emoji}</div>
+                <div class="bp-reward-info">
+                    <div class="bp-reward-level">Уровень ${r.level}</div>
+                    <div class="bp-reward-content">${freeText}</div>
+                </div>
+                ${buttons}
+            </div>
+        `;
+    }).join('');
+}
+
+async function claimBpReward(level, premium) {
+    haptic('medium');
+    try {
+        const d = await api('/api/battlepass/claim', { level, premium });
+        toast(`✅ +${fmt(d.coins)} 🪙${d.bonus ? ' + кейс' : ''}`, 'success');
+        SFX.cashout();
+        confettiBurst('#ffc107');
+        updateBalance(d.balance);
+        loadBattlePass();
+        if (d.bonus) loadInventory();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+async function buyPremiumPass() {
+    haptic('medium');
+    try {
+        const d = await api('/api/battlepass/buy-premium');
+        tg.openInvoice(d.link, (status) => {
+            if (status === 'paid') {
+                toast('✅ Premium активирован', 'success');
+                SFX.jackpot();
+                confettiJackpot();
+                setTimeout(loadBattlePass, 1500);
+            } else if (status === 'cancelled') {
+                toast('❌ Отменено', 'error');
+            }
+        });
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
 /* ═══ BOOTSTRAP ═══ */
 async function bootstrap() {
-    // ✅ Проверка initData
     if (!initData) {
         document.body.innerHTML = `
             <div style="color:#fff; padding:40px 20px; text-align:center; font-family:sans-serif; background:#0a0e14; min-height:100vh;">
@@ -4212,7 +4266,6 @@ async function bootstrap() {
         console.error('loadProfile failed:', e);
     }
 
-    // ✅ Скрываем splash ВСЕГДА — даже если что-то упало
     setTimeout(() => {
         document.getElementById('splash')?.classList.add('hide');
     }, 800);
@@ -4228,32 +4281,25 @@ async function bootstrap() {
         setInterval(loadLiveFeed, 10000);
         setInterval(renderHomeInventoryPreview, 30000);
 
+        updateJackpot();
+        setInterval(updateJackpot, 5000);
+
+        loadHourlyStatus();
+        setInterval(loadHourlyStatus, 30000);
+
         api('/api/penalti/reset').catch(() => {});
         api('/api/duel/cancel').catch(() => {});
     } catch (e) {
         console.error('bootstrap error:', e);
     }
 }
+
 bootstrap();
-// Блокировка горячих клавиш во время апгрейда
+
 document.addEventListener('keydown', (e) => {
     if (upgraderBusy) {
         e.preventDefault();
         e.stopPropagation();
         return false;
-    }
-}, true);
-
-// Блокировка кликов вне блокера (на всякий случай)
-document.addEventListener('click', (e) => {
-    if (upgraderBusy) {
-        const blocker = document.getElementById('upgradeBlocker');
-        if (blocker && !blocker.classList.contains('hidden')) {
-            if (!blocker.contains(e.target)) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-        }
     }
 }, true);
