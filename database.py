@@ -197,11 +197,10 @@ async def init_db():
             )
         """)
 
-        # ═══════════ НОВЫЕ ТАБЛИЦЫ ДЛЯ ФИЧ ═══════════
         await db.execute("""
             CREATE TABLE IF NOT EXISTS jackpot (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
-                amount INTEGER NOT NULL DEFAULT 100000,
+                amount INTEGER NOT NULL DEFAULT 10000000,
                 last_winner INTEGER,
                 last_won_at TIMESTAMP
             )
@@ -300,12 +299,20 @@ async def init_db():
 async def has_deposited(user_id: int, min_stars: int) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT SUM(stars) FROM payments WHERE user_id = ?",
+            "SELECT SUM(stars) FROM payments WHERE user_id = ? AND refunded = 0",
             (user_id,)
         ) as cur:
             row = await cur.fetchone()
             total_stars = row[0] if row and row[0] else 0
             return total_stars >= min_stars
+
+
+async def payment_exists(charge_id: str) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT 1 FROM payments WHERE charge_id = ?", (charge_id,)
+        ) as cur:
+            return await cur.fetchone() is not None
 
 
 async def ensure_user(user_id: int, username: str = None):
@@ -909,7 +916,6 @@ async def log_live_win(user_id: int, username: str, game: str, win: int):
             "INSERT INTO live_feed (user_id, username, game, win) VALUES (?, ?, ?, ?)",
             (user_id, username, game, win),
         )
-        await db.commit()
         await db.execute(
             "DELETE FROM live_feed WHERE id NOT IN "
             "(SELECT id FROM live_feed ORDER BY id DESC LIMIT 100)"
@@ -1062,7 +1068,7 @@ MAX_LEVEL = 50
 
 def _current_season() -> int:
     now = int(_time.time())
-    start = 1735689600   # 2025-01-01 00:00 UTC
+    start = 1735689600
     days_passed = (now - start) // 86400
     return (days_passed // SEASON_DURATION_DAYS) + 1
 
@@ -1244,7 +1250,8 @@ async def claim_battle_pass_reward(user_id: int, level: int, premium: bool) -> t
 
         _, free_coins, premium_coins, bonus_type = reward_row
         coins = premium_coins if premium else free_coins
-        bonus = bonus_type if premium else None
+        # ФИКС: бонусный кейс выдаётся ВСЕМ — и free, и premium
+        bonus = bonus_type
 
         claimed_set.add(key)
         new_claimed = ",".join(sorted(claimed_set))
@@ -1362,8 +1369,9 @@ async def win_jackpot(user_id: int) -> int:
         async with db.execute("SELECT amount FROM jackpot WHERE id = 1") as cur:
             row = await cur.fetchone()
             amount = row[0] if row else 0
+        # ФИКС: сбрасываем на тот же уровень, что и в init_db (10 000 000)
         await db.execute(
-            "UPDATE jackpot SET amount = 100000, last_winner = ?, "
+            "UPDATE jackpot SET amount = 10000000, last_winner = ?, "
             "last_won_at = CURRENT_TIMESTAMP WHERE id = 1",
             (user_id,),
         )
@@ -1569,6 +1577,21 @@ async def get_tournament_leaderboard(tournament_id: int, limit: int = 20):
             return await cur.fetchall()
 
 
+async def initialize_tournament_if_needed():
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM tournaments WHERE status = 'active'"
+        ) as cur:
+            cnt = (await cur.fetchone())[0]
+        if cnt == 0:
+            await db.execute(
+                "INSERT INTO tournaments (game, prize_pool, starts_at, ends_at) "
+                "VALUES ('crash', 1000000, CURRENT_TIMESTAMP, datetime('now', '+7 days'))"
+            )
+            await db.commit()
+            print("🏆 Турнир создан", flush=True)
+
+
 # ═══════════ HALL OF FAME ═══════════
 
 async def add_to_hall_of_fame(user_id: int, username: str, game: str, win: int):
@@ -1596,6 +1619,7 @@ async def get_hall_of_fame(limit: int = 30):
 # ═══════════ КОЛЕСО ФОРТУНЫ ═══════════
 
 async def get_wheel_info(user_id: int):
+    """Возвращает инфо о колесе. Даёт ежедневный прокрут раз в 24 часа."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             "INSERT OR IGNORE INTO wheel_spins (user_id, spins_available) "
@@ -1608,11 +1632,39 @@ async def get_wheel_info(user_id: int):
             (user_id,),
         ) as cur:
             row = await cur.fetchone()
-            return {"spins": row[0] if row else 0, "last_daily": row[1] if row else None}
+
+        spins = row[0] if row else 0
+        last_daily = row[1] if row else None
+
+        now = datetime.datetime.utcnow()
+        should_grant = False
+        if not last_daily:
+            should_grant = True
+        else:
+            try:
+                last_dt = datetime.datetime.fromisoformat(last_daily)
+                if (now - last_dt).total_seconds() >= 86400:
+                    should_grant = True
+            except (ValueError, TypeError):
+                should_grant = True
+
+        if should_grant:
+            spins += 1
+            await db.execute(
+                "UPDATE wheel_spins SET spins_available = ?, last_daily = ? WHERE user_id = ?",
+                (spins, now.isoformat(), user_id),
+            )
+            await db.commit()
+
+        return {"spins": spins, "last_daily": last_daily}
 
 
 async def add_wheel_spin(user_id: int, count: int = 1):
     async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO wheel_spins (user_id, spins_available) VALUES (?, 0)",
+            (user_id,),
+        )
         await db.execute(
             "UPDATE wheel_spins SET spins_available = spins_available + ? "
             "WHERE user_id = ?",
