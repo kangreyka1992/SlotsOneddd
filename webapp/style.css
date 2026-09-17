@@ -3299,3 +3299,122 @@ body.upgrade-running .bottom-nav {
   flex-shrink: 0;
 }
 .hall-win { font-family: var(--font-num); font-weight: 900; color: #3dd68c; }
+/* ═══════════ TELEGRAM-STYLE ICONS ═══════════ */
+
+/* Подарок — стилизованная коробка */
+.tg-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2b3a55 0%, #1a2333 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  font-size: 30px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+/* Внутренний блеск */
+.tg-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Подарок — оранжевая тема */
+.tg-icon.gift {
+  background: linear-gradient(135deg, #ff9b26 0%, #e07a00 100%);
+  border-color: rgba(255, 200, 100, 0.3);
+  box-shadow:
+    0 4px 16px rgba(255, 155, 38, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* NFT — синяя тема (Telegram premium style) */
+.tg-icon.nft {
+  background: linear-gradient(135deg, #4a9eff 0%, #7c5cff 100%);
+  border-color: rgba(124, 92, 255, 0.4);
+  box-shadow:
+    0 4px 16px rgba(124, 92, 255, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* Общий вид иконки в уменьшенном размере (для инвентаря) */
+.tg-icon.sm {
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+  border-radius: 10px;
+}
+
+/* Для главной картинки кейса (большая иконка) */
+.tg-icon.lg {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  font-size: 64px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.tg-icon.lg::before {
+  display: none;
+}
+
+/* Улучшенный вид иконки в рулетке */
+.cr-item .tg-icon.sm {
+  width: 48px;
+  height: 48px;
+  font-size: 26px;
+}
+
+/* Иконка в списке предметов кейса */
+.ci-item .tg-icon.sm {
+  width: 40px;
+  height: 40px;
+  font-size: 22px;
+  border-radius: 8px;
+}
+
+/* Иконка в инвентаре */
+.inventory-item .tg-icon.sm {
+  width: 48px;
+  height: 48px;
+  font-size: 26px;
+}
+
+/* Иконка в апгрейде */
+.upg-inv-item .tg-icon.sm,
+.upg-target-item .tg-icon.sm {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  border-radius: 8px;
+  margin-bottom: 2px;
+}
+
+/* Иконка крупная в апгрейде */
+.upg-slot-emoji .tg-icon {
+  width: 64px;
+  height: 64px;
+  font-size: 34px;
+  border-radius: 16px;
+}
+
+/* Иконка в джекпоте / рулетке с подсветкой по редкости */
+.tg-icon[data-rarity="common"]    { --glow: #8b95a5; }
+.tg-icon[data-rarity="uncommon"]  { --glow: #00d68f; }
+.tg-icon[data-rarity="rare"]      { --glow: #4a9eff; }
+.tg-icon[data-rarity="epic"]      { --glow: #7c5cff; }
+.tg-icon[data-rarity="legendary"] { --glow: #ffc107; }
+.tg-icon[data-rarity="mythic"]    { --glow: #ff4757; }
