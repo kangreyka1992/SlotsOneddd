@@ -1991,10 +1991,15 @@ function switchPayTab(method) {
 
 // Курсы (настрой под себя)
 const TOPUP_RATES = {
-    ton: 500,      // 1 TON = 500 монет
-    crypto: 100,   // 1 USDT = 100 монет
-    stars: 100,    // 1 ⭐ = 100 монет
+    ton: 500,      // 1 TON = 200 монет
+    sbp: 5,        // 1 ₽ = 1 монета  ← настрой под себя
+    stars: 10,    // 1 ⭐ = 10 монет
 };
+
+// Реквизиты для оплаты (замени на свои)
+const SBP_PHONE = '+7 (961)-480-26-06';
+const SBP_NAME = 'Андрей З.';
+const SBP_BANK = 'Сбер-Банк';
 
 function switchTopupTab(method) {
     haptic();
@@ -2028,11 +2033,13 @@ function topupQuick(method, amount) {
 
 function topupRecalc(method) {
     const inputId = method === 'ton' ? 'tonAmount'
-                  : method === 'crypto' ? 'cryptoAmount'
+                  : method === 'sbp' ? 'sbpAmount'
                   : 'starsAmount';
     const input = document.getElementById(inputId);
+    if (!input) return;
+
     const infoId = method === 'ton' ? 'tonInfo'
-                 : method === 'crypto' ? 'cryptoInfo'
+                 : method === 'sbp' ? 'sbpInfo'
                  : 'starsInfo';
     const info = document.getElementById(infoId);
     const goBtn = document.querySelector(`#topup-${method} .topup-go`);
@@ -2041,14 +2048,26 @@ function topupRecalc(method) {
 
     if (amount <= 0) {
         info.innerHTML = `Введите сумму для пополнения`;
-        goBtn.disabled = true;
+        if (goBtn) goBtn.disabled = true;
         return;
     }
 
     const rate = TOPUP_RATES[method] || 0;
     const coins = Math.floor(amount * rate);
 
-    info.innerHTML = `Зачислится: <b>${fmt(coins)}</b> 🪙 · Курс: 1 ${method === 'ton' ? 'TON' : method === 'crypto' ? 'USDT' : '⭐'} = <b>${fmt(rate)}</b> 🪙`;
+    const unit = method === 'ton' ? 'TON'
+               : method === 'sbp' ? '₽'
+               : '⭐';
+
+    info.innerHTML = `Зачислится: <b>${fmt(coins)}</b> 🪙 · Курс: 1 ${unit} = <b>${fmt(rate)}</b> 🪙`;
+
+    let valid = true;
+    if (method === 'ton' && amount < 0.1) valid = false;
+    if (method === 'sbp' && amount < 100) valid = false;
+    if (method === 'stars' && (amount < 10 || amount > 10000)) valid = false;
+
+    if (goBtn) goBtn.disabled = !valid;
+}
 
     // Валидация минималки
     let valid = true;
@@ -2061,7 +2080,7 @@ function topupRecalc(method) {
 
 async function topupPay(method) {
     if (method === 'ton') return topupTON();
-    if (method === 'crypto') return topupCryptoBot();
+    if (method === 'sbp') return topupSBP();
     if (method === 'stars') return topupStars();
 }
 
@@ -2087,23 +2106,98 @@ async function topupTON() {
     }
 }
 
-/* Крипто Бот */
-async function topupCryptoBot() {
+/* СБП */
+async function topupSBP() {
     haptic('medium');
-    const amount = Number(document.getElementById('cryptoAmount').value) || 0;
-    if (amount < 1) { toast('Минимум 1 USDT', 'error'); return; }
+    const amount = Number(document.getElementById('sbpAmount').value) || 0;
+    if (amount < 100) { toast('Минимум 100 ₽', 'error'); return; }
 
+    const rate = TOPUP_RATES.sbp;
+    const coins = Math.floor(amount * rate);
+
+    // Создаём заявку на сервере (можно через /api/crypto/create с типом sbp)
+    let orderId = null;
     try {
-        const d = await api('/api/crypto/create', { amount_usd: amount });
-        if (d.deeplink) {
-            tg.openLink(d.deeplink);
-        } else if (d.wallet) {
-            copyToClipboard(d.wallet);
-            toast('📋 Адрес скопирован', 'success');
-        }
+        const d = await api('/api/sbp/create', { amount_rub: amount });
+        orderId = d.order_id;
     } catch (e) {
-        toast(e.message, 'error');
+        // Если API нет — просто игнорируем, покажем реквизиты
+        console.warn('SBP order create failed:', e.message);
     }
+
+    // Показываем окно с реквизитами
+    const overlay = document.createElement('div');
+    overlay.className = 'case-opening';
+    overlay.innerHTML = `
+        <div style="color:#fff; text-align:center; max-width:92%;">
+            <div style="font-size:22px; font-weight:800; margin-bottom:12px;">
+                🇷🇺 Оплата через СБП
+            </div>
+            <div style="font-size:14px; color:#8a92a3; margin-bottom:14px;">
+                Сумма: <b style="color:#fff;">${fmt(amount)} ₽</b><br>
+                Зачислится: <b style="color:#3dd68c;">${fmt(coins)} 🪙</b>
+            </div>
+
+            <div class="sbp-requisites">
+                <div class="sbp-row">
+                    <div>
+                        <div class="sbp-row-label">Банк</div>
+                        <div class="sbp-row-value">${SBP_BANK}</div>
+                    </div>
+                </div>
+                <div class="sbp-row">
+                    <div>
+                        <div class="sbp-row-label">Телефон</div>
+                        <div class="sbp-row-value">${SBP_PHONE}</div>
+                    </div>
+                    <button class="sbp-row-copy" onclick="copyToClipboard('${SBP_PHONE.replace(/[^0-9+]/g, '')}')">
+                        📋 Копировать
+                    </button>
+                </div>
+                <div class="sbp-row">
+                    <div>
+                        <div class="sbp-row-label">Получатель</div>
+                        <div class="sbp-row-value">${SBP_NAME}</div>
+                    </div>
+                </div>
+                <div class="sbp-row">
+                    <div>
+                        <div class="sbp-row-label">Сумма</div>
+                        <div class="sbp-row-value money">${fmt(amount)} ₽</div>
+                    </div>
+                    <button class="sbp-row-copy" onclick="copyToClipboard('${amount}')">
+                        📋 Копировать
+                    </button>
+                </div>
+                ${orderId ? `
+                <div class="sbp-row">
+                    <div>
+                        <div class="sbp-row-label">Комментарий к переводу</div>
+                        <div class="sbp-row-value">ID: ${profile.user_id || '—'}</div>
+                    </div>
+                    <button class="sbp-row-copy" onclick="copyToClipboard('${profile.user_id || ''}')">
+                        📋 Копировать
+                    </button>
+                </div>` : ''}
+            </div>
+
+            <div style="background:rgba(124,92,255,0.1); padding:12px; border-radius:10px; text-align:left; font-size:11px; line-height:1.7; color:#e8eaed; margin-bottom:12px;">
+                <b>📋 Как оплатить:</b><br>
+                1. Открой приложение <b>${SBP_BANK}</b><br>
+                2. Переведи <b>${fmt(amount)} ₽</b> по номеру <b>${SBP_PHONE}</b><br>
+                3. В комментарии укажи <b>ID: ${profile.user_id || '—'}</b><br>
+                4. Отправь <b>скриншот чека</b> в поддержку <b>@ТвойПоддержка</b><br>
+                5. Зачисление в течение <b>5–30 минут</b>
+            </div>
+
+            <button class="btn-secondary" onclick="this.closest('.case-opening').remove()" style="margin-top:4px; width:100%;">
+                Закрыть
+            </button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    toast('📋 Переведи по реквизитам и отправь чек', 'success');
 }
 
 /* Stars — можно вызвать с явной суммой или без */
