@@ -7,7 +7,67 @@ import time as _time
 DB_PATH = os.getenv("DB_PATH", "casino.db")
 
 
+# ═══════════ АВТОМИГРАЦИЯ ═══════════
+
+async def _auto_migrate():
+    """Проверяет схему БД и добавляет недостающие колонки.
+    Запускается при init_db() — до старта сервера."""
+    print(f"🔍 Auto-migrate: DB_PATH = {DB_PATH}", flush=True)
+    print(f"🔍 Auto-migrate: abs = {os.path.abspath(DB_PATH)}", flush=True)
+    print(f"🔍 Auto-migrate: exists = {os.path.exists(DB_PATH)}", flush=True)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # profiles
+        try:
+            async with db.execute("PRAGMA table_info(profiles)") as cur:
+                cols = [c[1] for c in await cur.fetchall()]
+            print(f"📋 profiles columns: {cols}", flush=True)
+
+            if cols and "owned" not in cols:
+                await db.execute("ALTER TABLE profiles ADD COLUMN owned TEXT DEFAULT '[]'")
+                await db.commit()
+                print("🔧 Migration: added profiles.owned", flush=True)
+                async with db.execute("PRAGMA table_info(profiles)") as cur:
+                    cols = [c[1] for c in await cur.fetchall()]
+                print(f"✅ profiles columns now: {cols}", flush=True)
+        except Exception as e:
+            print(f"⚠️ profiles migration error: {e}", flush=True)
+
+        # withdrawals
+        try:
+            async with db.execute("PRAGMA table_info(withdrawals)") as cur:
+                cols = [c[1] for c in await cur.fetchall()]
+            print(f"📋 withdrawals columns: {cols}", flush=True)
+
+            for col, definition in [
+                ("method",  "TEXT NOT NULL DEFAULT 'stars'"),
+                ("amount",  "REAL NOT NULL DEFAULT 0"),
+                ("details", "TEXT"),
+            ]:
+                if cols and col not in cols:
+                    await db.execute(f"ALTER TABLE withdrawals ADD COLUMN {col} {definition}")
+                    await db.commit()
+                    print(f"🔧 Migration: added withdrawals.{col}", flush=True)
+
+            await db.execute("UPDATE withdrawals SET amount = stars WHERE amount = 0")
+            await db.commit()
+        except Exception as e:
+            print(f"⚠️ withdrawals migration error: {e}", flush=True)
+
+        # Показываем пользователей для проверки
+        try:
+            async with db.execute("SELECT COUNT(*), SUM(balance) FROM users") as cur:
+                cnt, total = await cur.fetchone()
+            print(f"👥 Users: {cnt}, total balance: {total}", flush=True)
+        except Exception as e:
+            print(f"⚠️ users count error: {e}", flush=True)
+
+    print("🎉 Auto-migrate: complete", flush=True)
+
+
 async def init_db():
+    await _auto_migrate()
+
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
