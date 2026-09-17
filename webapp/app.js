@@ -2106,17 +2106,23 @@ async function topupCryptoBot() {
     }
 }
 
-/* Stars */
-async function topupStars() {
+/* Stars — можно вызвать с явной суммой или без */
+async function topupStars(starsOverride = null) {
     haptic('medium');
-    const amount = Number(document.getElementById('starsAmount').value) || 0;
+
+    let amount;
+    if (starsOverride !== null) {
+        amount = Number(starsOverride) || 0;
+    } else {
+        amount = Number(document.getElementById('starsAmount').value) || 0;
+    }
+
     if (amount < 10 || amount > 10000) {
         toast('Stars: 10 – 10 000', 'error');
         return;
     }
 
     try {
-        // Открываем стандартный invoice
         const d = await api('/api/invoice', { stars: amount });
         tg.openInvoice(d.link, (status) => {
             if (status === 'paid') {
@@ -2161,7 +2167,7 @@ function renderTopupGifts() {
 function topupGift(stars, coins) {
     haptic('medium');
     toast(`🎁 Подарок за ${stars} ⭐ → +${fmt(coins)} 🪙`, 'success');
-    topupStars();
+    topupStars(stars);   // ⬅️ передаём сумму ПОДАРКА, а не из input
 }
 function renderStarsButtons() {
     const el = document.getElementById('payGridStars');
