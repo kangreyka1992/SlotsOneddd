@@ -365,7 +365,6 @@ const GAMES_META = {
     plinko:  { name: 'Plinko',    desc: 'До ×100',  icon: '🎯', cls: 'plinko', sub: 'Шарик удачи' },
     dice:    { name: 'Кости',     desc: 'До ×5.7',  icon: '🎲', cls: '',       sub: 'Угадай диапазон' },
     rr:      { name: 'Рулетка',   desc: 'До ×7',    icon: '🔫', cls: '',       sub: 'Русская рулетка' },
-    penalti: { name: 'Penalti',   desc: 'До ×7',    icon: '⚽', cls: '',       sub: 'Забей и забери' },
     coin:    { name: 'Монетка',   desc: '×1.95',    icon: '🪙', cls: '',       sub: '50/50' },
     duel:    { name: 'PvP Дуэль', desc: '×1.96',    icon: '⚔️', cls: '',       sub: 'Против игрока' },
 };
@@ -4320,3 +4319,12 @@ document.addEventListener('keydown', (e) => {
         return false;
     }
 }, true);
+.profile-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #ffc107;
+    margin-top: -6px;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
