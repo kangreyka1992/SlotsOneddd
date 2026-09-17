@@ -3274,3 +3274,40 @@ body.upgrade-running .bottom-nav {
     z-index: 40;
 }
 .hall-win { font-family: var(--font-num); font-weight: 900; color: #3dd68c; }
+.app-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  max-width: 520px;
+  margin: 0 auto;
+  z-index: 60;
+}
+
+.fixed-banners {
+  position: fixed;
+  top: 60px; /* высота хедера */
+  left: 0; right: 0;
+  max-width: 520px;
+  margin: 0 auto;
+  z-index: 40;
+}
+
+.live-feed {
+  position: fixed;
+  top: 190px; /* 60 + высота баннеров */
+  left: 0; right: 0;
+  max-width: 520px;
+  margin: 0 auto;
+  z-index: 40;
+}
+
+.screens {
+  padding-top: 240px; /* отступ под все фиксированные блоки */
+}
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  max-width: 520px;
+  margin: 0 auto;
+  z-index: 50;
+}
