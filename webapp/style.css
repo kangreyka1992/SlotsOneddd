@@ -3264,4 +3264,11 @@ body.upgrade-running .bottom-nav {
 }
 .hall-user { font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; }
 .hall-game { font-size: 11px; color: #8a92a3; padding: 2px 8px; background: rgba(255,255,255,0.05); border-radius: 6px; }
+.fixed-banners {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+}
 .hall-win { font-family: var(--font-num); font-weight: 900; color: #3dd68c; }
