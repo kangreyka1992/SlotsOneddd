@@ -254,16 +254,26 @@
   </div>
 </header>
 
-  <div class="live-feed" id="liveFeed"></div>
-  <!-- Баннер джекпота -->
-<div class="jackpot-banner" id="jackpotBanner">
-    <div class="jackpot-icon">🎰</div>
-    <div class="jackpot-info">
-        <div class="jackpot-label">ДЖЕКПОТ</div>
-        <div class="jackpot-value">0</div>
+ <header class="app-header">...</header>
+
+<!-- Фиксированные баннеры -->
+<div class="fixed-banners" id="fixedBanners">
+    <div class="jackpot-banner" id="jackpotBanner">
+        <div class="jackpot-icon">🎰</div>
+        <div class="jackpot-info">
+            <div class="jackpot-label">ДЖЕКПОТ</div>
+            <div class="jackpot-value">0</div>
+        </div>
+        <div class="jackpot-icon">💰</div>
     </div>
-    <div class="jackpot-icon">💰</div>
+    <div class="hourly-banner hidden" id="hourlyBanner" onclick="claimHourly()">
+        <div class="hourly-icon">⏰</div>
+        <div class="hourly-text" id="hourlyText">Загрузка...</div>
+    </div>
 </div>
+
+<div class="live-feed" id="liveFeed"></div>
+<main class="screens">...</main>
 
 <!-- Ежечасный бонус -->
 <div class="hourly-banner hidden" id="hourlyBanner" onclick="claimHourly()">
