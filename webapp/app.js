@@ -66,10 +66,17 @@ const TOPUP_RATES = {
 };
 
 /* ═══ TELEGRAM-STYLE ICONS ═══ */
-function iconWrap(emoji, kind = 'gift', size = '', rarity = '') {
+function iconWrap(emojiOrPath, kind = 'gift', size = '', rarity = '', isImage = false) {
     const sizeCls = size ? ` ${size}` : '';
     const rarityAttr = rarity ? ` data-rarity="${rarity}"` : '';
-    return `<div class="tg-icon ${kind}${sizeCls}"${rarityAttr}>${emoji}</div>`;
+
+    // Если передан путь к картинке (начинается с / или http) — рисуем <img>
+    if (isImage || emojiOrPath.startsWith('/') || emojiOrPath.startsWith('http')) {
+        return `<img src="${emojiOrPath}" class="tg-icon-img ${kind}${sizeCls}"${rarityAttr} alt="">`;
+    }
+
+    // Иначе — старая логика с эмодзи
+    return `<div class="tg-icon ${kind}${sizeCls}"${rarityAttr}>${emojiOrPath}</div>`;
 }
 
 function kindFromRarity(rarity) {
