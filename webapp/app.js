@@ -54,7 +54,6 @@ let upgraderFastMode = false;
 /* WITHDRAW */
 const WITHDRAW_METHODS = {
     stars: { rate: 125,  min: 15,   unit: '⭐',   name: 'Stars' },
-    sbp:   { rate: 1000, min: 500,  unit: '₽',    name: 'СБП' },
     usdc:  { rate: 100,  min: 5,    unit: 'USDC', name: 'USDC' },
     ton:   { rate: 5000, min: 1,    unit: 'TON',  name: 'TON' },
 };
