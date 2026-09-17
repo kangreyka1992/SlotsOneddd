@@ -211,5 +211,4 @@ async def on_payment(message: types.Message):
 
 
 async def start_bot():
-    await init_db()
     await dp.start_polling(bot)
