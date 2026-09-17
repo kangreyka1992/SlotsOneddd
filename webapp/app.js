@@ -343,6 +343,7 @@ function showScreen(name) {
     if (name === 'profile') { loadProfile(); renderHistory(); }
     if (name === 'admin') switchAdminTab('stats');
     if (name === 'cases') { loadCases(); loadFreeCaseStatus(); }
+    if (name === 'topup') { renderTopupGifts(); topupRecalc('ton'); }
     if (name === 'quests') loadQuests();
     if (name === 'battlepass') loadBattlePass();
     if (name === 'inventory') loadInventory();
@@ -1986,7 +1987,182 @@ function switchPayTab(method) {
         m.classList.toggle('active', m.id === `pay-method-${method}`);
     });
 }
+/* ═══ ЭКРАН ПОПОЛНЕНИЯ БАЛАНСА ═══ */
 
+// Курсы (настрой под себя)
+const TOPUP_RATES = {
+    ton: 500,      // 1 TON = 500 монет
+    crypto: 100,   // 1 USDT = 100 монет
+    stars: 100,    // 1 ⭐ = 100 монет
+};
+
+function switchTopupTab(method) {
+    haptic();
+    document.querySelectorAll('.topup-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.method === method);
+    });
+    document.querySelectorAll('.topup-method').forEach(m => {
+        m.classList.toggle('active', m.id === `topup-${method}`);
+    });
+}
+
+function topupQuick(method, amount) {
+    haptic();
+    const inputId = method === 'ton' ? 'tonAmount'
+                  : method === 'crypto' ? 'cryptoAmount'
+                  : 'starsAmount';
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    const current = Number(input.value) || 0;
+    const newVal = current + amount;
+
+    if (method === 'stars' && newVal > 10000) {
+        input.value = 10000;
+    } else {
+        input.value = newVal;
+    }
+
+    topupRecalc(method);
+}
+
+function topupRecalc(method) {
+    const inputId = method === 'ton' ? 'tonAmount'
+                  : method === 'crypto' ? 'cryptoAmount'
+                  : 'starsAmount';
+    const input = document.getElementById(inputId);
+    const infoId = method === 'ton' ? 'tonInfo'
+                 : method === 'crypto' ? 'cryptoInfo'
+                 : 'starsInfo';
+    const info = document.getElementById(infoId);
+    const goBtn = document.querySelector(`#topup-${method} .topup-go`);
+
+    const amount = Number(input.value) || 0;
+
+    if (amount <= 0) {
+        info.innerHTML = `Введите сумму для пополнения`;
+        goBtn.disabled = true;
+        return;
+    }
+
+    const rate = TOPUP_RATES[method] || 0;
+    const coins = Math.floor(amount * rate);
+
+    info.innerHTML = `Зачислится: <b>${fmt(coins)}</b> 🪙 · Курс: 1 ${method === 'ton' ? 'TON' : method === 'crypto' ? 'USDT' : '⭐'} = <b>${fmt(rate)}</b> 🪙`;
+
+    // Валидация минималки
+    let valid = true;
+    if (method === 'ton' && amount < 0.1) valid = false;
+    if (method === 'crypto' && amount < 1) valid = false;
+    if (method === 'stars' && (amount < 10 || amount > 10000)) valid = false;
+
+    goBtn.disabled = !valid;
+}
+
+async function topupPay(method) {
+    if (method === 'ton') return topupTON();
+    if (method === 'crypto') return topupCryptoBot();
+    if (method === 'stars') return topupStars();
+}
+
+/* TON */
+async function topupTON() {
+    haptic('medium');
+    const amount = Number(document.getElementById('tonAmount').value) || 0;
+    if (amount < 0.1) { toast('Минимум 0.1 TON', 'error'); return; }
+
+    toast('💎 Откройте @wallet и переведите TON', 'success');
+    // Здесь можно открыть deeplink: ton://transfer/...
+    try {
+        const d = await api('/api/crypto/create', {
+            amount_usd: amount,
+            currency: 'ton',
+        });
+        if (d.wallet) {
+            copyToClipboard(d.wallet);
+            toast('📋 Адрес скопирован — переведите TON', 'success');
+        }
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+/* Крипто Бот */
+async function topupCryptoBot() {
+    haptic('medium');
+    const amount = Number(document.getElementById('cryptoAmount').value) || 0;
+    if (amount < 1) { toast('Минимум 1 USDT', 'error'); return; }
+
+    try {
+        const d = await api('/api/crypto/create', { amount_usd: amount });
+        if (d.deeplink) {
+            tg.openLink(d.deeplink);
+        } else if (d.wallet) {
+            copyToClipboard(d.wallet);
+            toast('📋 Адрес скопирован', 'success');
+        }
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+/* Stars */
+async function topupStars() {
+    haptic('medium');
+    const amount = Number(document.getElementById('starsAmount').value) || 0;
+    if (amount < 10 || amount > 10000) {
+        toast('Stars: 10 – 10 000', 'error');
+        return;
+    }
+
+    try {
+        // Открываем стандартный invoice
+        const d = await api('/api/invoice', { stars: amount });
+        tg.openInvoice(d.link, (status) => {
+            if (status === 'paid') {
+                toast('✅ Оплата успешна', 'success');
+                SFX.cashout();
+                setTimeout(() => {
+                    loadProfile();
+                    updateBalance(profile.balance);
+                }, 1500);
+            } else if (status === 'cancelled') {
+                toast('❌ Оплата отменена', 'error');
+            }
+        });
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+/* Подарки */
+function renderTopupGifts() {
+    const el = document.getElementById('giftsGrid');
+    if (!el) return;
+
+    const GIFTS = [
+        { emoji: '🧸', name: 'Мишка',   price: 15,  coins: 1500 },
+        { emoji: '🌹', name: 'Роза',    price: 25,  coins: 2500 },
+        { emoji: '🎂', name: 'Торт',    price: 50,  coins: 5000 },
+        { emoji: '🚀', name: 'Ракета',  price: 100, coins: 10000 },
+        { emoji: '💎', name: 'Алмаз',   price: 250, coins: 25000 },
+        { emoji: '👑', name: 'Корона',  price: 500, coins: 50000 },
+    ];
+
+    el.innerHTML = GIFTS.map(g => `
+        <div class="topup-gift" onclick="topupGift(${g.price}, ${g.coins})">
+            <div class="topup-gift-emoji">${g.emoji}</div>
+            <div class="topup-gift-name">${g.name}</div>
+            <div class="topup-gift-price">${g.price} ⭐</div>
+        </div>
+    `).join('');
+}
+
+function topupGift(stars, coins) {
+    haptic('medium');
+    toast(`🎁 Подарок за ${stars} ⭐ → +${fmt(coins)} 🪙`, 'success');
+    topupStars();
+}
 function renderStarsButtons() {
     const el = document.getElementById('payGridStars');
     if (!el) return;
