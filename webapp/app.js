@@ -301,7 +301,7 @@ function showScreen(name) {
     if (!screen) return;
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     screen.classList.add('active');
-    screen.scrollTop = 0;
+    document.getElementById('app').scrollTop = 0;
 
     document.querySelectorAll('.nav-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.nav === name);
