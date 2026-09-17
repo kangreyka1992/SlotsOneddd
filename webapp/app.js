@@ -486,7 +486,6 @@ async function loadProfile() {
         if (profileNameEl) profileNameEl.textContent = displayName;
         const avatarEl = document.getElementById('profileAvatar');
         if (avatarEl) {
-            // Применяем кастомную аватарку, если есть
             const av = d.profile?.avatar;
             const emojiMap = {
                 default: '👤', cat: '🐱', dragon: '🐉', unicorn: '🦄',
@@ -494,7 +493,23 @@ async function loadProfile() {
                 crown: '👑', god: '⚡',
             };
             avatarEl.textContent = emojiMap[av] || (d.username || 'И')[0].toUpperCase();
-        }
+
+    // Применяем рамку
+    const frameColors = {
+        none: 'transparent', bronze: '#cd7f32', silver: '#c0c0c0',
+        gold: '#ffc107', diamond: '#00d4ff', mythic: '#ff4757',
+    };
+    const fr = d.profile?.frame || 'none';
+    avatarEl.style.border = fr === 'none' ? 'none' : `3px solid ${frameColors[fr] || 'transparent'}`;
+    avatarEl.style.boxShadow = fr === 'none' ? '' : `0 0 20px ${frameColors[fr]}`;
+
+    // Титул под аватаркой
+    const titleEl = document.getElementById('profileTitle');
+    if (titleEl) {
+        titleEl.textContent = d.profile?.title || '';
+        titleEl.style.display = d.profile?.title ? 'block' : 'none';
+    }
+}
 
         const sg = document.getElementById('statGames');
         const sw = document.getElementById('statWagered');
@@ -3962,11 +3977,11 @@ async function loadCustomize() {
         const avEl = document.getElementById('customizeAvatars');
         if (avEl) {
             avEl.innerHTML = d.avatars.map(a => `
-                <div class="customize-item ${d.current.avatar === a.id ? 'selected' : ''}"
+                <div class="customize-item ${d.current.avatar === a.id ? 'selected' : ''} ${a.owned ? 'owned' : ''}"
                      onclick="buyCustomize('avatar', '${a.id}', ${a.price})">
                     <div class="customize-emoji">${a.emoji}</div>
                     <div class="customize-name">${a.name}</div>
-                    <div class="customize-price">${a.price === 0 ? 'Бесплатно' : fmt(a.price) + ' 🪙'}</div>
+                    <div class="customize-price">${a.owned ? '✅ Куплено' : (a.price === 0 ? 'Бесплатно' : fmt(a.price) + ' 🪙')}</div>
                 </div>
             `).join('');
         }
@@ -3974,11 +3989,11 @@ async function loadCustomize() {
         const frEl = document.getElementById('customizeFrames');
         if (frEl) {
             frEl.innerHTML = d.frames.map(f => `
-                <div class="customize-item ${d.current.frame === f.id ? 'selected' : ''}"
+                <div class="customize-item ${d.current.frame === f.id ? 'selected' : ''} ${f.owned ? 'owned' : ''}"
                      onclick="buyCustomize('frame', '${f.id}', ${f.price})">
                     <div class="customize-frame" style="border-color:${f.color}; border-width:3px; border-style:solid; border-radius:50%; width:40px; height:40px;"></div>
                     <div class="customize-name">${f.name}</div>
-                    <div class="customize-price">${f.price === 0 ? 'Бесплатно' : fmt(f.price) + ' 🪙'}</div>
+                    <div class="customize-price">${f.owned ? '✅ Куплено' : (f.price === 0 ? 'Бесплатно' : fmt(f.price) + ' 🪙')}</div>
                 </div>
             `).join('');
         }
@@ -3986,10 +4001,10 @@ async function loadCustomize() {
         const tiEl = document.getElementById('customizeTitles');
         if (tiEl) {
             tiEl.innerHTML = d.titles.map(t => `
-                <div class="customize-item ${d.current.title === t.name ? 'selected' : ''}"
+                <div class="customize-item ${d.current.title === t.name ? 'selected' : ''} ${t.owned ? 'owned' : ''}"
                      onclick="buyCustomize('title', '${t.id}', ${t.price})">
                     <div class="customize-title">${t.name}</div>
-                    <div class="customize-price">${t.price === 0 ? 'Бесплатно' : fmt(t.price) + ' 🪙'}</div>
+                    <div class="customize-price">${t.owned ? '✅ Куплено' : (t.price === 0 ? 'Бесплатно' : fmt(t.price) + ' 🪙')}</div>
                 </div>
             `).join('');
         }
@@ -4000,15 +4015,18 @@ async function loadCustomize() {
 
 async function buyCustomize(kind, itemId, price) {
     haptic();
-    if (price > profile.balance) {
+    const item = document.querySelector(`.customize-item[onclick*="${itemId}"]`);
+    const owned = item && item.classList.contains('owned');
+
+    if (!owned && price > 0 && price > profile.balance) {
         toast(`Нужно ${fmt(price)} 🪙`, 'error');
         return;
     }
-    if (price > 0 && !confirm(`Купить за ${fmt(price)} 🪙?`)) return;
+    if (!owned && price > 0 && !confirm(`Купить за ${fmt(price)} 🪙?`)) return;
 
     try {
         const d = await api('/api/profile/customize/buy', { kind, item_id: itemId });
-        toast('✅ Куплено!', 'success');
+        toast(d.already_owned ? '✅ Применено!' : '✅ Куплено!', 'success');
         updateBalance(d.balance);
         SFX.cashout();
         loadCustomize();
