@@ -25,7 +25,7 @@ BOT_TOKEN = "8602932446:AAEtYr2rsT8jFSVjYErG9Q84duJ3dVfSyCo"
 WEBAPP_URL = "https://bot-1789335277-8932-slotbots.bothost.tech"
 
 RATE = 100
-STAR_PACKS = {s: s * RATE for s in [10, 30, 50, 100, 250, 500]}
+STAR_PACKS = {s: s * RATE for s in [10, 15, 25, 30, 50, 100, 250, 500]}
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
