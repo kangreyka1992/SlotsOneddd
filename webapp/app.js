@@ -2698,6 +2698,12 @@ async function openCase(c, count = 1) {
         }
         haptic('success');
 
+
+        const rewardEmoji = document.getElementById('crRewardEmoji');
+        const rewardName = document.getElementById('crRewardName');
+        const rewardPrice = document.getElementById('crRewardPrice');
+        const sellPrice = document.getElementById('crSellPrice')
+        
         if (r) {
             const gifPath = GIFT_GIFS[r.item_id];
             const iconHtml = gifPath
