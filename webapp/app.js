@@ -12,7 +12,7 @@ const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
 
 const GIFT_GIFS = {
-    '*': 'img/pepe_gift.gif',
+    '*': 'pepe_gift.gif',
 };
 
 let profile = { balance: 0, stats: {}, referral: {} };
@@ -2705,17 +2705,17 @@ async function openCase(c, count = 1) {
         const sellPrice = document.getElementById('crSellPrice')
         
         if (r) {
-            const gifPath = GIFT_GIFS[r.item_id];
+            const gifPath = GIFT_GIFS[r.item_id] || GIFT_GIFS['*'];
             const iconHtml = gifPath
                 ? iconWrap(gifPath, 'gift', '', r.rarity, true)
                 : iconWrap(r.emoji, kindFromRarity(r.rarity), '', r.rarity);
 
-        rewardEmoji.innerHTML = iconHtml;
-        rewardName.textContent = r.name;
-        rewardPrice.textContent = `${fmt(r.value)} 🪙`;
-        rewardBox.classList.remove('hidden');
-        sellPrice.textContent = fmt(r.value);
-    }
+            rewardEmoji.innerHTML = iconHtml;
+            rewardName.textContent = r.name;
+            rewardPrice.textContent = `${fmt(r.value)} 🪙`;
+            rewardBox.classList.remove('hidden');
+            sellPrice.textContent = fmt(r.value);
+        }
 
         status.textContent = count === 1
             ? `${r.emoji} ${r.name} · ${fmt(r.value)} 🪙`
