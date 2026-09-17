@@ -1214,6 +1214,102 @@ async def clear_winrate(user_id):
             await db.execute("DELETE FROM winrate_settings WHERE user_id = ?", (user_id,))
         await db.commit()
 
+# ═══════════ НОВЫЕ ТАБЛИЦЫ ДЛЯ ФИЧ ═══════════
+
+await db.execute("""
+    CREATE TABLE IF NOT EXISTS jackpot (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        amount INTEGER NOT NULL DEFAULT 100000,
+        last_winner INTEGER,
+        last_won_at TIMESTAMP
+    )
+""")
+await db.execute("INSERT OR IGNORE INTO jackpot (id, amount) VALUES (1, 100000)")
+
+await db.execute("""
+    CREATE TABLE IF NOT EXISTS hourly_bonus (
+        user_id INTEGER PRIMARY KEY,
+        last_claim TIMESTAMP,
+        streak INTEGER DEFAULT 0
+    )
+""")
+
+await db.execute("""
+    CREATE TABLE IF NOT EXISTS cashback (
+        user_id INTEGER PRIMARY KEY,
+        lost_total INTEGER DEFAULT 0,
+        claimed_at TIMESTAMP
+    )
+""")
+
+await db.execute("""
+    CREATE TABLE IF NOT EXISTS referral_earnings (
+        user_id INTEGER PRIMARY KEY,
+        earned_total INTEGER DEFAULT 0,
+        from_bets INTEGER DEFAULT 0,
+        from_deposits INTEGER DEFAULT 0
+    )
+""")
+
+await db.execute("""
+    CREATE TABLE IF NOT EXISTS profiles (
+        user_id INTEGER PRIMARY KEY,
+        avatar TEXT DEFAULT 'default',
+        frame TEXT DEFAULT 'none',
+        title TEXT DEFAULT 'Новичок',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+""")
+
+await db.execute("""
+    CREATE TABLE IF NOT EXISTS tournaments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        game TEXT NOT NULL,
+        prize_pool INTEGER NOT NULL,
+        starts_at TIMESTAMP,
+        ends_at TIMESTAMP,
+        status TEXT DEFAULT 'active'
+    )
+""")
+
+await db.execute("""
+    CREATE TABLE IF NOT EXISTS tournament_scores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tournament_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        score INTEGER DEFAULT 0,
+        UNIQUE(tournament_id, user_id)
+    )
+""")
+
+await db.execute("""
+    CREATE TABLE IF NOT EXISTS user_levels (
+        user_id INTEGER PRIMARY KEY,
+        xp INTEGER DEFAULT 0,
+        level INTEGER DEFAULT 1
+    )
+""")
+
+await db.execute("""
+    CREATE TABLE IF NOT EXISTS hall_of_fame (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        username TEXT,
+        game TEXT NOT NULL,
+        win INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+""")
+
+await db.execute("""
+    CREATE TABLE IF NOT EXISTS wheel_spins (
+        user_id INTEGER PRIMARY KEY,
+        spins_available INTEGER DEFAULT 0,
+        last_daily TIMESTAMP
+    )
+""")
+
+await db.commit()
 
 async def list_winrates():
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1222,3 +1318,339 @@ async def list_winrates():
             "FROM winrate_settings ORDER BY updated_at DESC LIMIT 50"
         ) as cur:
             return await cur.fetchall()
+# ═══════════ ДЖЕКПОТ ═══════════
+
+async def get_jackpot() -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT amount FROM jackpot WHERE id = 1") as cur:
+            row = await cur.fetchone()
+            return row[0] if row else 0
+
+
+async def add_to_jackpot(amount: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE jackpot SET amount = amount + ? WHERE id = 1",
+            (amount,),
+        )
+        await db.commit()
+
+
+async def win_jackpot(user_id: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT amount FROM jackpot WHERE id = 1") as cur:
+            row = await cur.fetchone()
+            amount = row[0] if row else 0
+        await db.execute(
+            "UPDATE jackpot SET amount = 100000, last_winner = ?, "
+            "last_won_at = CURRENT_TIMESTAMP WHERE id = 1",
+            (user_id,),
+        )
+        await db.commit()
+        return amount
+
+
+# ═══════════ ЕЖЕЧАСНЫЙ БОНУС ═══════════
+
+async def get_hourly_info(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT last_claim, streak FROM hourly_bonus WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return (row[0], row[1]) if row else (None, 0)
+
+
+async def claim_hourly(user_id: int, streak: int):
+    now = datetime.datetime.utcnow().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO hourly_bonus (user_id, last_claim, streak) "
+            "VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET last_claim = ?, streak = ?",
+            (user_id, now, streak, now, streak),
+        )
+        await db.commit()
+
+
+# ═══════════ КЭШБЭК ═══════════
+
+async def add_to_cashback(user_id: int, lost: int):
+    """Добавляет проигранные монеты в счётчик кэшбэка."""
+    if lost <= 0:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO cashback (user_id, lost_total) VALUES (?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET lost_total = lost_total + ?",
+            (user_id, lost, lost),
+        )
+        await db.commit()
+
+
+async def get_cashback_info(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT lost_total FROM cashback WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            lost = row[0] if row else 0
+
+    # Уровни кэшбэка
+    if lost >= 10_000_000:
+        pct, tier = 12, "💎 Платина"
+    elif lost >= 1_000_000:
+        pct, tier = 8, "🥇 Золото"
+    elif lost >= 100_000:
+        pct, tier = 5, "🥈 Серебро"
+    elif lost >= 10_000:
+        pct, tier = 2, "🥉 Бронза"
+    else:
+        pct, tier = 0, "—"
+
+    reward = int(lost * pct / 100)
+    return {
+        "lost": lost,
+        "percent": pct,
+        "tier": tier,
+        "reward": reward,
+        "can_claim": reward > 0,
+    }
+
+
+async def claim_cashback(user_id: int) -> int:
+    info = await get_cashback_info(user_id)
+    if info["reward"] <= 0:
+        return 0
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE cashback SET lost_total = 0, claimed_at = CURRENT_TIMESTAMP "
+            "WHERE user_id = ?",
+            (user_id,),
+        )
+        await db.commit()
+    await add_balance(user_id, info["reward"])
+    return info["reward"]
+
+
+# ═══════════ РЕФЕРАЛЬНЫЕ % ═══════════
+
+async def add_referral_commission(referrer_id: int, bet_amount: int) -> int:
+    commission = int(bet_amount * 0.05)
+    if commission <= 0:
+        return 0
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO referral_earnings (user_id, earned_total, from_bets) "
+            "VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET "
+            "earned_total = earned_total + ?, from_bets = from_bets + ?",
+            (referrer_id, commission, commission, commission, commission),
+        )
+        await db.commit()
+    await add_balance(referrer_id, commission)
+    return commission
+
+
+async def get_referral_earnings(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT earned_total, from_bets, from_deposits "
+            "FROM referral_earnings WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if row:
+                return {"earned": row[0] or 0, "from_bets": row[1] or 0, "from_deposits": row[2] or 0}
+            return {"earned": 0, "from_bets": 0, "from_deposits": 0}
+
+
+# ═══════════ АВАТАРКИ / ТИТУЛЫ ═══════════
+
+async def get_profile(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO profiles (user_id) VALUES (?)",
+            (user_id,),
+        )
+        await db.commit()
+        async with db.execute(
+            "SELECT avatar, frame, title FROM profiles WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return {
+                "avatar": row[0] if row else "default",
+                "frame": row[1] if row else "none",
+                "title": row[2] if row else "Новичок",
+            }
+
+
+async def set_profile(user_id: int, avatar: str = None, frame: str = None, title: str = None):
+    current = await get_profile(user_id)
+    new_avatar = avatar or current["avatar"]
+    new_frame = frame or current["frame"]
+    new_title = title or current["title"]
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE profiles SET avatar = ?, frame = ?, title = ?, "
+            "updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+            (new_avatar, new_frame, new_title, user_id),
+        )
+        await db.commit()
+
+
+# ═══════════ ТУРНИРЫ ═══════════
+
+async def get_active_tournament():
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, game, prize_pool, starts_at, ends_at, status "
+            "FROM tournaments WHERE status = 'active' "
+            "ORDER BY id DESC LIMIT 1",
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0], "game": row[1], "prize_pool": row[2],
+                "starts_at": row[3], "ends_at": row[4], "status": row[5],
+            }
+
+
+async def add_tournament_score(tournament_id: int, user_id: int, score: int):
+    if score <= 0:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO tournament_scores (tournament_id, user_id, score) "
+            "VALUES (?, ?, ?) "
+            "ON CONFLICT(tournament_id, user_id) DO UPDATE SET "
+            "score = score + ?",
+            (tournament_id, user_id, score, score),
+        )
+        await db.commit()
+
+
+async def get_tournament_leaderboard(tournament_id: int, limit: int = 20):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT ts.user_id, u.username, ts.score "
+            "FROM tournament_scores ts "
+            "LEFT JOIN users u ON u.user_id = ts.user_id "
+            "WHERE ts.tournament_id = ? "
+            "ORDER BY ts.score DESC LIMIT ?",
+            (tournament_id, limit),
+        ) as cur:
+            return await cur.fetchall()
+
+
+# ═══════════ HALL OF FAME ═══════════
+
+async def add_to_hall_of_fame(user_id: int, username: str, game: str, win: int):
+    if win < 100_000:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO hall_of_fame (user_id, username, game, win) "
+            "VALUES (?, ?, ?, ?)",
+            (user_id, username, game, win),
+        )
+        await db.commit()
+
+
+async def get_hall_of_fame(limit: int = 30):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT user_id, username, game, win, created_at "
+            "FROM hall_of_fame ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ) as cur:
+            return await cur.fetchall()
+
+
+# ═══════════ WHEEL (колесо) ═══════════
+
+async def get_wheel_info(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO wheel_spins (user_id, spins_available) "
+            "VALUES (?, 1)",
+            (user_id,),
+        )
+        await db.commit()
+        async with db.execute(
+            "SELECT spins_available, last_daily FROM wheel_spins WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return {"spins": row[0] if row else 0, "last_daily": row[1] if row else None}
+
+
+async def add_wheel_spin(user_id: int, count: int = 1):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE wheel_spins SET spins_available = spins_available + ? "
+            "WHERE user_id = ?",
+            (count, user_id),
+        )
+        await db.commit()
+
+
+async def consume_wheel_spin(user_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT spins_available FROM wheel_spins WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if not row or row[0] <= 0:
+                return False
+        await db.execute(
+            "UPDATE wheel_spins SET spins_available = spins_available - 1 "
+            "WHERE user_id = ?",
+            (user_id,),
+        )
+        await db.commit()
+        return True
+
+
+# ═══════════ УРОВНИ ═══════════
+
+async def get_user_level(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO user_levels (user_id) VALUES (?)",
+            (user_id,),
+        )
+        await db.commit()
+        async with db.execute(
+            "SELECT xp, level FROM user_levels WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return {"xp": row[0] if row else 0, "level": row[1] if row else 1}
+
+
+async def add_user_xp(user_id: int, xp: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT xp, level FROM user_levels WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            await db.execute(
+                "INSERT INTO user_levels (user_id, xp, level) VALUES (?, ?, 1)",
+                (user_id, xp),
+            )
+        else:
+            new_xp = row[0] + xp
+            new_level = 1 + int((new_xp / 500) ** 0.5)
+            await db.execute(
+                "UPDATE user_levels SET xp = ?, level = ? WHERE user_id = ?",
+                (new_xp, new_level, user_id),
+            )
+        await db.commit()
