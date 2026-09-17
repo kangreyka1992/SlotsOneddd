@@ -62,7 +62,6 @@ let currentWithdrawMethod = 'stars';
 /* TOPUP */
 const TOPUP_RATES = {
     ton: 500,
-    sbp: 5,
     stars: 10,
 };
 const SBP_PHONE = '+7 (961)-480-26-06';
@@ -2158,9 +2157,7 @@ function switchTopupTab(method) {
 
 function topupQuick(method, amount) {
     haptic();
-    const inputId = method === 'ton' ? 'tonAmount'
-                  : method === 'sbp' ? 'sbpAmount'
-                  : 'starsAmount';
+    const inputId = method === 'ton' ? 'tonAmount' : 'starsAmount';
     const input = document.getElementById(inputId);
     if (!input) return;
 
@@ -2177,15 +2174,11 @@ function topupQuick(method, amount) {
 }
 
 function topupRecalc(method) {
-    const inputId = method === 'ton' ? 'tonAmount'
-                  : method === 'sbp' ? 'sbpAmount'
-                  : 'starsAmount';
-    const input = document.getElementById(inputId);
-    if (!input) return;
+    const inputId = method === 'ton' ? 'tonAmount' : 'starsAmount';
+const input = document.getElementById(inputId);
+if (!input) return;
 
-    const infoId = method === 'ton' ? 'tonInfo'
-                 : method === 'sbp' ? 'sbpInfo'
-                 : 'starsInfo';
+const infoId = method === 'ton' ? 'tonInfo' : 'starsInfo';
     const info = document.getElementById(infoId);
     const goBtn = document.querySelector(`#topup-${method} .topup-go`);
 
@@ -2200,23 +2193,19 @@ function topupRecalc(method) {
     const rate = TOPUP_RATES[method] || 0;
     const coins = Math.floor(amount * rate);
 
-    const unit = method === 'ton' ? 'TON'
-               : method === 'sbp' ? '₽'
-               : '⭐';
+    const unit = method === 'ton' ? 'TON' : '⭐';
 
-    info.innerHTML = `Зачислится: <b>${fmt(coins)}</b> 🪙 · Курс: 1 ${unit} = <b>${fmt(rate)}</b> 🪙`;
+info.innerHTML = `Зачислится: <b>${fmt(coins)}</b> 🪙 · Курс: 1 ${unit} = <b>${fmt(rate)}</b> 🪙`;
 
-    let valid = true;
-    if (method === 'ton' && amount < 0.1) valid = false;
-    if (method === 'sbp' && amount < 100) valid = false;
-    if (method === 'stars' && (amount < 10 || amount > 10000)) valid = false;
+let valid = true;
+if (method === 'ton' && amount < 0.1) valid = false;
+if (method === 'stars' && (amount < 10 || amount > 10000)) valid = false;
 
     if (goBtn) goBtn.disabled = !valid;
 }
 
 async function topupPay(method) {
     if (method === 'ton') return topupTON();
-    if (method === 'sbp') return topupSBP();
     if (method === 'stars') return topupStars();
 }
 
@@ -2240,77 +2229,6 @@ async function topupTON() {
     }
 }
 
-async function topupSBP() {
-    haptic('medium');
-    const amount = Number(document.getElementById('sbpAmount').value) || 0;
-    if (amount < 100) { toast('Минимум 100 ₽', 'error'); return; }
-
-    const rate = TOPUP_RATES.sbp;
-    const coins = Math.floor(amount * rate);
-
-    const overlay = document.createElement('div');
-    overlay.className = 'case-opening';
-    overlay.innerHTML = `
-        <div style="color:#fff; text-align:center; max-width:92%;">
-            <div style="font-size:22px; font-weight:800; margin-bottom:12px;">
-                🇷🇺 Оплата через СБП
-            </div>
-            <div style="font-size:14px; color:#8a92a3; margin-bottom:14px;">
-                Сумма: <b style="color:#fff;">${fmt(amount)} ₽</b><br>
-                Зачислится: <b style="color:#3dd68c;">${fmt(coins)} 🪙</b>
-            </div>
-
-            <div class="sbp-requisites">
-                <div class="sbp-row">
-                    <div>
-                        <div class="sbp-row-label">Банк</div>
-                        <div class="sbp-row-value">${SBP_BANK}</div>
-                    </div>
-                </div>
-                <div class="sbp-row">
-                    <div>
-                        <div class="sbp-row-label">Телефон</div>
-                        <div class="sbp-row-value">${SBP_PHONE}</div>
-                    </div>
-                    <button class="sbp-row-copy" onclick="copyToClipboard('${SBP_PHONE.replace(/[^0-9+]/g, '')}')">
-                        📋 Копировать
-                    </button>
-                </div>
-                <div class="sbp-row">
-                    <div>
-                        <div class="sbp-row-label">Получатель</div>
-                        <div class="sbp-row-value">${SBP_NAME}</div>
-                    </div>
-                </div>
-                <div class="sbp-row">
-                    <div>
-                        <div class="sbp-row-label">Сумма</div>
-                        <div class="sbp-row-value money">${fmt(amount)} ₽</div>
-                    </div>
-                    <button class="sbp-row-copy" onclick="copyToClipboard('${amount}')">
-                        📋 Копировать
-                    </button>
-                </div>
-            </div>
-
-            <div style="background:rgba(124,92,255,0.1); padding:12px; border-radius:10px; text-align:left; font-size:11px; line-height:1.7; color:#e8eaed; margin-bottom:12px;">
-                <b>📋 Как оплатить:</b><br>
-                1. Открой приложение <b>${SBP_BANK}</b><br>
-                2. Переведи <b>${fmt(amount)} ₽</b> по номеру <b>${SBP_PHONE}</b><br>
-                3. В комментарии укажи <b>ID: ${profile.user_id || '—'}</b><br>
-                4. Отправь <b>скриншот чека</b> в поддержку <b>@Gapp_Soul</b><br>
-                5. Зачисление в течение <b>5–30 минут</b>
-            </div>
-
-            <button class="btn-secondary" onclick="this.closest('.case-opening').remove()" style="margin-top:4px; width:100%;">
-                Закрыть
-            </button>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-
-    toast('📋 Переведи по реквизитам и отправь чек', 'success');
-}
 
 async function topupStars(starsOverride = null) {
     haptic('medium');
