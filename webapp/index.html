@@ -595,10 +595,6 @@
       <span class="topup-tab-icon">⭐</span>
       <span class="topup-tab-name">Stars</span>
     </button>
-    <button class="topup-tab" data-method="sbp" onclick="switchWithdrawTab('sbp')">
-      <span class="topup-tab-icon">🇷🇺</span>
-      <span class="topup-tab-name">СБП</span>
-    </button>
     <button class="topup-tab" data-method="usdc" onclick="switchWithdrawTab('usdc')">
       <span class="topup-tab-icon">💎</span>
       <span class="topup-tab-name">USDC</span>
@@ -627,42 +623,7 @@
     <div class="topup-info" id="wdStarsInfo"></div>
   </div>
 
-  <!-- ═══ СБП ═══ -->
-  <div class="topup-method" id="wd-method-sbp">
-    <div class="topup-label">Сумма в ₽ (мин. 500 ₽)</div>
-    <div class="topup-input-wrap">
-      <input type="number" class="topup-input" id="wdSbpAmount"
-             placeholder="0" min="500" step="100" oninput="withdrawRecalc('sbp')">
-      <span class="topup-input-icon">₽</span>
-    </div>
-    <div class="topup-quick">
-      <button class="topup-quick-btn" onclick="withdrawQuick('sbp', 500)">500 ₽</button>
-      <button class="topup-quick-btn" onclick="withdrawQuick('sbp', 1000)">1 000 ₽</button>
-      <button class="topup-quick-btn" onclick="withdrawQuick('sbp', 5000)">5 000 ₽</button>
-    </div>
-
-    <div class="topup-label">Номер карты / телефон</div>
-    <div class="topup-input-wrap">
-      <input type="text" class="topup-input" id="wdSbpCard"
-             placeholder="+7 (___) ___-__-__ или 0000 0000 0000 0000">
-    </div>
-
-    <div class="topup-label">Банк</div>
-    <div class="topup-input-wrap">
-      <input type="text" class="topup-input" id="wdSbpBank"
-             placeholder="Сбер, Тинькофф, ВТБ...">
-    </div>
-
-    <div class="topup-label">ФИО получателя</div>
-    <div class="topup-input-wrap">
-      <input type="text" class="topup-input" id="wdSbpName"
-             placeholder="Иванов Иван Иванович">
-    </div>
-
-    <button class="topup-go" onclick="withdrawGo('sbp')">💸 Вывести</button>
-    <div class="topup-info" id="wdSbpInfo"></div>
-  </div>
-
+ 
   <!-- ═══ USDC ═══ -->
   <div class="topup-method" id="wd-method-usdc">
     <div class="topup-label">Сумма в USDC (мин. 5 USDC)</div>
