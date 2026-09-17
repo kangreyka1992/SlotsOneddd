@@ -6,11 +6,9 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=351">
+<link rel="stylesheet" href="style.css?v=353">
 <style>
-/* ═══════════ НОВЫЕ ЭФФЕКТЫ ═══════════ */
-
-/* 1. SPLASH */
+/* SPLASH */
 .splash {
   position: fixed; inset: 0; z-index: 9999;
   background: radial-gradient(ellipse at center, #151b26 0%, #0a0e14 70%);
@@ -50,102 +48,9 @@
   100% { transform: translateX(100%); }
 }
 
-/* 2. СИЯНИЕ КАРТОЧЕК */
-.case-card {
-  position: relative;
-  transition: transform 0.15s, box-shadow 0.3s;
-}
-.case-card::after {
-  content: '';
-  position: absolute; inset: -2px;
-  border-radius: var(--radius, 10px);
-  background: linear-gradient(135deg, #ff9b26, transparent 60%);
-  opacity: 0; z-index: -1;
-  transition: opacity 0.3s;
-  filter: blur(12px);
-}
-.case-card:active::after { opacity: 0.8; }
-
-/* 4. ГРАДИЕНТНАЯ ОБВОДКА БАЛАНСА */
-.app-balance-chip {
-  position: relative;
-  background: var(--bg-elevated, #232732);
-  border: 1px solid transparent;
-  background-clip: padding-box;
-}
-.app-balance-chip::before {
-  content: '';
-  position: absolute; inset: -1px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #ff9b26, transparent, #ff9b26);
-  background-size: 200% 200%;
-  z-index: -1;
-  animation: borderShift 3s linear infinite;
-}
-@keyframes borderShift {
-  0% { background-position: 0% 0%; }
-  100% { background-position: 200% 200%; }
-}
-
-/* 5. ПОЯВЛЕНИЕ КНОПОК СТАВКИ */
-.bets .bet-btn {
-  opacity: 0;
-  transform: translateY(10px);
-  animation: betIn 0.4s ease forwards;
-}
-.bets .bet-btn:nth-child(1)  { animation-delay: 0.00s; }
-.bets .bet-btn:nth-child(2)  { animation-delay: 0.05s; }
-.bets .bet-btn:nth-child(3)  { animation-delay: 0.10s; }
-.bets .bet-btn:nth-child(4)  { animation-delay: 0.15s; }
-.bets .bet-btn:nth-child(5)  { animation-delay: 0.20s; }
-.bets .bet-btn:nth-child(6)  { animation-delay: 0.25s; }
-.bets .bet-btn:nth-child(7)  { animation-delay: 0.30s; }
-.bets .bet-btn:nth-child(8)  { animation-delay: 0.35s; }
-.bets .bet-btn:nth-child(9)  { animation-delay: 0.40s; }
-.bets .bet-btn:nth-child(10) { animation-delay: 0.45s; }
-.bets .bet-btn.allin { animation-delay: 0.50s; }
-@keyframes betIn {
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* 6. БЛИК НА LIVE-FEED */
-.feed-item {
-  position: relative;
-  overflow: hidden;
-}
-.feed-item::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(61,214,140,0.3), transparent);
-  transform: translateX(-100%);
-  animation: feedShine 3s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes feedShine {
-  0%, 60% { transform: translateX(-100%); }
-  100%    { transform: translateX(100%); }
-}
-
-/* 7. БЛИК УРОВНЯ */
-.level-fill {
-  position: relative;
-  overflow: hidden;
-}
-.level-fill::after {
-  content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%);
-  transform: translateX(-100%);
-  animation: levelShine 2s ease-in-out infinite;
-}
-@keyframes levelShine {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(200%); }
-}
-
-/* 8. ПЛАВАЮЩИЙ ФОН */
+/* HOME BG */
 .home-bg {
-  position: fixed; inset: 0;
+  position: absolute; inset: 0;
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
@@ -170,56 +75,15 @@
   100% { transform: translateY(-100vh) rotate(360deg); opacity: 0; }
 }
 
-/* 9. ТОП-ИГРОКИ */
-.top-item {
-  position: relative;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-.top-item.gold {
-  background: linear-gradient(135deg, rgba(255,193,7,0.25), var(--bg-card, #1a1d24));
-  border: 1px solid rgba(255,193,7,0.4);
-  box-shadow: 0 0 24px rgba(255,193,7,0.25);
-}
-.top-item.gold::before {
-  content: '';
-  position: absolute; inset: -1px;
-  border-radius: var(--radius, 10px);
-  background: linear-gradient(135deg, transparent, rgba(255,193,7,0.4), transparent);
-  background-size: 200% 200%;
-  z-index: -1;
-  animation: borderShift 3s linear infinite;
-}
-.top-item.silver { box-shadow: 0 0 20px rgba(192,192,192,0.2); }
-.top-item.bronze { box-shadow: 0 0 20px rgba(205,127,50,0.2); }
-
-/* 10. SHOCKWAVE */
-.shockwave {
-  position: fixed;
-  top: 50%; left: 50%;
-  width: 0; height: 0;
-  border-radius: 50%;
-  border: 3px solid #ff9b26;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 4000;
-  animation: shockwave 1.2s ease-out forwards;
-  box-shadow: 0 0 40px #ff9b26, inset 0 0 40px #ff9b26;
-}
-@keyframes shockwave {
-  0%   { width: 0; height: 0; opacity: 1; }
-  100% { width: 150vmax; height: 150vmax; opacity: 0; }
-}
-
-/* BONUS: SKELETON */
-.case-card.loading {
-  background: linear-gradient(90deg, #1a1d24 0%, #232732 50%, #1a1d24 100%);
-  background-size: 200% 100%;
-  animation: skeleton 1.5s infinite;
-  min-height: 140px;
-}
-@keyframes skeleton {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+/* ПРОФИЛЬ — ТИТУЛ */
+.profile-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #ffc107;
+    margin-top: -6px;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
 }
 </style>
 </head>
@@ -234,6 +98,7 @@
 
 <div id="app">
 
+<!-- ═══ HEADER ═══ -->
 <header class="app-header">
   <div class="app-header-left">
     <div class="app-logo">🎰</div>
@@ -254,9 +119,7 @@
   </div>
 </header>
 
- <header class="app-header">...</header>
-
-<!-- Фиксированные баннеры -->
+<!-- ═══ FIXED BANNERS ═══ -->
 <div class="fixed-banners" id="fixedBanners">
     <div class="jackpot-banner" id="jackpotBanner">
         <div class="jackpot-icon">🎰</div>
@@ -272,273 +135,246 @@
     </div>
 </div>
 
+<!-- ═══ LIVE FEED ═══ -->
 <div class="live-feed" id="liveFeed"></div>
-<main class="screens">...</main>
 
-<!-- Ежечасный бонус -->
-<div class="hourly-banner hidden" id="hourlyBanner" onclick="claimHourly()">
-    <div class="hourly-icon">⏰</div>
-    <div class="hourly-text" id="hourlyText">Загрузка...</div>
-</div>
-  <main class="screens">
-   <!-- Колесо -->
-<section class="screen" id="screen-wheel">
-  <h3 class="section-title">🎡 Колесо Фортуны</h3>
-  <div class="wheel-info">
-    <div class="inv-stat">
-      <div class="inv-stat-val" id="wheelSpins">0</div>
-      <div class="inv-stat-lbl">Доступно прокрутов</div>
+<!-- ═══ SCREENS ═══ -->
+<main class="screens">
+
+  <!-- ═══ HOME ═══ -->
+  <section class="screen active" id="screen-home">
+    <div class="home-bg">
+      <span>💎</span><span>🎰</span><span>🪙</span>
+      <span>🎲</span><span>⭐</span><span>🍒</span>
     </div>
-  </div>
-  <div class="wheel-container">
-    <div class="wheel-visual" id="wheelVisual">🎡</div>
-    <div class="wheel-result hidden" id="wheelResult"></div>
-  </div>
-  <button class="btn-primary" id="wheelSpinBtn" onclick="spinWheel()">🎡 Крутить</button>
-  <div class="topup-info" style="margin-top:12px;">
-    💡 Прокрут получаешь за активность и раз в сутки
-  </div>
-</section>
 
-<!-- Кэшбэк -->
-<section class="screen" id="screen-cashback">
-  <h3 class="section-title">💰 Кэшбэк</h3>
-  <div class="cashback-card" id="cashbackInfo">Загрузка...</div>
-  <div class="topup-info" style="margin-top:12px;">
-    💡 Получай % от проигранных монет каждую неделю
-  </div>
-</section>
-
-<!-- Рефералы -->
-<section class="screen" id="screen-referral">
-  <h3 class="section-title">👥 Рефералы</h3>
-  <div class="inventory-stats" id="referralStats"></div>
-
-  <div class="promo-box" style="margin-top:12px;">
-    <input class="input" id="referralLink" readonly>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <button class="btn-primary" onclick="copyReferralLink()">📋 Копировать</button>
-      <button class="btn-primary" onclick="shareReferralLink()">📤 Поделиться</button>
+    <div class="hero-banner">
+      <div class="hero-banner-content">
+        <div class="hero-banner-tag">🔥 АКЦИЯ НЕДЕЛИ</div>
+        <div class="hero-banner-title">Safari Skin Hunt</div>
+        <div class="hero-banner-sub">Особые кейсы · удвоенный шанс на мифик</div>
+        <button class="hero-banner-btn" onclick="showScreen('cases')">К кейсам →</button>
+      </div>
+      <div class="hero-banner-timer" id="heroTimer">--:--:--</div>
     </div>
-  </div>
 
-  <div class="topup-info" style="margin-top:16px;">
-    💰 Получай <b>5%</b> от каждой ставки реферала<br>
-    🎁 Бонус <b>+5000 🪙</b> за депозит реферала на 100+ ⭐
-  </div>
-</section>
-
-<!-- Кастомизация -->
-<section class="screen" id="screen-customize">
-  <h3 class="section-title">🎨 Кастомизация профиля</h3>
-
-  <h4 class="admin-subtitle">👤 Аватарки</h4>
-  <div class="customize-grid" id="customizeAvatars"></div>
-
-  <h4 class="admin-subtitle" style="margin-top:20px;">🖼 Рамки</h4>
-  <div class="customize-grid" id="customizeFrames"></div>
-
-  <h4 class="admin-subtitle" style="margin-top:20px;">📛 Титулы</h4>
-  <div class="customize-grid" id="customizeTitles"></div>
-</section>
-
-<!-- Турнир -->
-<section class="screen" id="screen-tournament">
-  <h3 class="section-title">🏆 Турнир недели</h3>
-  <div id="tournamentBody">Загрузка...</div>
-</section>
-
-<!-- Зал славы -->
-<section class="screen" id="screen-hall">
-  <h3 class="section-title">🏅 Зал славы</h3>
-  <div id="hallList">Загрузка...</div>
-</section>
-   <section class="screen active" id="screen-home">
-
-  <!-- Плавающий фон -->
-  <div class="home-bg">
-    <span>💎</span><span>🎰</span><span>🪙</span>
-    <span>🎲</span><span>⭐</span><span>🍒</span>
-  </div>
-
-  <!-- Баннер -->
-  <div class="hero-banner">
-    <div class="hero-banner-content">
-      <div class="hero-banner-tag">🔥 АКЦИЯ НЕДЕЛИ</div>
-      <div class="hero-banner-title">Safari Skin Hunt</div>
-      <div class="hero-banner-sub">Особые кейсы · удвоенный шанс на мифик</div>
-      <button class="hero-banner-btn" onclick="showScreen('cases')">
-        К кейсам →
-      </button>
+    <div class="toolbar">
+      <div class="toolbar-tabs">
+        <button class="toolbar-tab active" data-filter="all">Все</button>
+        <button class="toolbar-tab" data-filter="cheap">Дешёвые</button>
+        <button class="toolbar-tab" data-filter="mid">Средние</button>
+        <button class="toolbar-tab" data-filter="top">Дорогие</button>
+      </div>
+      <button class="toolbar-search" onclick="toast('Поиск в разработке')">🔍</button>
     </div>
-    <div class="hero-banner-timer" id="heroTimer">--:--:--</div>
-  </div>
 
-  <!-- Тулбар -->
-  <div class="toolbar">
-    <div class="toolbar-tabs">
-      <button class="toolbar-tab active" data-filter="all">Все</button>
-      <button class="toolbar-tab" data-filter="cheap">Дешёвые</button>
-      <button class="toolbar-tab" data-filter="mid">Средние</button>
-      <button class="toolbar-tab" data-filter="top">Дорогие</button>
+    <div class="free-case-banner" id="freeCaseBtn" onclick="openFreeCase()">
+      <div class="free-case-banner-left">
+        <div class="free-case-banner-icon">🎁</div>
+        <div>
+          <div class="free-case-banner-title">Бесплатный кейс</div>
+          <div class="free-case-banner-sub" id="freeCaseSub">Проверяем...</div>
+        </div>
+      </div>
+      <div class="free-case-banner-streak hidden" id="freeCaseStreak"></div>
     </div>
-    <button class="toolbar-search" onclick="toast('Поиск в разработке')">🔍</button>
-  </div>
 
-  <!-- Бесплатный кейс -->
-  <div class="free-case-banner" id="freeCaseBtn" onclick="openFreeCase()">
-    <div class="free-case-banner-left">
-      <div class="free-case-banner-icon">🎁</div>
-      <div>
-        <div class="free-case-banner-title">Бесплатный кейс</div>
-        <div class="free-case-banner-sub" id="freeCaseSub">Проверяем...</div>
+    <div class="section-title-row">
+      <h3 class="section-title">🎰 Кейсы</h3>
+      <button class="section-link" onclick="showScreen('cases')">Все кейсы →</button>
+    </div>
+    <div class="cases-grid" id="homeCasesGrid"></div>
+
+    <div class="section-title-row">
+      <h3 class="section-title">🔥 Игры</h3>
+    </div>
+    <div class="games-grid" id="gamesGrid"></div>
+
+    <div class="section-title-row">
+      <h3 class="section-title">🏆 Battle Pass</h3>
+      <button class="section-link" onclick="showScreen('battlepass')">Открыть →</button>
+    </div>
+
+    <button class="admin-access-btn hidden" id="adminBtn" onclick="showScreen('admin')">
+      ⚙️ Админ-панель
+    </button>
+
+    <div class="section-title-row">
+      <h3 class="section-title">🎒 Мой инвентарь</h3>
+      <button class="section-link" onclick="showScreen('inventory')">Открыть →</button>
+    </div>
+    <div class="inventory-preview" id="homeInventoryPreview">
+      <div class="inv-preview-empty">Пока пусто</div>
+    </div>
+  </section>
+
+  <!-- ═══ WHEEL ═══ -->
+  <section class="screen" id="screen-wheel">
+    <h3 class="section-title">🎡 Колесо Фортуны</h3>
+    <div class="wheel-info">
+      <div class="inv-stat">
+        <div class="inv-stat-val" id="wheelSpins">0</div>
+        <div class="inv-stat-lbl">Доступно прокрутов</div>
       </div>
     </div>
-    <div class="free-case-banner-streak hidden" id="freeCaseStreak"></div>
-  </div>
+    <div class="wheel-container">
+      <div class="wheel-visual" id="wheelVisual">🎡</div>
+      <div class="wheel-result hidden" id="wheelResult"></div>
+    </div>
+    <button class="btn-primary" id="wheelSpinBtn" onclick="spinWheel()">🎡 Крутить</button>
+    <div class="topup-info" style="margin-top:12px;">
+      💡 Прокрут получаешь за активность и раз в сутки
+    </div>
+  </section>
 
-  <!-- Сетка кейсов -->
-  <div class="section-title-row">
-    <h3 class="section-title">🎰 Кейсы</h3>
-    <button class="section-link" onclick="showScreen('cases')">Все кейсы →</button>
-  </div>
-  <div class="cases-grid" id="homeCasesGrid"></div>
+  <!-- ═══ CASHBACK ═══ -->
+  <section class="screen" id="screen-cashback">
+    <h3 class="section-title">💰 Кэшбэк</h3>
+    <div class="cashback-card" id="cashbackInfo">Загрузка...</div>
+    <div class="topup-info" style="margin-top:12px;">
+      💡 Получай % от проигранных монет каждую неделю
+    </div>
+  </section>
 
- <!-- Игры -->
-<div class="section-title-row">
-  <h3 class="section-title">🔥 Игры</h3>
-</div>
-<div class="games-grid" id="gamesGrid"></div>
+  <!-- ═══ REFERRAL ═══ -->
+  <section class="screen" id="screen-referral">
+    <h3 class="section-title">👥 Рефералы</h3>
+    <div class="inventory-stats" id="referralStats"></div>
+    <div class="promo-box" style="margin-top:12px;">
+      <input class="input" id="referralLink" readonly>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="btn-primary" onclick="copyReferralLink()">📋 Копировать</button>
+        <button class="btn-primary" onclick="shareReferralLink()">📤 Поделиться</button>
+      </div>
+    </div>
+    <div class="topup-info" style="margin-top:16px;">
+      💰 Получай <b>5%</b> от каждой ставки реферала<br>
+      🎁 Бонус <b>+5000 🪙</b> за депозит реферала на 100+ ⭐
+    </div>
+  </section>
 
-<!-- Battle Pass -->
-<div class="section-title-row">
-  <h3 class="section-title">🏆 Battle Pass</h3>
-  <button class="section-link" onclick="showScreen('battlepass')">Открыть →</button>
-</div>
+  <!-- ═══ CUSTOMIZE ═══ -->
+  <section class="screen" id="screen-customize">
+    <h3 class="section-title">🎨 Кастомизация профиля</h3>
+    <h4 class="admin-subtitle">👤 Аватарки</h4>
+    <div class="customize-grid" id="customizeAvatars"></div>
+    <h4 class="admin-subtitle" style="margin-top:20px;">🖼 Рамки</h4>
+    <div class="customize-grid" id="customizeFrames"></div>
+    <h4 class="admin-subtitle" style="margin-top:20px;">📛 Титулы</h4>
+    <div class="customize-grid" id="customizeTitles"></div>
+  </section>
 
-<!-- Админка (показывается только админу) -->
-<button class="admin-access-btn hidden" id="adminBtn" onclick="showScreen('admin')">
-  ⚙️ Админ-панель
-</button>
-  <!-- Инвентарь быстрый доступ -->
-  <div class="section-title-row">
-    <h3 class="section-title">🎒 Мой инвентарь</h3>
-    <button class="section-link" onclick="showScreen('inventory')">Открыть →</button>
-  </div>
-  <div class="inventory-preview" id="homeInventoryPreview">
-    <div class="inv-preview-empty">Пока пусто</div>
-  </div>
+  <!-- ═══ TOURNAMENT ═══ -->
+  <section class="screen" id="screen-tournament">
+    <h3 class="section-title">🏆 Турнир недели</h3>
+    <div id="tournamentBody">Загрузка...</div>
+  </section>
 
-</section>
+  <!-- ═══ HALL ═══ -->
+  <section class="screen" id="screen-hall">
+    <h3 class="section-title">🏅 Зал славы</h3>
+    <div id="hallList">Загрузка...</div>
+  </section>
 
-    <section class="screen" id="screen-cases">
-      <h3 class="section-title">📦 Кейсы</h3>
-      <button class="free-case-btn" id="freeCaseBtn2" onclick="openFreeCase()">
-        <div class="free-case-icon">🎁</div>
-        <div class="free-case-info">
-          <div class="free-case-title">Бесплатный кейс</div>
-          <div class="free-case-sub" id="freeCaseSub2">Проверяем...</div>
+  <!-- ═══ CASES ═══ -->
+  <section class="screen" id="screen-cases">
+    <h3 class="section-title">📦 Кейсы</h3>
+    <button class="free-case-btn" id="freeCaseBtn2" onclick="openFreeCase()">
+      <div class="free-case-icon">🎁</div>
+      <div class="free-case-info">
+        <div class="free-case-title">Бесплатный кейс</div>
+        <div class="free-case-sub" id="freeCaseSub2">Проверяем...</div>
+      </div>
+      <div class="free-case-streak hidden" id="freeCaseStreak2"></div>
+    </button>
+    <button class="cases-fast-btn" onclick="toggleFastCase()" id="casesFastBtn">
+      ⚡ Быстрый прокрут
+    </button>
+    <div class="cases-grid" id="casesGrid"></div>
+  </section>
+
+  <!-- ═══ INVENTORY ═══ -->
+  <section class="screen" id="screen-inventory">
+    <h3 class="section-title">🎒 Инвентарь</h3>
+    <div class="inventory-stats" id="inventoryStats"></div>
+    <button class="btn-secondary" onclick="toggleInvSort()" id="invSortBtn" style="width:100%; margin-bottom:8px;">💎 Дорогие ↓</button>
+    <button class="btn-primary" onclick="sellAllItems()" style="margin-bottom: 12px;">💸 Продать всё</button>
+    <div class="inventory-list" id="inventoryList"></div>
+  </section>
+
+  <!-- ═══ UPGRADER ═══ -->
+  <section class="screen" id="screen-upgrader">
+    <div class="upg-title">⚡ АПГРЕЙД</div>
+    <div class="upg-stage">
+      <div class="upg-slot" id="upgMyItem">
+        <div class="upg-slot-empty">
+          <div class="upg-slot-empty-icon">🎒</div>
+          <div class="upg-slot-empty-text">Выбери<br>предметы</div>
         </div>
-        <div class="free-case-streak hidden" id="freeCaseStreak2"></div>
-      </button>
-
-  <button class="cases-fast-btn" onclick="toggleFastCase()" id="casesFastBtn">
-    ⚡ Быстрый прокрут
-  </button>
-
-  <div class="cases-grid" id="casesGrid"></div>
-</section>
-
-    <section class="screen" id="screen-inventory">
-  <h3 class="section-title">🎒 Инвентарь</h3>
-  <div class="inventory-stats" id="inventoryStats"></div>
-  <button class="btn-secondary" onclick="toggleInvSort()" id="invSortBtn" style="width:100%; margin-bottom:8px;">💎 Дорогие ↓</button>
-  <button class="btn-primary" onclick="sellAllItems()" style="margin-bottom: 12px;">💸 Продать всё</button>
-  <div class="inventory-list" id="inventoryList"></div>
-    </section>
-
-    <section class="screen" id="screen-upgrader">
-      <!-- Заголовок -->
-      <div class="upg-title">⚡ АПГРЕЙД</div>
-
-      <!-- Три колонки: мой предмет | круг с процентом | цель -->
-      <div class="upg-stage">
-        <!-- Левая колонка: выбранные предметы -->
-        <div class="upg-slot" id="upgMyItem">
-          <div class="upg-slot-empty">
-            <div class="upg-slot-empty-icon">🎒</div>
-            <div class="upg-slot-empty-text">Выбери<br>предметы</div>
+      </div>
+      <div class="upg-center">
+        <div class="upg-circle-wrap">
+          <svg class="upg-circle" viewBox="0 0 200 200">
+            <circle class="upg-circle-bg" cx="100" cy="100" r="85" />
+            <circle class="upg-circle-fail" id="upgCircleFail" cx="100" cy="100" r="85" />
+            <circle class="upg-circle-success" id="upgCircleSuccess" cx="100" cy="100" r="85" />
+          </svg>
+          <div class="upg-arrow-spin" id="upgArrowSpin"></div>
+          <div class="upg-circle-center">
+            <div class="upg-percent" id="upgPercent">0%</div>
+            <div class="upg-percent-label">шанс</div>
           </div>
         </div>
-
-        <!-- Центр: круг с процентом -->
-        <div class="upg-center">
-          <div class="upg-circle-wrap">
-            <svg class="upg-circle" viewBox="0 0 200 200">
-              <circle class="upg-circle-bg" cx="100" cy="100" r="85" />
-              <circle class="upg-circle-fail" id="upgCircleFail" cx="100" cy="100" r="85" />
-              <circle class="upg-circle-success" id="upgCircleSuccess" cx="100" cy="100" r="85" />
-            </svg>
-            <div class="upg-arrow-spin" id="upgArrowSpin"></div>
-            <div class="upg-circle-center">
-              <div class="upg-percent" id="upgPercent">0%</div>
-              <div class="upg-percent-label">шанс</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Правая колонка: цель -->
-        <div class="upg-slot upg-target-card" id="upgTargetCard">
-          <button class="upg-nav upg-nav-prev" onclick="upgraderNav(-1)">‹</button>
-          <div class="upg-slot-empty">
-            <div class="upg-slot-empty-icon">🎯</div>
-            <div class="upg-slot-empty-text">Выбери<br>цель</div>
-          </div>
-          <button class="upg-nav upg-nav-next" onclick="upgraderNav(1)">›</button>
-        </div>
       </div>
-
-      <!-- Кнопка «Прокачать» -->
-      <div class="upg-quick-mult">
-  <button class="upg-qm-btn" onclick="upgraderQuickMult(2)">×2</button>
-  <button class="upg-qm-btn" onclick="upgraderQuickMult(4)">×4</button>
-  <button class="upg-qm-btn" onclick="upgraderQuickMult(8)">×8</button>
-</div>
-
-<button class="upg-fast-btn" onclick="toggleFastUpgrade()" id="upgFastBtn">
-  ⚡ Быстрый апгрейд
-</button>
-
-<button class="upg-go-big" onclick="upgraderPlay()" id="upgGoBtn">
-  ⚡ ПРОКАЧАТЬ
-</button>
-
-      <!-- Секция: Мой инвентарь -->
-      <div class="upg-section">
-        <div class="upg-section-title">
-          <span>🎒 Твой инвентарь</span>
-          <button class="upg-sort-btn" onclick="toggleUpgSort()" id="upgSortBtn">💎 Дорогие ↓</button>
+      <div class="upg-slot upg-target-card" id="upgTargetCard">
+        <button class="upg-nav upg-nav-prev" onclick="upgraderNav(-1)">‹</button>
+        <div class="upg-slot-empty">
+          <div class="upg-slot-empty-icon">🎯</div>
+          <div class="upg-slot-empty-text">Выбери<br>цель</div>
         </div>
-        <div class="upg-inv-list" id="upgInvList"></div>
+        <button class="upg-nav upg-nav-next" onclick="upgraderNav(1)">›</button>
       </div>
+    </div>
 
-      <!-- Секция: Все цели -->
-      <div class="upg-section">
-        <div class="upg-section-title">
-          <span>🎯 Доступные цели</span>
-        </div>
-        <div class="upg-targets-list" id="upgTargetsList"></div>
+    <div class="upg-quick-mult">
+      <button class="upg-qm-btn" onclick="upgraderQuickMult(2)">×2</button>
+      <button class="upg-qm-btn" onclick="upgraderQuickMult(4)">×4</button>
+      <button class="upg-qm-btn" onclick="upgraderQuickMult(8)">×8</button>
+    </div>
+
+    <button class="upg-fast-btn" onclick="toggleFastUpgrade()" id="upgFastBtn">
+      ⚡ Быстрый апгрейд
+    </button>
+
+    <button class="upg-go-big" onclick="upgraderPlay()" id="upgGoBtn">
+      ⚡ ПРОКАЧАТЬ
+    </button>
+
+    <div class="upg-section">
+      <div class="upg-section-title">
+        <span>🎒 Твой инвентарь</span>
+        <button class="upg-sort-btn" onclick="toggleUpgSort()" id="upgSortBtn">💎 Дорогие ↓</button>
       </div>
-    </section>
+      <div class="upg-inv-list" id="upgInvList"></div>
+    </div>
 
-    <section class="screen" id="screen-profile">
-      <div class="profile-card">
-        <div class="profile-avatar" id="profileAvatar">👤</div>
-        <div class="profile-title" id="profileTitle" style="display:none;"></div>
-        <div class="profile-name" id="profileName">Игрок</div>
-        <div class="profile-level">
-          <div class="level-bar"><div class="level-fill" id="levelFill"></div></div>
-          <div class="level-text" id="levelText">Уровень 1</div>
+    <div class="upg-section">
+      <div class="upg-section-title">
+        <span>🎯 Доступные цели</span>
+      </div>
+      <div class="upg-targets-list" id="upgTargetsList"></div>
+    </div>
+  </section>
+
+  <!-- ═══ PROFILE ═══ -->
+  <section class="screen" id="screen-profile">
+    <div class="profile-card">
+      <div class="profile-avatar" id="profileAvatar">👤</div>
+      <div class="profile-title" id="profileTitle" style="display:none;"></div>
+      <div class="profile-name" id="profileName">Игрок</div>
+      <div class="profile-level">
+        <div class="level-bar"><div class="level-fill" id="levelFill"></div></div>
+        <div class="level-text" id="levelText">Уровень 1</div>
       </div>
       <div class="profile-balance" id="profileBalance">0</div>
       <div class="profile-balance-label">🪙 Баланс</div>
@@ -548,546 +384,524 @@
         <button class="btn-primary" onclick="showScreen('withdraw')">💸 Вывести</button>
       </div>
 
-      <button class="btn-primary" onclick="showScreen('quests')" style="margin-top:10px; width:100%;">
-        📋 Ежедневные задания
+      <button class="btn-primary" onclick="showScreen('quests')" style="margin-top:10px; width:100%;">📋 Ежедневные задания</button>
+      <button class="btn-primary" onclick="showScreen('battlepass')" style="margin-top:10px; width:100%;">🏆 Battle Pass</button>
+      <button class="btn-primary" onclick="showScreen('referral')" style="margin-top:10px; width:100%;">👥 Рефералы</button>
+      <button class="btn-primary" onclick="showScreen('cashback')" style="margin-top:10px; width:100%;">💰 Кэшбэк</button>
+      <button class="btn-primary" onclick="showScreen('customize')" style="margin-top:10px; width:100%;">🎨 Кастомизация</button>
+      <button class="btn-primary" onclick="showScreen('hall')" style="margin-top:10px; width:100%;">🏅 Зал славы</button>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
+      <div class="stat-card"><div class="stat-val" id="statWagered">0</div><div class="stat-lbl">Поставлено</div></div>
+      <div class="stat-card"><div class="stat-val" id="statWon">0</div><div class="stat-lbl">Выиграно</div></div>
+    </div>
+    <h3 class="section-title">📜 История игр</h3>
+    <div class="history-list" id="historyList"></div>
+  </section>
+
+  <!-- ═══ TOP ═══ -->
+  <section class="screen" id="screen-top">
+    <h3 class="section-title">🏆 Топ игроков</h3>
+    <div class="top-list" id="topList"></div>
+  </section>
+
+  <!-- ═══ ACH ═══ -->
+  <section class="screen" id="screen-ach">
+    <h3 class="section-title">🏅 Достижения</h3>
+    <div class="ach-list" id="achList"></div>
+  </section>
+
+  <!-- ═══ WITHDRAW ═══ -->
+  <section class="screen" id="screen-withdraw">
+    <h3 class="section-title">💸 Вывод</h3>
+    <div class="withdraw-info">
+      <div class="withdraw-balance"><span id="withdrawBalance">0</span> 🪙</div>
+      <div class="withdraw-hint" id="withdrawHint">Выберите способ вывода</div>
+    </div>
+    <div id="withdrawWarnContainer"></div>
+
+    <div class="topup-tabs" id="withdrawTabs">
+      <button class="topup-tab active" data-method="stars" onclick="switchWithdrawTab('stars')">
+        <span class="topup-tab-icon">⭐</span>
+        <span class="topup-tab-name">Stars</span>
       </button>
-
-      <button class="btn-primary" onclick="showScreen('battlepass')" style="margin-top:10px; width:100%;">
-        🏆 Battle Pass
+      <button class="topup-tab" data-method="usdc" onclick="switchWithdrawTab('usdc')">
+        <span class="topup-tab-icon">💎</span>
+        <span class="topup-tab-name">USDC</span>
+      </button>
+      <button class="topup-tab" data-method="ton" onclick="switchWithdrawTab('ton')">
+        <span class="topup-tab-icon">🪙</span>
+        <span class="topup-tab-name">TON</span>
       </button>
     </div>
-      <!-- Добавь ПОСЛЕ кнопки "Battle Pass" -->
-<button class="btn-primary" onclick="showScreen('referral')" style="margin-top:10px; width:100%;">
-  👥 Рефералы
-</button>
-<button class="btn-primary" onclick="showScreen('cashback')" style="margin-top:10px; width:100%;">
-  💰 Кэшбэк
-</button>
-<button class="btn-primary" onclick="showScreen('customize')" style="margin-top:10px; width:100%;">
-  🎨 Кастомизация
-</button>
-<button class="btn-primary" onclick="showScreen('hall')" style="margin-top:10px; width:100%;">
-  🏅 Зал славы
-</button>
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
-        <div class="stat-card"><div class="stat-val" id="statWagered">0</div><div class="stat-lbl">Поставлено</div></div>
-        <div class="stat-card"><div class="stat-val" id="statWon">0</div><div class="stat-lbl">Выиграно</div></div>
+
+    <div class="topup-method active" id="wd-method-stars">
+      <div class="topup-label">Сумма в звёздах (мин. 15 ⭐)</div>
+      <div class="topup-input-wrap">
+        <input type="number" class="topup-input" id="wdStarsAmount" placeholder="0" min="15" step="1" oninput="withdrawRecalc('stars')">
+        <span class="topup-input-icon">⭐</span>
       </div>
-      <h3 class="section-title">📜 История игр</h3>
-      <div class="history-list" id="historyList"></div>
-    </section>
-
-    <section class="screen" id="screen-top">
-      <h3 class="section-title">🏆 Топ игроков</h3>
-      <div class="top-list" id="topList"></div>
-    </section>
-
-    <section class="screen" id="screen-ach">
-      <h3 class="section-title">🏅 Достижения</h3>
-      <div class="ach-list" id="achList"></div>
-    </section>
-
-    <section class="screen" id="screen-withdraw">
-  <h3 class="section-title">💸 Вывод</h3>
-
-  <div class="withdraw-info">
-    <div class="withdraw-balance"><span id="withdrawBalance">0</span> 🪙</div>
-    <div class="withdraw-hint" id="withdrawHint">
-      Выберите способ вывода
-    </div>
-  </div>
-
-  <div id="withdrawWarnContainer"></div>
-
-  <!-- Табы методов -->
-  <div class="topup-tabs" id="withdrawTabs">
-    <button class="topup-tab active" data-method="stars" onclick="switchWithdrawTab('stars')">
-      <span class="topup-tab-icon">⭐</span>
-      <span class="topup-tab-name">Stars</span>
-    </button>
-    <button class="topup-tab" data-method="usdc" onclick="switchWithdrawTab('usdc')">
-      <span class="topup-tab-icon">💎</span>
-      <span class="topup-tab-name">USDC</span>
-    </button>
-    <button class="topup-tab" data-method="ton" onclick="switchWithdrawTab('ton')">
-      <span class="topup-tab-icon">🪙</span>
-      <span class="topup-tab-name">TON</span>
-    </button>
-  </div>
-
-  <!-- ═══ Stars ═══ -->
-  <div class="topup-method active" id="wd-method-stars">
-    <div class="topup-label">Сумма в звёздах (мин. 15 ⭐)</div>
-    <div class="topup-input-wrap">
-      <input type="number" class="topup-input" id="wdStarsAmount"
-             placeholder="0" min="15" step="1" oninput="withdrawRecalc('stars')">
-      <span class="topup-input-icon">⭐</span>
-    </div>
-    <div class="topup-quick">
-      <button class="topup-quick-btn" onclick="withdrawQuick('stars', 15)">15</button>
-      <button class="topup-quick-btn" onclick="withdrawQuick('stars', 50)">50</button>
-      <button class="topup-quick-btn" onclick="withdrawQuick('stars', 100)">100</button>
-      <button class="topup-quick-btn" onclick="withdrawQuick('stars', 500)">500</button>
-    </div>
-    <button class="topup-go" onclick="withdrawGo('stars')">💸 Вывести</button>
-    <div class="topup-info" id="wdStarsInfo"></div>
-  </div>
-
- 
-  <!-- ═══ USDC ═══ -->
-  <div class="topup-method" id="wd-method-usdc">
-    <div class="topup-label">Сумма в USDC (мин. 5 USDC)</div>
-    <div class="topup-input-wrap">
-      <input type="number" class="topup-input" id="wdUsdcAmount"
-             placeholder="0" min="5" step="1" oninput="withdrawRecalc('usdc')">
-      <span class="topup-input-icon">💎</span>
-    </div>
-    <div class="topup-quick">
-      <button class="topup-quick-btn" onclick="withdrawQuick('usdc', 5)">5</button>
-      <button class="topup-quick-btn" onclick="withdrawQuick('usdc', 10)">10</button>
-      <button class="topup-quick-btn" onclick="withdrawQuick('usdc', 50)">50</button>
-    </div>
-
-    <div class="topup-label">Адрес кошелька (Polygon)</div>
-    <div class="topup-input-wrap">
-      <input type="text" class="topup-input" id="wdUsdcWallet"
-             placeholder="0x...">
-    </div>
-
-    <button class="topup-go" onclick="withdrawGo('usdc')">💸 Вывести</button>
-    <div class="topup-info" id="wdUsdcInfo"></div>
-  </div>
-
-  <!-- ═══ TON ═══ -->
-  <div class="topup-method" id="wd-method-ton">
-    <div class="topup-label">Сумма в TON (мин. 1 TON)</div>
-    <div class="topup-input-wrap">
-      <input type="number" class="topup-input" id="wdTonAmount"
-             placeholder="0" min="1" step="0.1" oninput="withdrawRecalc('ton')">
-      <span class="topup-input-icon">🪙</span>
-    </div>
-    <div class="topup-quick">
-      <button class="topup-quick-btn" onclick="withdrawQuick('ton', 1)">1 TON</button>
-      <button class="topup-quick-btn" onclick="withdrawQuick('ton', 5)">5 TON</button>
-      <button class="topup-quick-btn" onclick="withdrawQuick('ton', 10)">10 TON</button>
-    </div>
-
-    <div class="topup-label">TON-кошелёк</div>
-    <div class="topup-input-wrap">
-      <input type="text" class="topup-input" id="wdTonWallet"
-             placeholder="UQ... или EQ...">
-    </div>
-
-    <button class="topup-go" onclick="withdrawGo('ton')">💸 Вывести</button>
-    <div class="topup-info" id="wdTonInfo"></div>
-  </div>
-</section>
-    <section class="screen" id="screen-quests">
-      <h3 class="section-title">📋 Ежедневные задания</h3>
-      <div class="quests-info">Обновляются каждые 24 часа</div>
-      <div class="quests-list" id="questsList"></div>
-    </section>
-        <section class="screen" id="screen-battlepass">
-      <h3 class="section-title">🏆 Battle Pass</h3>
-
-      <div class="bp-info" id="bpInfo">
-        <div class="bp-season">Сезон <span id="bpSeason">1</span></div>
-        <div class="bp-level">Уровень <span id="bpLevel">1</span></div>
-        <div class="bp-xp-bar">
-          <div class="bp-xp-fill" id="bpXpFill"></div>
-        </div>
-        <div class="bp-xp-text"><span id="bpXp">0</span> / <span id="bpXpMax">1000</span> XP</div>
+      <div class="topup-quick">
+        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 15)">15</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 50)">50</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 100)">100</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 500)">500</button>
       </div>
+      <button class="topup-go" onclick="withdrawGo('stars')">💸 Вывести</button>
+      <div class="topup-info" id="wdStarsInfo"></div>
+    </div>
 
-      <button class="bp-premium-btn" id="bpPremiumBtn" onclick="buyPremiumPass()">
-        ⭐ Купить Premium Pass (250 ⭐)
+    <div class="topup-method" id="wd-method-usdc">
+      <div class="topup-label">Сумма в USDC (мин. 5 USDC)</div>
+      <div class="topup-input-wrap">
+        <input type="number" class="topup-input" id="wdUsdcAmount" placeholder="0" min="5" step="1" oninput="withdrawRecalc('usdc')">
+        <span class="topup-input-icon">💎</span>
+      </div>
+      <div class="topup-quick">
+        <button class="topup-quick-btn" onclick="withdrawQuick('usdc', 5)">5</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('usdc', 10)">10</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('usdc', 50)">50</button>
+      </div>
+      <div class="topup-label">Адрес кошелька (Polygon)</div>
+      <div class="topup-input-wrap">
+        <input type="text" class="topup-input" id="wdUsdcWallet" placeholder="0x...">
+      </div>
+      <button class="topup-go" onclick="withdrawGo('usdc')">💸 Вывести</button>
+      <div class="topup-info" id="wdUsdcInfo"></div>
+    </div>
+
+    <div class="topup-method" id="wd-method-ton">
+      <div class="topup-label">Сумма в TON (мин. 1 TON)</div>
+      <div class="topup-input-wrap">
+        <input type="number" class="topup-input" id="wdTonAmount" placeholder="0" min="1" step="0.1" oninput="withdrawRecalc('ton')">
+        <span class="topup-input-icon">🪙</span>
+      </div>
+      <div class="topup-quick">
+        <button class="topup-quick-btn" onclick="withdrawQuick('ton', 1)">1 TON</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('ton', 5)">5 TON</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('ton', 10)">10 TON</button>
+      </div>
+      <div class="topup-label">TON-кошелёк</div>
+      <div class="topup-input-wrap">
+        <input type="text" class="topup-input" id="wdTonWallet" placeholder="UQ... или EQ...">
+      </div>
+      <button class="topup-go" onclick="withdrawGo('ton')">💸 Вывести</button>
+      <div class="topup-info" id="wdTonInfo"></div>
+    </div>
+  </section>
+
+  <!-- ═══ QUESTS ═══ -->
+  <section class="screen" id="screen-quests">
+    <h3 class="section-title">📋 Ежедневные задания</h3>
+    <div class="quests-info">Обновляются каждые 24 часа</div>
+    <div class="quests-list" id="questsList"></div>
+  </section>
+
+  <!-- ═══ BATTLE PASS ═══ -->
+  <section class="screen" id="screen-battlepass">
+    <h3 class="section-title">🏆 Battle Pass</h3>
+    <div class="bp-info" id="bpInfo">
+      <div class="bp-season">Сезон <span id="bpSeason">1</span></div>
+      <div class="bp-level">Уровень <span id="bpLevel">1</span></div>
+      <div class="bp-xp-bar">
+        <div class="bp-xp-fill" id="bpXpFill"></div>
+      </div>
+      <div class="bp-xp-text"><span id="bpXp">0</span> / <span id="bpXpMax">1000</span> XP</div>
+    </div>
+    <button class="bp-premium-btn" id="bpPremiumBtn" onclick="buyPremiumPass()">
+      ⭐ Купить Premium Pass (250 ⭐)
+    </button>
+    <div class="bp-rewards" id="bpRewards"></div>
+  </section>
+
+  <!-- ═══ PAY (старый) ═══ -->
+  <section class="screen" id="screen-pay">
+    <h3 class="section-title">⭐ Пополнение</h3>
+    <div class="pay-grid" id="payGrid"></div>
+  </section>
+
+  <!-- ═══ TOPUP ═══ -->
+  <section class="screen" id="screen-topup">
+    <h3 class="section-title">Пополнение баланса</h3>
+    <div class="topup-tabs">
+      <button class="topup-tab active" data-method="ton" onclick="switchTopupTab('ton')">
+        <span class="topup-tab-icon">💳</span>
+        <span class="topup-tab-name">TON</span>
       </button>
-      <button class="btn-primary" onclick="showScreen('battlepass')" style="margin-top:12px;">
-       🏆 Battle Pass
+      <button class="topup-tab" data-method="sbp" onclick="switchTopupTab('sbp')">
+        <span class="topup-tab-icon">🇷🇺</span>
+        <span class="topup-tab-name">СБП</span>
       </button>
-      <div class="bp-rewards" id="bpRewards"></div>
-    </section>
-    <section class="screen" id="screen-pay">
-      <h3 class="section-title">⭐ Пополнение</h3>
-      <div class="pay-grid" id="payGrid"></div>
-    </section>
-    <!-- ═══ ЭКРАН ПОПОЛНЕНИЯ БАЛАНСА ═══ -->
-<section class="screen" id="screen-topup">
-  <h3 class="section-title">Пополнение баланса</h3>
-
-  <!-- Табы методов -->
-  <div class="topup-tabs">
-    <button class="topup-tab active" data-method="ton" onclick="switchTopupTab('ton')">
-      <span class="topup-tab-icon">💳</span>
-      <span class="topup-tab-name">TON</span>
-    </button>
-   <button class="topup-tab" data-method="sbp" onclick="switchTopupTab('sbp')">
-  <span class="topup-tab-icon">🇷🇺</span>
-  <span class="topup-tab-name">СБП</span>
-</button>
-    <button class="topup-tab" data-method="stars" onclick="switchTopupTab('stars')">
-      <span class="topup-tab-icon">⭐</span>
-      <span class="topup-tab-name">Stars</span>
-    </button>
-    <button class="topup-tab" data-method="gifts" onclick="switchTopupTab('gifts')">
-      <span class="topup-tab-icon">🎁</span>
-      <span class="topup-tab-name">Подарки</span>
-    </button>
-  </div>
-
-  <!-- Метод: TON -->
-  <div class="topup-method active" id="topup-ton">
-    <div class="topup-label">Сумма (минимум 0.1 TON)</div>
-    <div class="topup-input-wrap">
-      <input type="number" class="topup-input" id="tonAmount" placeholder="Введите сумму..." min="0.1" step="0.1" oninput="topupRecalc('ton')">
-      <span class="topup-input-icon">💎</span>
+      <button class="topup-tab" data-method="stars" onclick="switchTopupTab('stars')">
+        <span class="topup-tab-icon">⭐</span>
+        <span class="topup-tab-name">Stars</span>
+      </button>
+      <button class="topup-tab" data-method="gifts" onclick="switchTopupTab('gifts')">
+        <span class="topup-tab-icon">🎁</span>
+        <span class="topup-tab-name">Подарки</span>
+      </button>
     </div>
-    <div class="topup-quick">
-      <button class="topup-quick-btn" onclick="topupQuick('ton', 1)">+1 TON</button>
-      <button class="topup-quick-btn" onclick="topupQuick('ton', 10)">+10 TON</button>
-      <button class="topup-quick-btn" onclick="topupQuick('ton', 100)">+100 TON</button>
+
+    <div class="topup-method active" id="topup-ton">
+      <div class="topup-label">Сумма (минимум 0.1 TON)</div>
+      <div class="topup-input-wrap">
+        <input type="number" class="topup-input" id="tonAmount" placeholder="Введите сумму..." min="0.1" step="0.1" oninput="topupRecalc('ton')">
+        <span class="topup-input-icon">💎</span>
+      </div>
+      <div class="topup-quick">
+        <button class="topup-quick-btn" onclick="topupQuick('ton', 1)">+1 TON</button>
+        <button class="topup-quick-btn" onclick="topupQuick('ton', 10)">+10 TON</button>
+        <button class="topup-quick-btn" onclick="topupQuick('ton', 100)">+100 TON</button>
+      </div>
+      <button class="topup-go" onclick="topupPay('ton')">Пополнить</button>
+      <div class="topup-info" id="tonInfo"></div>
     </div>
-    <button class="topup-go" onclick="topupPay('ton')">Пополнить</button>
-    <div class="topup-info" id="tonInfo"></div>
-  </div>
 
-<!-- Метод: СБП -->
-<div class="topup-method" id="topup-sbp">
-  <div class="topup-label">Сумма в ₽ (минимум 100)</div>
-  <div class="topup-input-wrap">
-    <input type="number" class="topup-input" id="sbpAmount" placeholder="Введите сумму..." min="100" step="100" oninput="topupRecalc('sbp')">
-    <span class="topup-input-icon">₽</span>
-  </div>
-  <div class="topup-quick">
-    <button class="topup-quick-btn" onclick="topupQuick('sbp', 100)">+100 ₽</button>
-    <button class="topup-quick-btn" onclick="topupQuick('sbp', 500)">+500 ₽</button>
-    <button class="topup-quick-btn" onclick="topupQuick('sbp', 1000)">+1 000 ₽</button>
-    <button class="topup-quick-btn" onclick="topupQuick('sbp', 5000)">+5 000 ₽</button>
-  </div>
-  <button class="topup-go" onclick="topupPay('sbp')">Пополнить</button>
-  <div class="topup-info" id="sbpInfo"></div>
-</div>
-
-  <!-- Метод: Stars -->
-  <div class="topup-method" id="topup-stars">
-    <div class="topup-label">Количество Stars (10 – 10 000)</div>
-    <div class="topup-input-wrap">
-      <input type="number" class="topup-input" id="starsAmount" placeholder="0" min="10" max="10000" step="10" oninput="topupRecalc('stars')">
+    <div class="topup-method" id="topup-sbp">
+      <div class="topup-label">Сумма в ₽ (минимум 100)</div>
+      <div class="topup-input-wrap">
+        <input type="number" class="topup-input" id="sbpAmount" placeholder="Введите сумму..." min="100" step="100" oninput="topupRecalc('sbp')">
+        <span class="topup-input-icon">₽</span>
+      </div>
+      <div class="topup-quick">
+        <button class="topup-quick-btn" onclick="topupQuick('sbp', 100)">+100 ₽</button>
+        <button class="topup-quick-btn" onclick="topupQuick('sbp', 500)">+500 ₽</button>
+        <button class="topup-quick-btn" onclick="topupQuick('sbp', 1000)">+1 000 ₽</button>
+        <button class="topup-quick-btn" onclick="topupQuick('sbp', 5000)">+5 000 ₽</button>
+      </div>
+      <button class="topup-go" onclick="topupPay('sbp')">Пополнить</button>
+      <div class="topup-info" id="sbpInfo"></div>
     </div>
-    <div class="topup-quick">
-      <button class="topup-quick-btn" onclick="topupQuick('stars', 50)">+50</button>
-      <button class="topup-quick-btn" onclick="topupQuick('stars', 100)">+100</button>
-      <button class="topup-quick-btn" onclick="topupQuick('stars', 500)">+500</button>
-      <button class="topup-quick-btn" onclick="topupQuick('stars', 1000)">+1k</button>
-      <button class="topup-quick-btn" onclick="topupQuick('stars', 5000)">+5k</button>
+
+    <div class="topup-method" id="topup-stars">
+      <div class="topup-label">Количество Stars (10 – 10 000)</div>
+      <div class="topup-input-wrap">
+        <input type="number" class="topup-input" id="starsAmount" placeholder="0" min="10" max="10000" step="10" oninput="topupRecalc('stars')">
+      </div>
+      <div class="topup-quick">
+        <button class="topup-quick-btn" onclick="topupQuick('stars', 50)">+50</button>
+        <button class="topup-quick-btn" onclick="topupQuick('stars', 100)">+100</button>
+        <button class="topup-quick-btn" onclick="topupQuick('stars', 500)">+500</button>
+        <button class="topup-quick-btn" onclick="topupQuick('stars', 1000)">+1k</button>
+        <button class="topup-quick-btn" onclick="topupQuick('stars', 5000)">+5k</button>
+      </div>
+      <button class="topup-go" onclick="topupPay('stars')">Пополнить</button>
+      <div class="topup-info" id="starsInfo"></div>
     </div>
-    <button class="topup-go" onclick="topupPay('stars')">Пополнить</button>
-    <div class="topup-info" id="starsInfo"></div>
-  </div>
 
-  <!-- Метод: Подарки -->
-  <div class="topup-method" id="topup-gifts">
-    <div class="topup-label">Выберите подарок</div>
-    <div class="topup-gifts-grid" id="giftsGrid"></div>
-    <div class="topup-info">🎁 Оплата подарком зачислится на баланс автоматически</div>
-  </div>
-</section>
-    <section class="screen" id="screen-promo">
-      <h3 class="section-title">🎟 Промокод</h3>
-      <div class="promo-box">
-        <input id="promoInput" class="input" placeholder="Введите код" autocapitalize="characters">
-        <button class="btn-primary" onclick="activatePromo()">Активировать</button>
+    <div class="topup-method" id="topup-gifts">
+      <div class="topup-label">Выберите подарок</div>
+      <div class="topup-gifts-grid" id="giftsGrid"></div>
+      <div class="topup-info">🎁 Оплата подарком зачислится на баланс автоматически</div>
+    </div>
+  </section>
+
+  <!-- ═══ PROMO ═══ -->
+  <section class="screen" id="screen-promo">
+    <h3 class="section-title">🎟 Промокод</h3>
+    <div class="promo-box">
+      <input id="promoInput" class="input" placeholder="Введите код" autocapitalize="characters">
+      <button class="btn-primary" onclick="activatePromo()">Активировать</button>
+    </div>
+  </section>
+
+  <!-- ═══ ADMIN ═══ -->
+  <section class="screen" id="screen-admin">
+    <h3 class="section-title">⚙️ Админ-панель</h3>
+    <div class="admin-tabs" style="grid-template-columns: repeat(3, 1fr);">
+      <button class="admin-tab active" data-tab="stats" onclick="switchAdminTab('stats')">📊 Стата</button>
+      <button class="admin-tab" data-tab="wd" onclick="switchAdminTab('wd')">💸 Выводы</button>
+      <button class="admin-tab" data-tab="money" onclick="switchAdminTab('money')">💰 Деньги</button>
+      <button class="admin-tab" data-tab="promo" onclick="switchAdminTab('promo')">🎟 Промо</button>
+      <button class="admin-tab" data-tab="inv" onclick="switchAdminTab('inv')">🎒 Инвентарь</button>
+      <button class="admin-tab" data-tab="winrate" onclick="switchAdminTab('winrate')">🎲 Подкрутка</button>
+      <button class="admin-tab" data-tab="logs" onclick="switchAdminTab('logs')">📜 Логи</button>
+    </div>
+
+    <div class="admin-content" id="admin-stats">
+      <div class="admin-stats-grid">
+        <div class="admin-stat-card"><div class="admin-stat-val" id="admUsers">0</div><div class="admin-stat-lbl">Юзеров</div></div>
+        <div class="admin-stat-card"><div class="admin-stat-val" id="admCoins">0</div><div class="admin-stat-lbl">Монет</div></div>
+        <div class="admin-stat-card"><div class="admin-stat-val" id="admWd">0</div><div class="admin-stat-lbl">Выводов</div></div>
+        <div class="admin-stat-card"><div class="admin-stat-val" id="admStars">0</div><div class="admin-stat-lbl">⭐ Выведено</div></div>
       </div>
-    </section>
-
-    <section class="screen" id="screen-admin">
-      <h3 class="section-title">⚙️ Админ-панель</h3>
-
-      <div class="admin-tabs" style="grid-template-columns: repeat(3, 1fr);">
-        <button class="admin-tab active" data-tab="stats" onclick="switchAdminTab('stats')">📊 Стата</button>
-        <button class="admin-tab" data-tab="wd" onclick="switchAdminTab('wd')">💸 Выводы</button>
-        <button class="admin-tab" data-tab="money" onclick="switchAdminTab('money')">💰 Деньги</button>
-        <button class="admin-tab" data-tab="promo" onclick="switchAdminTab('promo')">🎟 Промо</button>
-        <button class="admin-tab" data-tab="inv" onclick="switchAdminTab('inv')">🎒 Инвентарь</button>
-        <button class="admin-tab" data-tab="winrate" onclick="switchAdminTab('winrate')">🎲 Подкрутка</button>
-        <button class="admin-tab" data-tab="logs" onclick="switchAdminTab('logs')">📜 Логи</button>
+      <h4 class="admin-subtitle">📈 Оборот (RTP)</h4>
+      <div class="admin-stats-grid">
+        <div class="admin-stat-card"><div class="admin-stat-val" id="admWagered">0</div><div class="admin-stat-lbl">Поставлено</div></div>
+        <div class="admin-stat-card"><div class="admin-stat-val" id="admPaid">0</div><div class="admin-stat-lbl">Выплачено</div></div>
+        <div class="admin-stat-card"><div class="admin-stat-val" id="admProfit">0</div><div class="admin-stat-lbl">Профит</div></div>
+        <div class="admin-stat-card"><div class="admin-stat-val" id="admRtp">0%</div><div class="admin-stat-lbl">RTP</div></div>
       </div>
+      <h4 class="admin-subtitle">🏆 Топ по балансу</h4>
+      <div id="admTop"></div>
+    </div>
 
-      <div class="admin-content" id="admin-stats">
-        <div class="admin-stats-grid">
-          <div class="admin-stat-card"><div class="admin-stat-val" id="admUsers">0</div><div class="admin-stat-lbl">Юзеров</div></div>
-          <div class="admin-stat-card"><div class="admin-stat-val" id="admCoins">0</div><div class="admin-stat-lbl">Монет</div></div>
-          <div class="admin-stat-card"><div class="admin-stat-val" id="admWd">0</div><div class="admin-stat-lbl">Выводов</div></div>
-          <div class="admin-stat-card"><div class="admin-stat-val" id="admStars">0</div><div class="admin-stat-lbl">⭐ Выведено</div></div>
+    <div class="admin-content hidden" id="admin-wd">
+      <div id="admWdList"></div>
+    </div>
+
+    <div class="admin-content hidden" id="admin-money">
+      <div class="admin-card">
+        <div class="admin-subtitle">🎁 Выдать монеты</div>
+        <input class="input" id="giveTarget" placeholder="ID или @username">
+        <input class="input" id="giveAmount" type="number" placeholder="Сумма (+ / −)">
+        <button class="btn-primary" onclick="adminGive()">Выдать</button>
+      </div>
+      <div class="admin-card">
+        <div class="admin-subtitle">📝 Установить баланс</div>
+        <input class="input" id="setbalTarget" placeholder="ID или @username">
+        <input class="input" id="setbalAmount" type="number" placeholder="Новый баланс">
+        <button class="btn-primary" onclick="adminSetbal()">Установить</button>
+      </div>
+      <div class="admin-card">
+        <div class="admin-subtitle">📢 Рассылка</div>
+        <textarea class="input" id="broadcastText" placeholder="Текст (HTML поддерживается)" rows="3"></textarea>
+        <button class="btn-primary" onclick="adminBroadcast()">Отправить всем</button>
+      </div>
+    </div>
+
+    <div class="admin-content hidden" id="admin-promo">
+      <div class="admin-card">
+        <div class="admin-subtitle">➕ Создать промокод</div>
+        <input class="input" id="promoCode" placeholder="КОД" autocapitalize="characters">
+        <select class="input" id="promoKind">
+          <option value="coins">🪙 Монеты</option>
+          <option value="discount">💸 Скидка %</option>
+        </select>
+        <input class="input" id="promoValue" type="number" placeholder="Значение">
+        <input class="input" id="promoMaxUses" type="number" placeholder="Макс. использований (0 = ∞)">
+        <button class="btn-primary" onclick="adminCreatePromo()">Создать</button>
+      </div>
+      <h4 class="admin-subtitle">Список промокодов</h4>
+      <div id="admPromoList"></div>
+    </div>
+
+    <div class="admin-content hidden" id="admin-inv">
+      <div class="admin-card">
+        <div class="admin-subtitle">🎒 Инвентарь игрока</div>
+        <input class="input" id="invTarget" placeholder="ID или @username">
+        <button class="btn-primary" onclick="loadUserInventory()">Показать</button>
+      </div>
+      <h4 class="admin-subtitle">Предметы</h4>
+      <div id="admInvList"></div>
+    </div>
+
+    <div class="admin-content hidden" id="admin-winrate">
+      <div class="admin-card">
+        <div class="admin-subtitle">🎲 Настроить винрейт</div>
+        <input class="input" id="wrTarget" placeholder="ID или @username (пусто = глобально)">
+        <input class="input" id="wrPercent" type="number" min="0" max="100" step="1" placeholder="Винрейт % (50 = честно, 100 = всегда выигрывает)">
+        <input class="input" id="wrPayout" type="number" min="0" max="10" step="0.1" placeholder="Множитель выплат (1.0 = как есть)">
+        <button class="btn-primary" onclick="adminSetWinrate()">Применить</button>
+        <button class="btn-secondary" onclick="adminClearWinrate()" style="margin-top:8px;">🗑 Сбросить</button>
+      </div>
+      <h4 class="admin-subtitle">📋 Активные настройки</h4>
+      <div id="admWinrateList"></div>
+    </div>
+
+    <div class="admin-content hidden" id="admin-logs">
+      <div id="admLogs"></div>
+    </div>
+  </section>
+
+  <!-- ═══ GAME (единый экран для всех игр) ═══ -->
+  <section class="screen" id="screen-game">
+    <div class="game-header">
+      <button class="icon-btn" onclick="closeGame()">←</button>
+      <div class="game-title" id="gameTitle">Игра</div>
+      <div class="game-balance"><span id="gameBalance">0</span> 🪙</div>
+    </div>
+    <div class="game-body">
+
+      <div class="game-content hidden" id="content-slots2">
+        <div class="slots2-lines" id="slots2Lines">
+          <button class="lines-btn" data-lines="1" onclick="setSlotsLines(1)">1</button>
+          <button class="lines-btn active" data-lines="5" onclick="setSlotsLines(5)">5</button>
+          <button class="lines-btn" data-lines="10" onclick="setSlotsLines(10)">10</button>
+          <button class="lines-btn" data-lines="20" onclick="setSlotsLines(20)">20</button>
         </div>
-        <h4 class="admin-subtitle">📈 Оборот (RTP)</h4>
-        <div class="admin-stats-grid">
-          <div class="admin-stat-card"><div class="admin-stat-val" id="admWagered">0</div><div class="admin-stat-lbl">Поставлено</div></div>
-          <div class="admin-stat-card"><div class="admin-stat-val" id="admPaid">0</div><div class="admin-stat-lbl">Выплачено</div></div>
-          <div class="admin-stat-card"><div class="admin-stat-val" id="admProfit">0</div><div class="admin-stat-lbl">Профит</div></div>
-          <div class="admin-stat-card"><div class="admin-stat-val" id="admRtp">0%</div><div class="admin-stat-lbl">RTP</div></div>
-        </div>
-        <h4 class="admin-subtitle">🏆 Топ по балансу</h4>
-        <div id="admTop"></div>
+        <div class="slots2-field" id="slots2Field"></div>
+        <div class="game-result" id="slots2Result">Выберите ставку</div>
+        <div class="bets" id="slots2Bets"></div>
       </div>
 
-      <div class="admin-content hidden" id="admin-wd">
-        <div id="admWdList"></div>
+      <div class="game-content hidden" id="content-mines">
+        <div class="mines-settings" id="minesSettings">
+          <div class="mines-setting-label">Количество мин:</div>
+          <div class="mines-setting-options" id="minesOptions"></div>
+        </div>
+        <div class="game-info hidden" id="minesInfo">
+          <span>Открыто: <b id="minesOpened">0</b></span>
+          <span>Приз: <b id="minesPrize">0</b> 🪙</span>
+        </div>
+        <div class="mines-grid hidden" id="minesGrid"></div>
+        <div class="bets" id="minesBets"></div>
+        <button class="btn-cashout hidden" id="minesCashout" onclick="minesCashout()">💰 Забрать</button>
       </div>
 
-      <div class="admin-content hidden" id="admin-money">
-        <div class="admin-card">
-          <div class="admin-subtitle">🎁 Выдать монеты</div>
-          <input class="input" id="giveTarget" placeholder="ID или @username">
-          <input class="input" id="giveAmount" type="number" placeholder="Сумма (+ / −)">
-          <button class="btn-primary" onclick="adminGive()">Выдать</button>
+      <div class="game-content hidden" id="content-crash">
+        <div class="crash-history" id="crashHistory"></div>
+        <div class="crash-auto-block" id="crashAutoBlock">
+          <label class="crash-auto-label">
+            <span>💰 Авто-кэшаут (множитель)</span>
+            <input type="number" id="crashAuto" min="1.1" max="100" step="0.1" value="2.0">
+          </label>
+          <div class="crash-auto-hint">Оставьте 2.0 если хотите забрать вручную. При достижении — выигрыш зачислится автоматически.</div>
         </div>
-        <div class="admin-card">
-          <div class="admin-subtitle">📝 Установить баланс</div>
-          <input class="input" id="setbalTarget" placeholder="ID или @username">
-          <input class="input" id="setbalAmount" type="number" placeholder="Новый баланс">
-          <button class="btn-primary" onclick="adminSetbal()">Установить</button>
-        </div>
-        <div class="admin-card">
-          <div class="admin-subtitle">📢 Рассылка</div>
-          <textarea class="input" id="broadcastText" placeholder="Текст (HTML поддерживается)" rows="3"></textarea>
-          <button class="btn-primary" onclick="adminBroadcast()">Отправить всем</button>
-        </div>
-      </div>
-
-      <div class="admin-content hidden" id="admin-promo">
-        <div class="admin-card">
-          <div class="admin-subtitle">➕ Создать промокод</div>
-          <input class="input" id="promoCode" placeholder="КОД" autocapitalize="characters">
-          <select class="input" id="promoKind">
-            <option value="coins">🪙 Монеты</option>
-            <option value="discount">💸 Скидка %</option>
-          </select>
-          <input class="input" id="promoValue" type="number" placeholder="Значение">
-          <input class="input" id="promoMaxUses" type="number" placeholder="Макс. использований (0 = ∞)">
-          <button class="btn-primary" onclick="adminCreatePromo()">Создать</button>
-        </div>
-        <h4 class="admin-subtitle">Список промокодов</h4>
-        <div id="admPromoList"></div>
-      </div>
-
-      <div class="admin-content hidden" id="admin-inv">
-        <div class="admin-card">
-          <div class="admin-subtitle">🎒 Инвентарь игрока</div>
-          <input class="input" id="invTarget" placeholder="ID или @username">
-          <button class="btn-primary" onclick="loadUserInventory()">Показать</button>
-        </div>
-        <h4 class="admin-subtitle">Предметы</h4>
-        <div id="admInvList"></div>
-      </div>
-            <div class="admin-content hidden" id="admin-winrate">
-        <div class="admin-card">
-          <div class="admin-subtitle">🎲 Настроить винрейт</div>
-          <input class="input" id="wrTarget" placeholder="ID или @username (пусто = глобально)">
-          <input class="input" id="wrPercent" type="number" min="0" max="100" step="1" placeholder="Винрейт % (50 = честно, 100 = всегда выигрывает)">
-          <input class="input" id="wrPayout" type="number" min="0" max="10" step="0.1" placeholder="Множитель выплат (1.0 = как есть)">
-          <button class="btn-primary" onclick="adminSetWinrate()">Применить</button>
-          <button class="btn-secondary" onclick="adminClearWinrate()" style="margin-top:8px;">🗑 Сбросить</button>
-        </div>
-        <h4 class="admin-subtitle">📋 Активные настройки</h4>
-        <div id="admWinrateList"></div>
-      </div>
-      <div class="admin-content hidden" id="admin-logs">
-        <div id="admLogs"></div>
-      </div>
-    </section>
-
-    <section class="screen" id="screen-game">
-      <div class="game-header">
-        <button class="icon-btn" onclick="closeGame()">←</button>
-        <div class="game-title" id="gameTitle">Игра</div>
-        <div class="game-balance"><span id="gameBalance">0</span> 🪙</div>
-      </div>
-      <div class="game-body">
-
-        <div class="game-content hidden" id="content-slots2">
-          <div class="slots2-lines" id="slots2Lines">
-            <button class="lines-btn" data-lines="1" onclick="setSlotsLines(1)">1</button>
-            <button class="lines-btn active" data-lines="5" onclick="setSlotsLines(5)">5</button>
-            <button class="lines-btn" data-lines="10" onclick="setSlotsLines(10)">10</button>
-            <button class="lines-btn" data-lines="20" onclick="setSlotsLines(20)">20</button>
+        <div class="crash-display hidden" id="crashDisplay">
+          <div class="crash-field" id="crashField">
+            <canvas id="crashCanvas"></canvas>
+            <div class="crash-mult" id="crashMult">×1.00</div>
+            <div class="crash-prize" id="crashPrize">0 🪙</div>
+            <div class="crash-auto-inline hidden" id="crashAutoInline"></div>
           </div>
-          <div class="slots2-field" id="slots2Field"></div>
-          <div class="game-result" id="slots2Result">Выберите ставку</div>
-          <div class="bets" id="slots2Bets"></div>
+          <button class="btn-cashout" onclick="crashCashout()">💰 Забрать</button>
         </div>
+        <div class="bets" id="crashBets"></div>
+      </div>
 
-        <div class="game-content hidden" id="content-mines">
-          <div class="mines-settings" id="minesSettings">
-            <div class="mines-setting-label">Количество мин:</div>
-            <div class="mines-setting-options" id="minesOptions"></div>
+      <div class="game-content hidden" id="content-dice">
+        <div class="dice-display hidden" id="diceDisplay">
+          <div class="dice-face" id="diceFace">🎲</div>
+          <div class="dice-result" id="diceResult"></div>
+          <div class="dice-choices" id="diceChoices">
+            <button class="choice-btn" onclick="rollDice('low')">1-3 <span>×1.95</span></button>
+            <button class="choice-btn" onclick="rollDice('high')">4-6 <span>×1.95</span></button>
+            <button class="choice-btn" onclick="rollDice('range_4_6_plus')">4-6+ <span>×2.9</span></button>
+            <button class="choice-btn" onclick="rollDice('exact')">6 <span>×5.7</span></button>
           </div>
-          <div class="game-info hidden" id="minesInfo">
-            <span>Открыто: <b id="minesOpened">0</b></span>
-            <span>Приз: <b id="minesPrize">0</b> 🪙</span>
-          </div>
-          <div class="mines-grid hidden" id="minesGrid"></div>
-          <div class="bets" id="minesBets"></div>
-          <button class="btn-cashout hidden" id="minesCashout" onclick="minesCashout()">💰 Забрать</button>
         </div>
+        <div class="bets" id="diceBets"></div>
+      </div>
 
-        <div class="game-content hidden" id="content-crash">
-          <div class="crash-history" id="crashHistory"></div>
-
-          <div class="crash-auto-block" id="crashAutoBlock">
-            <label class="crash-auto-label">
-              <span>💰 Авто-кэшаут (множитель)</span>
-              <input type="number" id="crashAuto" min="1.1" max="100" step="0.1" value="2.0">
-            </label>
-            <div class="crash-auto-hint">Оставьте 2.0 если хотите забрать вручную. При достижении — выигрыш зачислится автоматически.</div>
+      <div class="game-content hidden" id="content-rr">
+        <div class="rr-display hidden" id="rrDisplay">
+          <div class="rr-revolver" id="rrRevolver">🔫</div>
+          <div class="rr-stats">
+            <span>Множитель: <b id="rrMult">×1.00</b></span>
+            <span>Приз: <b id="rrPrize">0 🪙</b></span>
           </div>
+          <div class="rr-actions">
+            <button class="btn-primary" onclick="rrSpin()">🔫 Крутить</button>
+            <button class="btn-cashout" onclick="rrCashout()">💰 Забрать</button>
+          </div>
+        </div>
+        <div class="bets" id="rrBets"></div>
+      </div>
 
-          <div class="crash-display hidden" id="crashDisplay">
-            <div class="crash-field" id="crashField">
-              <canvas id="crashCanvas"></canvas>
-              <div class="crash-mult" id="crashMult">×1.00</div>
-              <div class="crash-prize" id="crashPrize">0 🪙</div>
-              <div class="crash-auto-inline hidden" id="crashAutoInline"></div>
+      <div class="game-content hidden" id="content-plinko">
+        <div class="plinko-risk">
+          <button class="plinko-risk-btn active" data-risk="low" onclick="setPlinkoRisk('low')">🟢 Низкий</button>
+          <button class="plinko-risk-btn" data-risk="medium" onclick="setPlinkoRisk('medium')">🟡 Средний</button>
+          <button class="plinko-risk-btn" data-risk="high" onclick="setPlinkoRisk('high')">🔴 Высокий</button>
+        </div>
+        <div class="plinko-field" id="plinkoField">
+          <div class="plinko-board" id="plinkoBoard"></div>
+          <div class="plinko-ball" id="plinkoBall"></div>
+        </div>
+        <div class="plinko-slots" id="plinkoSlots"></div>
+        <div class="bets" id="plinkoBets"></div>
+      </div>
+
+      <div class="game-content hidden" id="content-penalti">
+        <div class="penalti-display hidden" id="penaltiDisplay">
+          <div class="penalti-stats">
+            <span>Голы: <b id="penaltiGoals">0</b></span>
+            <span>Множитель: <b id="penaltiMult">×1.00</b></span>
+            <span>Приз: <b id="penaltiPrize">0</b> 🪙</span>
+          </div>
+        </div>
+        <div class="penalti-scene" id="penaltiScene">
+          <div class="penalti-sky"></div>
+          <div class="penalti-crowd"></div>
+          <div class="goal" id="goalFrame">
+            <div class="goal-net"></div>
+            <div class="goal-post goal-post-left"></div>
+            <div class="goal-post goal-post-right"></div>
+            <div class="goal-crossbar"></div>
+            <div class="goal-grid" id="goalGrid">
+              <button class="goal-zone" data-zone="0" onclick="penaltiKick(0)"></button>
+              <button class="goal-zone" data-zone="1" onclick="penaltiKick(1)"></button>
+              <button class="goal-zone" data-zone="2" onclick="penaltiKick(2)"></button>
+              <button class="goal-zone" data-zone="3" onclick="penaltiKick(3)"></button>
+              <button class="goal-zone" data-zone="4" onclick="penaltiKick(4)"></button>
+              <button class="goal-zone" data-zone="5" onclick="penaltiKick(5)"></button>
+              <button class="goal-zone" data-zone="6" onclick="penaltiKick(6)"></button>
+              <button class="goal-zone" data-zone="7" onclick="penaltiKick(7)"></button>
+              <button class="goal-zone" data-zone="8" onclick="penaltiKick(8)"></button>
             </div>
-            <button class="btn-cashout" onclick="crashCashout()">💰 Забрать</button>
+            <div class="keeper" id="keeper"><div class="keeper-body">🧤</div></div>
           </div>
-
-          <div class="bets" id="crashBets"></div>
+          <div class="penalti-ball" id="ballAnim">⚽</div>
+          <div class="penalti-grass"></div>
         </div>
-
-        <div class="game-content hidden" id="content-dice">
-          <div class="dice-display hidden" id="diceDisplay">
-            <div class="dice-face" id="diceFace">🎲</div>
-            <div class="dice-result" id="diceResult"></div>
-            <div class="dice-choices" id="diceChoices">
-              <button class="choice-btn" onclick="rollDice('low')">1-3 <span>×1.95</span></button>
-              <button class="choice-btn" onclick="rollDice('high')">4-6 <span>×1.95</span></button>
-              <button class="choice-btn" onclick="rollDice('range_4_6_plus')">4-6+ <span>×2.9</span></button>
-              <button class="choice-btn" onclick="rollDice('exact')">6 <span>×5.7</span></button>
-            </div>
-          </div>
-          <div class="bets" id="diceBets"></div>
+        <div class="penalti-hint" id="penaltiHint">👇 Выбери, куда бить</div>
+        <div class="rr-actions">
+          <button class="btn-cashout" onclick="penaltiCashout()" id="penaltiCashoutBtn" style="display: none;">💰 Забрать</button>
         </div>
-
-        <div class="game-content hidden" id="content-rr">
-          <div class="rr-display hidden" id="rrDisplay">
-            <div class="rr-revolver" id="rrRevolver">🔫</div>
-            <div class="rr-stats">
-              <span>Множитель: <b id="rrMult">×1.00</b></span>
-              <span>Приз: <b id="rrPrize">0 🪙</b></span>
-            </div>
-            <div class="rr-actions">
-              <button class="btn-primary" onclick="rrSpin()">🔫 Крутить</button>
-              <button class="btn-cashout" onclick="rrCashout()">💰 Забрать</button>
-            </div>
-          </div>
-          <div class="bets" id="rrBets"></div>
-        </div>
-
-        <div class="game-content hidden" id="content-plinko">
-          <div class="plinko-risk">
-            <button class="plinko-risk-btn active" data-risk="low" onclick="setPlinkoRisk('low')">🟢 Низкий</button>
-            <button class="plinko-risk-btn" data-risk="medium" onclick="setPlinkoRisk('medium')">🟡 Средний</button>
-            <button class="plinko-risk-btn" data-risk="high" onclick="setPlinkoRisk('high')">🔴 Высокий</button>
-          </div>
-          <div class="plinko-field" id="plinkoField">
-            <div class="plinko-board" id="plinkoBoard"></div>
-            <div class="plinko-ball" id="plinkoBall"></div>
-          </div>
-          <div class="plinko-slots" id="plinkoSlots"></div>
-          <div class="bets" id="plinkoBets"></div>
-        </div>
-            <div class="penalti-scene" id="penaltiScene">
-              <div class="penalti-sky"></div>
-              <div class="penalti-crowd"></div>
-
-              <div class="goal" id="goalFrame">
-                <div class="goal-net"></div>
-                <div class="goal-post goal-post-left"></div>
-                <div class="goal-post goal-post-right"></div>
-                <div class="goal-crossbar"></div>
-
-                <div class="goal-grid" id="goalGrid">
-                  <button class="goal-zone" data-zone="0" onclick="penaltiKick(0)"></button>
-                  <button class="goal-zone" data-zone="1" onclick="penaltiKick(1)"></button>
-                  <button class="goal-zone" data-zone="2" onclick="penaltiKick(2)"></button>
-                  <button class="goal-zone" data-zone="3" onclick="penaltiKick(3)"></button>
-                  <button class="goal-zone" data-zone="4" onclick="penaltiKick(4)"></button>
-                  <button class="goal-zone" data-zone="5" onclick="penaltiKick(5)"></button>
-                  <button class="goal-zone" data-zone="6" onclick="penaltiKick(6)"></button>
-                  <button class="goal-zone" data-zone="7" onclick="penaltiKick(7)"></button>
-                  <button class="goal-zone" data-zone="8" onclick="penaltiKick(8)"></button>
-                </div>
-
-                <div class="keeper" id="keeper">
-                  <div class="keeper-body">🧤</div>
-                </div>
-              </div>
-
-              <div class="penalti-ball" id="ballAnim">⚽</div>
-              <div class="penalti-grass"></div>
-            </div>
-
-            <div class="penalti-hint" id="penaltiHint">👇 Выбери, куда бить</div>
-
-            <div class="rr-actions">
-              <button class="btn-cashout" onclick="penaltiCashout()" id="penaltiCashoutBtn" style="display: none;">💰 Забрать</button>
-            </div>
-          </div>
-          <div class="bets" id="penaltiBets"></div>
-        </div>
-
-        <div class="game-content hidden" id="content-coin">
-          <div class="coin-display hidden" id="coinDisplay">
-            <div class="coin-face" id="coinFace">🪙</div>
-            <div class="coin-result" id="coinResult">Выберите сторону</div>
-            <div class="coin-choices">
-              <button class="choice-btn" onclick="flipCoin('heads')">👑 Орёл</button>
-              <button class="choice-btn" onclick="flipCoin('tails')">🔢 Решка</button>
-            </div>
-          </div>
-          <div class="coin-history" id="coinHistory"></div>
-          <div class="bets" id="coinBets"></div>
-        </div>
-          <div class="duel-battle hidden" id="duelBattle">
-            <div class="battle-arena" id="battleArena">
-              <div class="fighter fighter-left" id="fighterLeft">
-                <div class="fighter-avatar">🛡️</div>
-                <div class="fighter-sword">⚔️</div>
-              </div>
-              <div class="battle-vs">VS</div>
-              <div class="fighter fighter-right" id="fighterRight">
-                <div class="fighter-avatar">🛡️</div>
-                <div class="fighter-sword">⚔️</div>
-              </div>
-              <div class="battle-spark" id="battleSpark">💥</div>
-            </div>
-            <div class="battle-status" id="battleStatus">Битва!</div>
-          </div>
-
-          <div class="bets" id="duelBets"></div>
-        </div>
-
+        <div class="bets" id="penaltiBets"></div>
       </div>
-    </section>
 
-    <section class="screen" id="screen-result">
-      <div class="result-box">
-        <div class="result-icon" id="resultIcon">🎉</div>
-        <div class="result-title" id="resultTitle">Победа!</div>
-        <div class="result-amount" id="resultAmount">+0 🪙</div>
-        <div class="result-details" id="resultDetails"></div>
-        <div class="result-actions">
-          <button class="btn-primary" onclick="playAgain()">🔄 Ещё раз</button>
-          <button class="btn-secondary" onclick="showScreen('home')">🏠 Домой</button>
+      <div class="game-content hidden" id="content-coin">
+        <div class="coin-display hidden" id="coinDisplay">
+          <div class="coin-face" id="coinFace">🪙</div>
+          <div class="coin-result" id="coinResult">Выберите сторону</div>
+          <div class="coin-choices">
+            <button class="choice-btn" onclick="flipCoin('heads')">👑 Орёл</button>
+            <button class="choice-btn" onclick="flipCoin('tails')">🔢 Решка</button>
+          </div>
         </div>
+        <div class="coin-history" id="coinHistory"></div>
+        <div class="bets" id="coinBets"></div>
       </div>
-    </section>
 
-  </main>
+      <div class="game-content hidden" id="content-duel">
+        <div class="duel-display" id="duelDisplay">
+          <div class="duel-icon">⚔️</div>
+          <div class="duel-title">PVP Дуэль</div>
+          <div class="duel-desc">Сразись с другим игроком. Победитель забирает всё.</div>
+          <div class="duel-status" id="duelStatus">Выберите ставку</div>
+        </div>
+        <div class="duel-battle hidden" id="duelBattle">
+          <div class="battle-arena" id="battleArena">
+            <div class="fighter fighter-left" id="fighterLeft">
+              <div class="fighter-avatar">🛡️</div>
+              <div class="fighter-sword">⚔️</div>
+            </div>
+            <div class="battle-vs">VS</div>
+            <div class="fighter fighter-right" id="fighterRight">
+              <div class="fighter-avatar">🛡️</div>
+              <div class="fighter-sword">⚔️</div>
+            </div>
+            <div class="battle-spark" id="battleSpark">💥</div>
+          </div>
+          <div class="battle-status" id="battleStatus">Битва!</div>
+        </div>
+        <div class="bets" id="duelBets"></div>
+      </div>
 
-<nav class="bottom-nav" style="grid-template-columns: repeat(5, 1fr);">
+    </div>
+  </section>
+
+  <!-- ═══ RESULT ═══ -->
+  <section class="screen" id="screen-result">
+    <div class="result-box">
+      <div class="result-icon" id="resultIcon">🎉</div>
+      <div class="result-title" id="resultTitle">Победа!</div>
+      <div class="result-amount" id="resultAmount">+0 🪙</div>
+      <div class="result-details" id="resultDetails"></div>
+      <div class="result-actions">
+        <button class="btn-primary" onclick="playAgain()">🔄 Ещё раз</button>
+        <button class="btn-secondary" onclick="showScreen('home')">🏠 Домой</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══ BOTTOM NAV ═══ -->
+<nav class="bottom-nav">
   <button class="nav-btn active" data-nav="home" onclick="showScreen('home')">
     <span class="nav-icon">🎰</span><span class="nav-lbl">Игры</span>
   </button>
@@ -1108,6 +922,7 @@
   <div class="toast" id="toast"></div>
 </div>
 
+<!-- ═══ CASE INFO OVERLAY ═══ -->
 <div id="caseInfo" class="case-info-overlay hidden">
   <div class="ci-header">
     <div class="ci-title" id="ciTitle">Кейс</div>
@@ -1122,35 +937,26 @@
   </div>
 </div>
 
+<!-- ═══ CASE ROULETTE ═══ -->
 <div id="caseRoulette" class="case-roulette hidden">
   <div class="cr-header">
     <div class="cr-title" id="crTitle">Кейс</div>
     <button class="cr-close" onclick="closeCaseRoulette()">✕</button>
   </div>
-
   <div class="cr-viewport">
     <div class="cr-track" id="crTrack"></div>
     <div class="cr-cursor"></div>
   </div>
-
   <div class="cr-reward hidden" id="crReward">
     <div class="cr-reward-emoji" id="crRewardEmoji">🎁</div>
     <div class="cr-reward-name" id="crRewardName">Предмет</div>
     <div class="cr-reward-price" id="crRewardPrice">0 🪙</div>
   </div>
-
   <div class="cr-actions hidden" id="crActions">
-    <button class="cr-action-btn cr-action-upgrade" onclick="caseToUpgrade()">
-      ⚡ В АПГРЕЙД
-    </button>
-    <button class="cr-action-btn cr-action-sell" onclick="caseSellNow()">
-      💰 ПРОДАТЬ ЗА <span id="crSellPrice">0</span> 🪙
-    </button>
-    <button class="cr-action-btn cr-action-again" onclick="caseOpenAgain()">
-      🔄 ЕЩЁ РАЗ
-    </button>
+    <button class="cr-action-btn cr-action-upgrade" onclick="caseToUpgrade()">⚡ В АПГРЕЙД</button>
+    <button class="cr-action-btn cr-action-sell" onclick="caseSellNow()">💰 ПРОДАТЬ ЗА <span id="crSellPrice">0</span> 🪙</button>
+    <button class="cr-action-btn cr-action-again" onclick="caseOpenAgain()">🔄 ЕЩЁ РАЗ</button>
   </div>
-
   <div class="cr-footer" id="crFooter">
     <div class="cr-status" id="crStatus">Крутим...</div>
     <div class="cr-multi hidden" id="crMulti"></div>
@@ -1158,19 +964,13 @@
 </div>
 
 <script>
-  window.onerror = function(message, source, lineno, colno, error) {
-    console.error('[JS ERROR]', message, '|', source, lineno + ':' + colno);
-    const el = document.getElementById('toast');
-    if (el) {
-      el.textContent = '⚠️ Ошибка: ' + message;
-      el.className = 'toast show error';
-      clearTimeout(el._t);
-      el._t = setTimeout(() => el.className = 'toast', 4000);
-    }
-    return true;
-  };
+  // Форс-скрытие сплэша через 3 секунды — даже если JS упал
+  setTimeout(function() {
+    var s = document.getElementById('splash');
+    if (s) s.classList.add('hide');
+  }, 3000);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=351"></script>
+<script src="app.js?v=353"></script>
 </body>
 </html>
