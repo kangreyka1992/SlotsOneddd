@@ -3585,3 +3585,8 @@ body.upgrade-running .bottom-nav {
   0% { transform: scale(0.8); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
+.cr-reward-emoji .tg-icon-img {
+    width: 120px;
+    height: 120px;
+    border-radius: 20px;
+}
