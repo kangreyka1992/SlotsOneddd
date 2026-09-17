@@ -3,6 +3,7 @@ import datetime
 import os
 import random
 import time as _time
+import aiosqlite, asyncio
 
 DB_PATH = os.getenv("DB_PATH", "casino.db")
 
@@ -239,6 +240,7 @@ async def init_db():
                 avatar TEXT DEFAULT 'default',
                 frame TEXT DEFAULT 'none',
                 title TEXT DEFAULT 'Новичок',
+                owned TEXT DEFAULT '[]',
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -870,7 +872,16 @@ async def claim_free_case(user_id: int, streak: int):
         )
         await db.commit()
 
+async def migrate():
+    async with aiosqlite.connect("casino.db") as db:
+        try:
+            await db.execute("ALTER TABLE profiles ADD COLUMN owned TEXT DEFAULT '[]'")
+            await db.commit()
+            print("✅ Колонка owned добавлена")
+        except Exception as e:
+            print(f"⚠️ {e}")
 
+asyncio.run(migrate())
 # ═══════════ ОБОРОТ КАЗИНО ═══════════
 
 async def log_house_flow(wagered: int, paid: int):
@@ -1495,7 +1506,7 @@ async def get_profile(user_id: int):
         )
         await db.commit()
         async with db.execute(
-            "SELECT avatar, frame, title FROM profiles WHERE user_id = ?",
+            "SELECT avatar, frame, title, owned FROM profiles WHERE user_id = ?",
             (user_id,),
         ) as cur:
             row = await cur.fetchone()
@@ -1503,19 +1514,22 @@ async def get_profile(user_id: int):
                 "avatar": row[0] if row else "default",
                 "frame": row[1] if row else "none",
                 "title": row[2] if row else "Новичок",
+                "owned": row[3] if row and row[3] else "[]",
             }
 
 
-async def set_profile(user_id: int, avatar: str = None, frame: str = None, title: str = None):
+async def set_profile(user_id: int, avatar: str = None, frame: str = None,
+                      title: str = None, owned: str = None):
     current = await get_profile(user_id)
-    new_avatar = avatar or current["avatar"]
-    new_frame = frame or current["frame"]
-    new_title = title or current["title"]
+    new_avatar = avatar if avatar is not None else current["avatar"]
+    new_frame = frame if frame is not None else current["frame"]
+    new_title = title if title is not None else current["title"]
+    new_owned = owned if owned is not None else current.get("owned", "[]")
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "UPDATE profiles SET avatar = ?, frame = ?, title = ?, "
+            "UPDATE profiles SET avatar = ?, frame = ?, title = ?, owned = ?, "
             "updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
-            (new_avatar, new_frame, new_title, user_id),
+            (new_avatar, new_frame, new_title, new_owned, user_id),
         )
         await db.commit()
 
