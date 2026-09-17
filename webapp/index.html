@@ -516,7 +516,88 @@
       <h3 class="section-title">⭐ Пополнение</h3>
       <div class="pay-grid" id="payGrid"></div>
     </section>
+    <!-- ═══ ЭКРАН ПОПОЛНЕНИЯ БАЛАНСА ═══ -->
+<section class="screen" id="screen-topup">
+  <h3 class="section-title">Пополнение баланса</h3>
 
+  <!-- Табы методов -->
+  <div class="topup-tabs">
+    <button class="topup-tab active" data-method="ton" onclick="switchTopupTab('ton')">
+      <span class="topup-tab-icon">💳</span>
+      <span class="topup-tab-name">TON</span>
+    </button>
+    <button class="topup-tab" data-method="crypto" onclick="switchTopupTab('crypto')">
+      <span class="topup-tab-icon">🤖</span>
+      <span class="topup-tab-name">Крипто Бот</span>
+      <span class="topup-tab-hot">HOT</span>
+    </button>
+    <button class="topup-tab" data-method="stars" onclick="switchTopupTab('stars')">
+      <span class="topup-tab-icon">⭐</span>
+      <span class="topup-tab-name">Stars</span>
+    </button>
+    <button class="topup-tab" data-method="gifts" onclick="switchTopupTab('gifts')">
+      <span class="topup-tab-icon">🎁</span>
+      <span class="topup-tab-name">Подарки</span>
+    </button>
+  </div>
+
+  <!-- Метод: TON -->
+  <div class="topup-method active" id="topup-ton">
+    <div class="topup-label">Сумма (минимум 0.1 TON)</div>
+    <div class="topup-input-wrap">
+      <input type="number" class="topup-input" id="tonAmount" placeholder="Введите сумму..." min="0.1" step="0.1" oninput="topupRecalc('ton')">
+      <span class="topup-input-icon">💎</span>
+    </div>
+    <div class="topup-quick">
+      <button class="topup-quick-btn" onclick="topupQuick('ton', 1)">+1 TON</button>
+      <button class="topup-quick-btn" onclick="topupQuick('ton', 10)">+10 TON</button>
+      <button class="topup-quick-btn" onclick="topupQuick('ton', 100)">+100 TON</button>
+    </div>
+    <button class="topup-go" onclick="topupPay('ton')">Пополнить</button>
+    <div class="topup-info" id="tonInfo"></div>
+  </div>
+
+  <!-- Метод: Крипто Бот -->
+  <div class="topup-method" id="topup-crypto">
+    <div class="topup-label">Сумма в USDT (минимум 1)</div>
+    <div class="topup-input-wrap">
+      <input type="number" class="topup-input" id="cryptoAmount" placeholder="Введите сумму..." min="1" step="1" oninput="topupRecalc('crypto')">
+      <span class="topup-input-icon">💎</span>
+    </div>
+    <div class="topup-quick">
+      <button class="topup-quick-btn" onclick="topupQuick('crypto', 1)">+1</button>
+      <button class="topup-quick-btn" onclick="topupQuick('crypto', 5)">+5</button>
+      <button class="topup-quick-btn" onclick="topupQuick('crypto', 10)">+10</button>
+      <button class="topup-quick-btn" onclick="topupQuick('crypto', 50)">+50</button>
+    </div>
+    <button class="topup-go" onclick="topupPay('crypto')">Пополнить</button>
+    <div class="topup-info" id="cryptoInfo"></div>
+  </div>
+
+  <!-- Метод: Stars -->
+  <div class="topup-method" id="topup-stars">
+    <div class="topup-label">Количество Stars (10 – 10 000)</div>
+    <div class="topup-input-wrap">
+      <input type="number" class="topup-input" id="starsAmount" placeholder="0" min="10" max="10000" step="10" oninput="topupRecalc('stars')">
+    </div>
+    <div class="topup-quick">
+      <button class="topup-quick-btn" onclick="topupQuick('stars', 50)">+50</button>
+      <button class="topup-quick-btn" onclick="topupQuick('stars', 100)">+100</button>
+      <button class="topup-quick-btn" onclick="topupQuick('stars', 500)">+500</button>
+      <button class="topup-quick-btn" onclick="topupQuick('stars', 1000)">+1k</button>
+      <button class="topup-quick-btn" onclick="topupQuick('stars', 5000)">+5k</button>
+    </div>
+    <button class="topup-go" onclick="topupPay('stars')">Пополнить</button>
+    <div class="topup-info" id="starsInfo"></div>
+  </div>
+
+  <!-- Метод: Подарки -->
+  <div class="topup-method" id="topup-gifts">
+    <div class="topup-label">Выберите подарок</div>
+    <div class="topup-gifts-grid" id="giftsGrid"></div>
+    <div class="topup-info">🎁 Оплата подарком зачислится на баланс автоматически</div>
+  </div>
+</section>
     <section class="screen" id="screen-promo">
       <h3 class="section-title">🎟 Промокод</h3>
       <div class="promo-box">
