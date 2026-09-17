@@ -526,11 +526,10 @@
       <span class="topup-tab-icon">💳</span>
       <span class="topup-tab-name">TON</span>
     </button>
-    <button class="topup-tab" data-method="crypto" onclick="switchTopupTab('crypto')">
-      <span class="topup-tab-icon">🤖</span>
-      <span class="topup-tab-name">Крипто Бот</span>
-      <span class="topup-tab-hot">HOT</span>
-    </button>
+   <button class="topup-tab" data-method="sbp" onclick="switchTopupTab('sbp')">
+  <span class="topup-tab-icon">🇷🇺</span>
+  <span class="topup-tab-name">СБП</span>
+</button>
     <button class="topup-tab" data-method="stars" onclick="switchTopupTab('stars')">
       <span class="topup-tab-icon">⭐</span>
       <span class="topup-tab-name">Stars</span>
@@ -557,22 +556,22 @@
     <div class="topup-info" id="tonInfo"></div>
   </div>
 
-  <!-- Метод: Крипто Бот -->
-  <div class="topup-method" id="topup-crypto">
-    <div class="topup-label">Сумма в USDT (минимум 1)</div>
-    <div class="topup-input-wrap">
-      <input type="number" class="topup-input" id="cryptoAmount" placeholder="Введите сумму..." min="1" step="1" oninput="topupRecalc('crypto')">
-      <span class="topup-input-icon">💎</span>
-    </div>
-    <div class="topup-quick">
-      <button class="topup-quick-btn" onclick="topupQuick('crypto', 1)">+1</button>
-      <button class="topup-quick-btn" onclick="topupQuick('crypto', 5)">+5</button>
-      <button class="topup-quick-btn" onclick="topupQuick('crypto', 10)">+10</button>
-      <button class="topup-quick-btn" onclick="topupQuick('crypto', 50)">+50</button>
-    </div>
-    <button class="topup-go" onclick="topupPay('crypto')">Пополнить</button>
-    <div class="topup-info" id="cryptoInfo"></div>
+<!-- Метод: СБП -->
+<div class="topup-method" id="topup-sbp">
+  <div class="topup-label">Сумма в ₽ (минимум 100)</div>
+  <div class="topup-input-wrap">
+    <input type="number" class="topup-input" id="sbpAmount" placeholder="Введите сумму..." min="100" step="100" oninput="topupRecalc('sbp')">
+    <span class="topup-input-icon">₽</span>
   </div>
+  <div class="topup-quick">
+    <button class="topup-quick-btn" onclick="topupQuick('sbp', 100)">+100 ₽</button>
+    <button class="topup-quick-btn" onclick="topupQuick('sbp', 500)">+500 ₽</button>
+    <button class="topup-quick-btn" onclick="topupQuick('sbp', 1000)">+1 000 ₽</button>
+    <button class="topup-quick-btn" onclick="topupQuick('sbp', 5000)">+5 000 ₽</button>
+  </div>
+  <button class="topup-go" onclick="topupPay('sbp')">Пополнить</button>
+  <div class="topup-info" id="sbpInfo"></div>
+</div>
 
   <!-- Метод: Stars -->
   <div class="topup-method" id="topup-stars">
