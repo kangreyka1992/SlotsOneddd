@@ -3,7 +3,6 @@ import datetime
 import os
 import random
 import time as _time
-import aiosqlite, asyncio
 
 DB_PATH = os.getenv("DB_PATH", "casino.db")
 
@@ -872,16 +871,7 @@ async def claim_free_case(user_id: int, streak: int):
         )
         await db.commit()
 
-async def migrate():
-    async with aiosqlite.connect("casino.db") as db:
-        try:
-            await db.execute("ALTER TABLE profiles ADD COLUMN owned TEXT DEFAULT '[]'")
-            await db.commit()
-            print("✅ Колонка owned добавлена")
-        except Exception as e:
-            print(f"⚠️ {e}")
 
-asyncio.run(migrate())
 # ═══════════ ОБОРОТ КАЗИНО ═══════════
 
 async def log_house_flow(wagered: int, paid: int):
