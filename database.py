@@ -206,7 +206,7 @@ async def init_db():
                 last_won_at TIMESTAMP
             )
         """)
-        await db.execute("INSERT OR IGNORE INTO jackpot (id, amount) VALUES (1, 100000)")
+        await db.execute("INSERT OR IGNORE INTO jackpot (id, amount) VALUES (1, 10000000)")
 
         await db.execute("""
             CREATE TABLE IF NOT EXISTS hourly_bonus (
