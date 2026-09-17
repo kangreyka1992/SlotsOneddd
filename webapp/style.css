@@ -3418,3 +3418,138 @@ body.upgrade-running .bottom-nav {
 .tg-icon[data-rarity="epic"]      { --glow: #7c5cff; }
 .tg-icon[data-rarity="legendary"] { --glow: #ffc107; }
 .tg-icon[data-rarity="mythic"]    { --glow: #ff4757; }
+/* ═══════════ TELEGRAM-STYLE ICONS ═══════════ */
+
+.tg-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2b3a55 0%, #1a2333 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  font-size: 30px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.tg-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.tg-icon.gift {
+  background: linear-gradient(135deg, #ff9b26 0%, #e07a00 100%);
+  border-color: rgba(255, 200, 100, 0.3);
+  box-shadow:
+    0 4px 16px rgba(255, 155, 38, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.tg-icon.nft {
+  background: linear-gradient(135deg, #4a9eff 0%, #7c5cff 100%);
+  border-color: rgba(124, 92, 255, 0.4);
+  box-shadow:
+    0 4px 16px rgba(124, 92, 255, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.tg-icon.sm {
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+  border-radius: 10px;
+}
+
+.tg-icon.lg {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  font-size: 64px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.tg-icon.lg::before {
+  display: none;
+}
+
+.cr-item .tg-icon.sm {
+  width: 48px;
+  height: 48px;
+  font-size: 26px;
+}
+
+.ci-item .tg-icon.sm {
+  width: 40px;
+  height: 40px;
+  font-size: 22px;
+  border-radius: 8px;
+}
+
+.inventory-item .tg-icon.sm {
+  width: 48px;
+  height: 48px;
+  font-size: 26px;
+}
+
+.upg-inv-item .tg-icon.sm,
+.upg-target-item .tg-icon.sm {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  border-radius: 8px;
+  margin-bottom: 2px;
+}
+
+.upg-slot-emoji .tg-icon {
+  width: 64px;
+  height: 64px;
+  font-size: 34px;
+  border-radius: 16px;
+}
+
+.cr-reward-emoji .tg-icon {
+  width: 90px;
+  height: 90px;
+  font-size: 48px;
+  border-radius: 20px;
+}
+
+/* Свечение по редкости */
+.cr-item .tg-icon[data-rarity="legendary"] {
+  box-shadow:
+    0 0 20px rgba(255, 193, 7, 0.6),
+    0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.cr-item .tg-icon[data-rarity="mythic"] {
+  box-shadow:
+    0 0 24px rgba(255, 71, 87, 0.7),
+    0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: mythicPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes mythicPulse {
+  0%, 100% { box-shadow: 0 0 24px rgba(255, 71, 87, 0.7); }
+  50%      { box-shadow: 0 0 40px rgba(255, 71, 87, 1); }
+}
+
+.ci-item .tg-icon {
+  animation: iconPop 0.3s ease;
+}
+
+@keyframes iconPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
