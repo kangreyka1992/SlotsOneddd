@@ -143,17 +143,31 @@ function haptic(type = 'light') {
 }
 
 async function api(url, body = {}) {
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData, ...body }),
-    });
-    if (!res.ok) {
-        let msg = 'Ошибка';
-        try { msg = (await res.json()).detail; } catch (e) {}
-        throw new Error(msg);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData, ...body }),
+            signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+            let msg = 'Ошибка';
+            try { msg = (await res.json()).detail; } catch (e) {}
+            throw new Error(msg);
+        }
+        return res.json();
+    } catch (e) {
+        clearTimeout(timeoutId);
+        if (e.name === 'AbortError') {
+            throw new Error('Превышено время ожидания сервера');
+        }
+        throw e;
     }
-    return res.json();
 }
 
 async function gameApi(url, body = {}) {
@@ -388,12 +402,12 @@ async function loadLiveFeed() {
         const d = await api('/api/feed/live');
         const el = document.getElementById('liveFeed');
         if (!el) return;
-        
+
         if (!d.feed || !d.feed.length) {
             el.innerHTML = '<div class="feed-item" style="opacity:0.4;">Пока нет крупных выигрышей</div>';
             return;
         }
-        
+
         el.innerHTML = d.feed.map(item => {
             const name = item.username.startsWith('@') ? item.username : '@' + item.username;
             return `<div class="feed-item">
@@ -482,6 +496,7 @@ async function loadProfile() {
         const displayName = d.username ? '@' + d.username : 'Игрок';
         if (nameEl) nameEl.textContent = displayName;
         if (profileNameEl) profileNameEl.textContent = displayName;
+
         const avatarEl = document.getElementById('profileAvatar');
         if (avatarEl) {
             const av = d.profile?.avatar;
@@ -492,22 +507,20 @@ async function loadProfile() {
             };
             avatarEl.textContent = emojiMap[av] || (d.username || 'И')[0].toUpperCase();
 
-    // Применяем рамку
-    const frameColors = {
-        none: 'transparent', bronze: '#cd7f32', silver: '#c0c0c0',
-        gold: '#ffc107', diamond: '#00d4ff', mythic: '#ff4757',
-    };
-    const fr = d.profile?.frame || 'none';
-    avatarEl.style.border = fr === 'none' ? 'none' : `3px solid ${frameColors[fr] || 'transparent'}`;
-    avatarEl.style.boxShadow = fr === 'none' ? '' : `0 0 20px ${frameColors[fr]}`;
+            const frameColors = {
+                none: 'transparent', bronze: '#cd7f32', silver: '#c0c0c0',
+                gold: '#ffc107', diamond: '#00d4ff', mythic: '#ff4757',
+            };
+            const fr = d.profile?.frame || 'none';
+            avatarEl.style.border = fr === 'none' ? 'none' : `3px solid ${frameColors[fr] || 'transparent'}`;
+            avatarEl.style.boxShadow = fr === 'none' ? '' : `0 0 20px ${frameColors[fr]}`;
 
-    // Титул под аватаркой
-    const titleEl = document.getElementById('profileTitle');
-    if (titleEl) {
-        titleEl.textContent = d.profile?.title || '';
-        titleEl.style.display = d.profile?.title ? 'block' : 'none';
-    }
-}
+            const titleEl = document.getElementById('profileTitle');
+            if (titleEl) {
+                titleEl.textContent = d.profile?.title || '';
+                titleEl.style.display = d.profile?.title ? 'block' : 'none';
+            }
+        }
 
         const sg = document.getElementById('statGames');
         const sw = document.getElementById('statWagered');
@@ -2473,9 +2486,9 @@ async function withdrawGo(method) {
 
     } else if (method === 'sbp') {
         amount = Number(document.getElementById('wdSbpAmount').value) || 0;
-        const card = document.getElementById('wdSbpCard').value.trim();
-        const bank = document.getElementById('wdSbpBank').value.trim();
-        const full_name = document.getElementById('wdSbpName').value.trim();
+        const card = document.getElementById('wdSbpCard')?.value.trim() || '';
+        const bank = document.getElementById('wdSbpBank')?.value.trim() || '';
+        const full_name = document.getElementById('wdSbpName')?.value.trim() || '';
         if (!card || !full_name) {
             toast('Заполните карту и ФИО', 'error');
             return;
@@ -4256,6 +4269,14 @@ async function buyPremiumPass() {
 
 /* ═══ BOOTSTRAP ═══ */
 async function bootstrap() {
+    console.log('🚀 bootstrap start, initData length:', (initData || '').length);
+
+    // Всегда скрываем сплэш через 3 секунды, даже если что-то упало
+    const splashTimeout = setTimeout(() => {
+        console.log('⏰ Force-hide splash by timeout');
+        document.getElementById('splash')?.classList.add('hide');
+    }, 3000);
+
     if (!initData) {
         document.body.innerHTML = `
             <div style="color:#fff; padding:40px 20px; text-align:center; font-family:sans-serif; background:#0a0e14; min-height:100vh;">
@@ -4276,37 +4297,35 @@ async function bootstrap() {
     }
 
     try {
+        console.log('📡 loadProfile...');
         await loadProfile();
+        console.log('✅ loadProfile OK');
     } catch (e) {
-        console.error('loadProfile failed:', e);
+        console.error('❌ loadProfile failed:', e);
+        toast('Ошибка загрузки профиля: ' + e.message, 'error');
     }
 
-    setTimeout(() => {
-        document.getElementById('splash')?.classList.add('hide');
-    }, 800);
+    clearTimeout(splashTimeout);
+    document.getElementById('splash')?.classList.add('hide');
 
-    try {
-        renderGamesGrid();
-        renderHistory();
-        loadCases().then(() => renderHomeInventoryPreview());
-        loadFreeCaseStatus();
-        startHeroTimer();
-        initToolbarFilters();
-        loadLiveFeed();
-        setInterval(loadLiveFeed, 10000);
-        setInterval(renderHomeInventoryPreview, 30000);
+    // Остальные загрузки — каждая в своём try, чтобы одна ошибка не убила всё
+    try { renderGamesGrid(); } catch (e) { console.error('games grid:', e); }
+    try { renderHistory(); } catch (e) { console.error('history:', e); }
+    try { loadCases().then(() => renderHomeInventoryPreview()); } catch (e) { console.error('cases:', e); }
+    try { loadFreeCaseStatus(); } catch (e) { console.error('free case:', e); }
+    try { startHeroTimer(); } catch (e) { console.error('timer:', e); }
+    try { initToolbarFilters(); } catch (e) { console.error('toolbar:', e); }
+    try { loadLiveFeed(); } catch (e) { console.error('feed:', e); }
+    try { updateJackpot(); } catch (e) { console.error('jackpot:', e); }
+    try { loadHourlyStatus(); } catch (e) { console.error('hourly:', e); }
 
-        updateJackpot();
-        setInterval(updateJackpot, 5000);
+    setInterval(loadLiveFeed, 10000);
+    setInterval(renderHomeInventoryPreview, 30000);
+    setInterval(updateJackpot, 5000);
+    setInterval(loadHourlyStatus, 30000);
 
-        loadHourlyStatus();
-        setInterval(loadHourlyStatus, 30000);
-
-        api('/api/penalti/reset').catch(() => {});
-        api('/api/duel/cancel').catch(() => {});
-    } catch (e) {
-        console.error('bootstrap error:', e);
-    }
+    api('/api/penalti/reset').catch(() => {});
+    api('/api/duel/cancel').catch(() => {});
 }
 
 bootstrap();
@@ -4318,12 +4337,3 @@ document.addEventListener('keydown', (e) => {
         return false;
     }
 }, true);
-.profile-title {
-    font-size: 13px;
-    font-weight: 800;
-    color: #ffc107;
-    margin-top: -6px;
-    margin-bottom: 8px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
