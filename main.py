@@ -9,11 +9,9 @@ import datetime
 from contextlib import asynccontextmanager
 from urllib.parse import parse_qsl, quote
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import Response
 
 import aiohttp
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 
@@ -45,7 +43,7 @@ from database import (
     log_admin_action, get_admin_logs,
     log_visit, can_withdraw,
     has_deposited,
-    save_payment,
+    save_payment, payment_exists,
     add_user_item, get_user_items, get_user_item, sell_user_item,
     delete_user_item, get_user_items_stats,
     get_user_item_by_id, mark_items_sold,
@@ -54,7 +52,6 @@ from database import (
     log_house_flow, get_house_stats,
     get_winrate, set_winrate, clear_winrate, list_winrates,
     get_referrer,
-    # ═══ НОВЫЕ ФИЧИ ═══
     get_jackpot, add_to_jackpot, win_jackpot,
     get_hourly_info, claim_hourly,
     add_to_cashback, get_cashback_info, claim_cashback,
@@ -64,6 +61,7 @@ from database import (
     add_to_hall_of_fame, get_hall_of_fame,
     get_wheel_info, add_wheel_spin, consume_wheel_spin,
     get_user_level, add_user_xp,
+    initialize_tournament_if_needed,
 )
 
 WITHDRAW_RATE = 125
@@ -71,7 +69,6 @@ MIN_WITHDRAW = 15
 BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
 
-# ═══════════ КУРСЫ ВЫВОДА ═══════════
 WITHDRAW_RATES = {
     'stars': {'rate': 125,  'min': 15,  'unit': '⭐'},
     'sbp':   {'rate': 1000, 'min': 500, 'unit': '₽'},
@@ -142,20 +139,21 @@ def admin_only(init_data: str) -> dict:
 async def _notify_admin_withdraw(wid: int, method: str, amount: float,
                                  unit: str, need: int, uid: int,
                                  extra: str = ""):
-    """Отправляет админу уведомление о новой заявке на вывод."""
-    try:
-        text = (
-            f"💸 <b>Новая заявка №{wid}</b>\n"
-            f"Метод: <b>{method}</b>\n"
-            f"Сумма: <b>{amount} {unit}</b>\n"
-            f"Монет: <b>{need}</b> 🪙\n"
-            f"Юзер: <code>{uid}</code>"
-        )
-        if extra:
-            text += f"\n{extra}"
-        await bot.send_message(ADMIN_IDS[0], text, parse_mode="HTML")
-    except Exception as e:
-        print(f"notify admin error: {e}")
+    """Отправляет всем админам уведомление о новой заявке на вывод."""
+    text = (
+        f"💸 <b>Новая заявка №{wid}</b>\n"
+        f"Метод: <b>{method}</b>\n"
+        f"Сумма: <b>{amount} {unit}</b>\n"
+        f"Монет: <b>{need}</b> 🪙\n"
+        f"Юзер: <code>{uid}</code>"
+    )
+    if extra:
+        text += f"\n{extra}"
+    for admin_id in ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, text, parse_mode="HTML")
+        except Exception as e:
+            print(f"notify admin {admin_id} error: {e}")
 
 
 def _calc_withdraw_need(method: str, amount: float) -> int:
@@ -175,24 +173,12 @@ def _validate_withdraw_amount(method: str, amount: float) -> None:
 
 async def _process_game_rewards(uid: int, bet: int, win: int, game: str,
                                 username: str = None):
-    """
-    Начисляет:
-    - кэшбэк-накопление (если игрок в минусе)
-    - % рефереру от ставки
-    - вклад в джекпот
-    - вклад в турнир
-    - hall of fame для крупных выигрышей
-    - прогресс колеса
-    - XP пользователя
-    """
-    # Кэшбэк
     if win < bet:
         try:
             await add_to_cashback(uid, bet - win)
         except Exception as e:
             print(f"cashback error: {e}")
 
-    # Реферальный %
     try:
         referrer = await get_referrer(uid)
         if referrer:
@@ -200,13 +186,11 @@ async def _process_game_rewards(uid: int, bet: int, win: int, game: str,
     except Exception as e:
         print(f"referral error: {e}")
 
-    # Джекпот
     try:
         await add_to_jackpot(max(1, int(bet * 0.01)))
     except Exception as e:
         print(f"jackpot error: {e}")
 
-    # Турнир
     try:
         tour = await get_active_tournament()
         if tour and tour["game"] == game and win > 0:
@@ -214,20 +198,17 @@ async def _process_game_rewards(uid: int, bet: int, win: int, game: str,
     except Exception as e:
         print(f"tournament error: {e}")
 
-    # Hall of Fame
     try:
         if win >= 100_000:
             await add_to_hall_of_fame(uid, username or f"user_{uid}", game, win)
     except Exception as e:
         print(f"hall error: {e}")
 
-    # XP
     try:
         await add_user_xp(uid, max(1, bet // 1000))
     except Exception as e:
         print(f"xp error: {e}")
 
-    # Колесо: 5% шанс получить спин
     try:
         if random.random() < 0.05:
             await add_wheel_spin(uid, 1)
@@ -235,36 +216,39 @@ async def _process_game_rewards(uid: int, bet: int, win: int, game: str,
         print(f"wheel error: {e}")
 
 
+async def periodic_cleanup():
+    """Фоновый таск — чистит зависшие игры и очередь дуэлей."""
+    while True:
+        await asyncio.sleep(60)
+        try:
+            cleanup_penalti()
+        except Exception as e:
+            print(f"cleanup_penalti error: {e}")
+        try:
+            cleanup_duel()
+        except Exception as e:
+            print(f"cleanup_duel error: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(start_bot())
+    cleanup_task = asyncio.create_task(periodic_cleanup())
     print("🚀 Бот и веб-сервер запущены", flush=True)
 
-    # Инициализация турнира
     try:
-        import aiosqlite
-        from database import DB_PATH
-        async with aiosqlite.connect(DB_PATH) as db:
-            async with db.execute(
-                "SELECT COUNT(*) FROM tournaments WHERE status = 'active'"
-            ) as cur:
-                cnt = (await cur.fetchone())[0]
-            if cnt == 0:
-                await db.execute(
-                    "INSERT INTO tournaments (game, prize_pool, starts_at, ends_at) "
-                    "VALUES ('crash', 1000000, CURRENT_TIMESTAMP, "
-                    "datetime('now', '+7 days'))"
-                )
-                await db.commit()
-                print("🏆 Турнир создан", flush=True)
+        await initialize_tournament_if_needed()
     except Exception as e:
-        print(f"tournament init error: {e}")
+        print(f"⚠️ tournament init skipped: {e}", flush=True)
 
     yield
     task.cancel()
+    cleanup_task.cancel()
 
 
 app = FastAPI(lifespan=lifespan)
+
+
 class NoCacheStaticFiles(StaticFiles):
     async def get_response(self, path, scope):
         response = await super().get_response(path, scope)
@@ -272,6 +256,7 @@ class NoCacheStaticFiles(StaticFiles):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         return response
+
 
 app.mount("/webapp", NoCacheStaticFiles(directory="webapp", html=True), name="webapp")
 
@@ -286,7 +271,7 @@ async def health():
     return {"status": "ok"}
 
 
-# ═══════════ CRYPTO DIRECT (Polygon) ═══════════
+# ═══════════ CRYPTO DIRECT ═══════════
 
 @app.post("/api/crypto/create")
 async def api_crypto_create(request: Request):
@@ -480,12 +465,7 @@ async def api_feed_live(request: Request):
     feed = await get_live_feed(15)
     return {
         "feed": [
-            {
-                "username": f[0] or "Игрок",
-                "game": f[1],
-                "win": f[2],
-                "time": f[3],
-            }
+            {"username": f[0] or "Игрок", "game": f[1], "win": f[2], "time": f[3]}
             for f in feed
         ]
     }
@@ -706,7 +686,8 @@ async def api_slots2_spin(request: Request):
     elif not final_win_bool and base_win_bool:
         total_win = 0
         line_wins = []
-    # total_win = await _apply_payout(uid, total_win)
+    # ФИКС: раскомментировано — подкрутка выплат
+    total_win = await _apply_payout(uid, total_win)
 
     if total_win > 0:
         await add_balance(uid, total_win)
@@ -764,8 +745,11 @@ async def api_mines_start(request: Request):
     bet = int(data.get("bet", 0))
     mines_count = int(data.get("mines", 5))
 
-    if uid in mines_games:
-        raise HTTPException(400, "already_playing")
+    # ФИКС: если игра уже идёт — возвращаем ставку
+    existing = mines_games.pop(uid, None)
+    if existing:
+        await add_balance(uid, existing["bet"])
+
     if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
     if mines_count not in MINES_MULT:
@@ -830,7 +814,8 @@ async def api_mines_open(request: Request):
     if hit_mine:
         game["opened"].add(idx)
         bet = game["bet"]
-        del mines_games[uid]
+        mines_copy = list(game["mines"])
+        mines_games.pop(uid, None)
         await log_game(uid, bet, 0)
         await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=0)
@@ -842,7 +827,7 @@ async def api_mines_open(request: Request):
             "hit_mine": True,
             "idx": idx,
             "bet": bet,
-            "mines": list(game["mines"]),
+            "mines": mines_copy,
             "balance": await get_balance(uid),
         }
 
@@ -863,7 +848,7 @@ async def api_mines_open(request: Request):
         await update_quest_progress(uid, "wagered", bet)
         await update_quest_progress(uid, "game_mines", 1)
         await update_quest_progress(uid, "wins", 1)
-        del mines_games[uid]
+        mines_games.pop(uid, None)
         await unlock_achievement(uid, "first_bet")
         await unlock_achievement(uid, "first_win")
         return {
@@ -892,8 +877,11 @@ async def api_mines_cashout(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
-    game = mines_games.get(uid)
+    # ФИКС: pop вместо get — защита от race condition
+    game = mines_games.pop(uid, None)
     if not game or not game["opened"]:
+        if game:
+            mines_games[uid] = game  # возврат, если ничего не открыто
         raise HTTPException(400, "nothing_to_cashout")
 
     step_mult = MINES_MULT[game["mines_count"]]
@@ -911,7 +899,6 @@ async def api_mines_cashout(request: Request):
     if prize >= 1000:
         username = user.get("username") or "Игрок"
         await log_live_win(uid, username, "Mines", prize)
-    del mines_games[uid]
     await unlock_achievement(uid, "first_bet")
     return {"prize": prize, "bet": bet, "balance": await get_balance(uid)}
 
@@ -947,8 +934,11 @@ async def api_crash_start(request: Request):
     bet = int(data.get("bet", 0))
     auto_cashout = float(data.get("auto_cashout", 0))
 
-    if uid in crash_games:
-        raise HTTPException(400, "already_playing")
+    # ФИКС: возврат ставки если игра уже есть
+    existing = crash_games.pop(uid, None)
+    if existing and not existing.get("cashed"):
+        await add_balance(uid, existing["bet"])
+
     if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
 
@@ -1003,30 +993,32 @@ async def api_crash_status(request: Request):
     if game["auto_cashout"] and mult >= game["auto_cashout"] and not game["cashed"]:
         game["cashed"] = True
         prize = int(game["bet"] * game["auto_cashout"])
+        bet = game["bet"]
         await add_balance(uid, prize)
-        await log_game(uid, game["bet"], prize)
-        await add_battle_pass_xp(uid, game["bet"] // 10)
-        await log_house_flow(wagered=game["bet"], paid=prize)
-        await _process_game_rewards(uid, game["bet"], prize, "crash", user.get("username"))
+        await log_game(uid, bet, prize)
+        await add_battle_pass_xp(uid, bet // 10)
+        await log_house_flow(wagered=bet, paid=prize)
+        await _process_game_rewards(uid, bet, prize, "crash", user.get("username"))
         if prize >= 1000:
             username = user.get("username") or "Игрок"
             await log_live_win(uid, username, "Crash", prize)
         await unlock_achievement(uid, "first_bet")
-        if prize > game["bet"]:
+        if prize > bet:
             await unlock_achievement(uid, "first_win")
-        del crash_games[uid]
+        crash_games.pop(uid, None)
         return {
             "crashed": False,
             "cashed": True,
             "mult": game["auto_cashout"],
             "prize": prize,
-            "bet": game["bet"],
+            "bet": bet,
             "balance": await get_balance(uid),
         }
 
     if mult >= game["crash_at"]:
         bet = game["bet"]
-        del crash_games[uid]
+        crash_at_val = game["crash_at"]
+        crash_games.pop(uid, None)
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
         await _process_game_rewards(uid, bet, 0, "crash", user.get("username"))
@@ -1035,7 +1027,7 @@ async def api_crash_status(request: Request):
         await update_quest_progress(uid, "game_crash", 1)
         return {
             "crashed": True,
-            "mult": game["crash_at"],
+            "mult": crash_at_val,
             "bet": bet,
             "balance": await get_balance(uid),
         }
@@ -1064,7 +1056,7 @@ async def api_crash_cashout(request: Request):
 
     if mult >= game["crash_at"]:
         bet = game["bet"]
-        del crash_games[uid]
+        crash_games.pop(uid, None)
         await log_game(uid, bet, 0)
         await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=0)
@@ -1073,7 +1065,7 @@ async def api_crash_cashout(request: Request):
     prize = int(game["bet"] * mult)
     prize = await _apply_payout(uid, prize)
     bet = game["bet"]
-    del crash_games[uid]
+    crash_games.pop(uid, None)
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
     await add_battle_pass_xp(uid, bet // 10)
@@ -1169,8 +1161,11 @@ async def api_rr_start(request: Request):
     uid = user["id"]
     bet = int(data.get("bet", 0))
 
-    if uid in rr_games:
-        raise HTTPException(400, "already_playing")
+    # ФИКС: возврат старой ставки
+    existing = rr_games.pop(uid, None)
+    if existing:
+        await add_balance(uid, existing["bet"])
+
     if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
 
@@ -1197,7 +1192,7 @@ async def api_rr_spin(request: Request):
 
     if random.random() < (bullets / 7):
         bet = game["bet"]
-        del rr_games[uid]
+        rr_games.pop(uid, None)
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
         return {"shot": True, "bet": bet, "balance": await get_balance(uid)}
@@ -1208,7 +1203,7 @@ async def api_rr_spin(request: Request):
     if step >= 6:
         prize = int(game["bet"] * RR_MULTS[5])
         bet = game["bet"]
-        del rr_games[uid]
+        rr_games.pop(uid, None)
         await add_balance(uid, prize)
         await log_game(uid, bet, prize)
         await log_house_flow(wagered=bet, paid=prize)
@@ -1237,7 +1232,7 @@ async def api_rr_cashout(request: Request):
     mult = RR_MULTS[game["step"] - 1]
     prize = int(game["bet"] * mult)
     bet = game["bet"]
-    del rr_games[uid]
+    rr_games.pop(uid, None)
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
     await log_house_flow(wagered=bet, paid=prize)
@@ -1396,11 +1391,10 @@ async def api_penalti_start(request: Request):
 
     cleanup_penalti()
 
-    existing = penalti_games.get(uid)
+    existing = penalti_games.pop(uid, None)
     if existing:
         if existing.get("step", 0) == 0:
             await add_balance(uid, existing["bet"])
-        del penalti_games[uid]
 
     if bet <= 0 or bet > 10000000000:
         raise HTTPException(400, "invalid_bet")
@@ -1456,7 +1450,7 @@ async def api_penalti_kick(request: Request):
 
     if is_save:
         bet = game["bet"]
-        del penalti_games[uid]
+        penalti_games.pop(uid, None)
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
         return {
@@ -1479,7 +1473,7 @@ async def api_penalti_kick(request: Request):
 
     if step >= 5:
         bet = game["bet"]
-        del penalti_games[uid]
+        penalti_games.pop(uid, None)
         await add_balance(uid, prize)
         await update_quest_progress(uid, "bets_count", 1)
         await update_quest_progress(uid, "wagered", bet)
@@ -1532,7 +1526,7 @@ async def api_penalti_cashout(request: Request):
     mult = PENALTI_MULTS[game["step"] - 1]
     prize = int(game["bet"] * mult)
     bet = game["bet"]
-    del penalti_games[uid]
+    penalti_games.pop(uid, None)
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
     await add_battle_pass_xp(uid, bet // 10)
@@ -1620,6 +1614,8 @@ duel_active: dict[str, dict] = {}
 DUEL_QUEUE_TIMEOUT = 120
 DUEL_ACTIVE_TIMEOUT = 300
 
+_duel_lock = asyncio.Lock()
+
 
 def cleanup_duel():
     now = time.time()
@@ -1642,80 +1638,81 @@ async def api_duel_join(request: Request):
     uid = user["id"]
     bet = int(data.get("bet", 0))
 
-    cleanup_duel()
+    async with _duel_lock:
+        cleanup_duel()
 
-    if bet <= 0 or bet > 10000000000:
-        raise HTTPException(400, "invalid_bet")
+        if bet <= 0 or bet > 10000000000:
+            raise HTTPException(400, "invalid_bet")
 
-    for i in range(len(duel_queue) - 1, -1, -1):
-        if duel_queue[i]["uid"] == uid:
-            duel_queue.pop(i)
+        for i in range(len(duel_queue) - 1, -1, -1):
+            if duel_queue[i]["uid"] == uid:
+                duel_queue.pop(i)
 
-    for did, g in list(duel_active.items()):
-        if uid in (g["p1"], g["p2"]):
-            if uid in g.get("claimed", set()):
-                del duel_active[did]
-            else:
-                raise HTTPException(400, "already_in_duel")
+        for did, g in list(duel_active.items()):
+            if uid in (g["p1"], g["p2"]):
+                if uid in g.get("claimed", set()):
+                    del duel_active[did]
+                else:
+                    raise HTTPException(400, "already_in_duel")
 
-    balance = await get_balance(uid)
-    if balance < bet:
-        raise HTTPException(400, "not_enough_coins")
+        balance = await get_balance(uid)
+        if balance < bet:
+            raise HTTPException(400, "not_enough_coins")
 
-    opponent = None
-    for i, q in enumerate(duel_queue):
-        if q["bet"] == bet and q["uid"] != uid:
-            opponent = duel_queue.pop(i)
-            break
+        opponent = None
+        for i, q in enumerate(duel_queue):
+            if q["bet"] == bet and q["uid"] != uid:
+                opponent = duel_queue.pop(i)
+                break
 
-    if not opponent:
-        duel_queue.append({"uid": uid, "bet": bet, "joined": time.time()})
-        return {"status": "waiting", "queue_size": len(duel_queue)}
+        if not opponent:
+            duel_queue.append({"uid": uid, "bet": bet, "joined": time.time()})
+            return {"status": "waiting", "queue_size": len(duel_queue)}
 
-    await add_balance(uid, -bet)
-    await add_balance(opponent["uid"], -bet)
+        await add_balance(uid, -bet)
+        await add_balance(opponent["uid"], -bet)
 
-    winner = random.choice([uid, opponent["uid"]])
-    prize = int(bet * 2 * 0.98)
+        winner = random.choice([uid, opponent["uid"]])
+        prize = int(bet * 2 * 0.98)
 
-    duel_id = f"duel_{int(time.time())}_{random.randint(1000,9999)}"
-    duel_active[duel_id] = {
-        "p1": uid, "p2": opponent["uid"], "bet": bet,
-        "winner": winner, "prize": prize,
-        "created": time.time(), "claimed": set(),
-    }
+        duel_id = f"duel_{int(time.time())}_{random.randint(1000,9999)}"
+        duel_active[duel_id] = {
+            "p1": uid, "p2": opponent["uid"], "bet": bet,
+            "winner": winner, "prize": prize,
+            "created": time.time(), "claimed": set(),
+        }
 
-    await add_balance(winner, prize)
-    await log_game(uid, bet, prize if winner == uid else 0)
-    await log_game(opponent["uid"], bet, prize if winner == opponent["uid"] else 0)
-    await log_house_flow(wagered=bet * 2, paid=prize)
-    await _process_game_rewards(uid, bet, prize if winner == uid else 0, "duel", user.get("username"))
-    await _process_game_rewards(opponent["uid"], bet, prize if winner == opponent["uid"] else 0, "duel")
-    await unlock_achievement(uid, "first_bet")
-    await unlock_achievement(opponent["uid"], "first_bet")
-    if winner == uid:
-        await unlock_achievement(uid, "first_win")
-    else:
-        await unlock_achievement(opponent["uid"], "first_win")
+        await add_balance(winner, prize)
+        await log_game(uid, bet, prize if winner == uid else 0)
+        await log_game(opponent["uid"], bet, prize if winner == opponent["uid"] else 0)
+        await log_house_flow(wagered=bet * 2, paid=prize)
+        await _process_game_rewards(uid, bet, prize if winner == uid else 0, "duel", user.get("username"))
+        await _process_game_rewards(opponent["uid"], bet, prize if winner == opponent["uid"] else 0, "duel")
+        await unlock_achievement(uid, "first_bet")
+        await unlock_achievement(opponent["uid"], "first_bet")
+        if winner == uid:
+            await unlock_achievement(uid, "first_win")
+        else:
+            await unlock_achievement(opponent["uid"], "first_win")
 
-    for player_uid, is_winner in [(uid, winner == uid), (opponent["uid"], winner == opponent["uid"])]:
-        try:
-            if is_winner:
-                await bot.send_message(player_uid,
-                    f"🏆 <b>Победа в дуэли!</b>\n\nСтавка: <b>{bet}</b> 🪙\nВыигрыш: <b>+{prize}</b> 🪙",
-                    parse_mode="HTML")
-            else:
-                await bot.send_message(player_uid,
-                    f"😢 <b>Поражение в дуэли</b>\n\nСтавка: <b>{bet}</b> 🪙 сгорела",
-                    parse_mode="HTML")
-        except Exception:
-            pass
+        for player_uid, is_winner in [(uid, winner == uid), (opponent["uid"], winner == opponent["uid"])]:
+            try:
+                if is_winner:
+                    await bot.send_message(player_uid,
+                        f"🏆 <b>Победа в дуэли!</b>\n\nСтавка: <b>{bet}</b> 🪙\nВыигрыш: <b>+{prize}</b> 🪙",
+                        parse_mode="HTML")
+                else:
+                    await bot.send_message(player_uid,
+                        f"😢 <b>Поражение в дуэли</b>\n\nСтавка: <b>{bet}</b> 🪙 сгорела",
+                        parse_mode="HTML")
+            except Exception:
+                pass
 
-    return {
-        "status": "matched", "duel_id": duel_id, "winner": winner,
-        "you_win": winner == uid, "prize": prize,
-        "opponent_id": opponent["uid"], "balance": await get_balance(uid),
-    }
+        return {
+            "status": "matched", "duel_id": duel_id, "winner": winner,
+            "you_win": winner == uid, "prize": prize,
+            "opponent_id": opponent["uid"], "balance": await get_balance(uid),
+        }
 
 
 @app.post("/api/duel/status")
@@ -1780,256 +1777,7 @@ RARITY_TABLE = [
     ("mythic",    "🟥", "Мифический",    15, 35.00),
 ]
 
-CASE_ITEMS = {
-    "starter": {
-        "common":    [("cherry","🍒","Вишня"),("lemon","🍋","Лимон"),("orange","🍊","Апельсин"),("grape","🍇","Виноград"),("coin","🪙","Монетка")],
-        "uncommon":  [("gem","💎","Самоцвет"),("star","⭐","Звезда"),("clover","🍀","Клевер"),("bell","🔔","Колокольчик"),("horseshoe","🧲","Подкова")],
-        "rare":      [("seven","7️⃣","Семёрка"),("money","🤑","Денежный"),("crown","👑","Корона"),("trophy","🏆","Кубок"),("ring","💍","Кольцо")],
-        "epic":      [("rocket","🚀","Ракета"),("diamond","💠","Алмаз"),("skull","💀","Череп"),("alien","👽","Пришелец"),("robot","🤖","Робот")],
-        "legendary": [("dragon","🐉","Дракон"),("phoenix","🦅","Феникс"),("unicorn","🦄","Единорог"),("galaxy","🌌","Галактика"),("fire","🔥","Пламя")],
-        "mythic":    [("blackhole","🕳️","Чёрная дыра"),("cosmos","🌠","Космос"),("infinite","♾️","Бесконечность"),("god","⚡","Молния Бога"),("void","🔮","Пустота")],
-    },
-    "bronze": {
-        "common":    [("nut","🥜","Орех"),("bolt","🔩","Болт"),("gear","⚙️","Шестерёнка"),("stone","🪨","Камень"),("brick","🧱","Кирпич")],
-        "uncommon":  [("medal","🎖️","Медаль"),("shield","🛡️","Щит"),("hammer","🔨","Молот"),("anchor","⚓","Якорь"),("chain","⛓️","Цепь")],
-        "rare":      [("dagger","🗡️","Кинжал"),("bow","🏹","Лук"),("axe","🪓","Топор"),("key","🗝️","Ключ"),("lock","🔒","Замок")],
-        "epic":      [("sword","⚔️","Меч"),("helmet","⛑️","Шлем"),("spike","📌","Шип"),("bomb","💣","Бомба"),("wheel","☸️","Колесо")],
-        "legendary": [("castle","🏰","Замок"),("lion","🦁","Лев"),("eagle","🦅","Орёл"),("throne","🪑","Трон"),("crown_b","👑","Бронзовая корона")],
-        "mythic":    [("titan","🗿","Титан"),("colossus","🏛️","Колосс"),("iron_god","🤖","Железный бог"),("core","⚛️","Ядро"),("trident","🔱","Трезубец")],
-    },
-    "silver": {
-        "common":    [("moon","🌙","Луна"),("cloud","☁️","Облако"),("drop","💧","Капля"),("snow","❄️","Снежинка"),("wind","💨","Ветер")],
-        "uncommon":  [("mirror","🪞","Зеркало"),("bell_s","🔔","Колокол"),("scale","⚖️","Весы"),("plume","🪶","Перо"),("crescent","🌜","Полумесяц")],
-        "rare":      [("pearl","🦪","Жемчуг"),("silver_ring","💍","Серебряное кольцо"),("moon_stone","🌕","Лунный камень"),("ice","🧊","Лёд"),("shard","🔷","Осколок")],
-        "epic":      [("swan","🦢","Лебедь"),("wolf","🐺","Волк"),("crystal","🔮","Кристалл"),("comet","☄️","Комета"),("star_s","🌟","Звезда")],
-        "legendary": [("aurora","🌌","Аврора"),("frost","🌨️","Мороз"),("pegasus","🦄","Пегас"),("polar","🐻‍❄️","Белый медведь"),("blizzard","🌪️","Буран")],
-        "mythic":    [("moonlight","🌛","Лунный свет"),("eternity","♾️","Вечность"),("silver_god","🗿","Серебряный бог"),("ice_throne","🏔️","Ледяной трон"),("permafrost","🥶","Вечная мерзлота")],
-    },
-    "gold": {
-        "common":    [("sun","☀️","Солнце"),("coin_g","🪙","Золотая монета"),("wheat","🌾","Пшеница"),("honey","🍯","Мёд"),("bar","🧈","Слиток")],
-        "uncommon":  [("key_g","🗝️","Золотой ключ"),("chalice","🏆","Кубок"),("ring_g","💍","Кольцо"),("bell_g","🔔","Бубенчик"),("hourglass","⏳","Песочные часы")],
-        "rare":      [("crown_g","👑","Корона"),("scepter","🔱","Скипетр"),("coin_pile","💰","Мешок монет"),("diamond_g","💎","Алмаз"),("bar_gold","🥇","Слиток золота")],
-        "epic":      [("lion_g","🦁","Золотой лев"),("eagle_g","🦅","Золотой орёл"),("phoenix_g","🔥","Пламя феникса"),("throne_g","🪑","Золотой трон"),("statue","🗽","Статуя")],
-        "legendary": [("midas","👑","Мидас"),("sol","🌟","Солнце-бог"),("golden_dragon","🐉","Золотой дракон"),("golden_apple","🍎","Золотое яблоко"),("treasure","🏴‍☠️","Сокровище")],
-        "mythic":    [("gold_god","🌞","Бог Солнца"),("olympus_g","🏔️","Золотой Олимп"),("infinity_g","♾️","Бесконечное золото"),("cosmos_g","🌌","Золотая галактика"),("eternal","⚡","Вечная сила")],
-    },
-    "lucky": {
-        "common":    [("clover_l","🍀","Клевер"),("acorn","🌰","Жёлудь"),("mushroom","🍄","Гриб"),("leaf","🍃","Лист"),("fern","🌿","Папоротник")],
-        "uncommon":  [("cat","🐱","Кот"),("rabbit","🐰","Кролик"),("bird","🐦","Птица"),("bee","🐝","Пчела"),("butterfly","🦋","Бабочка")],
-        "rare":      [("rainbow","🌈","Радуга"),("shooting_star","🌠","Падающая звезда"),("dice","🎲","Кубик"),("horseshoe_l","🧲","Подкова"),("four_leaf","🍀","Четырёхлистник")],
-        "epic":      [("leprechaun","🍀","Лепрекон"),("pot_of_gold","💰","Горшок золота"),("lucky_coin","🪙","Счастливая монета"),("wish","🌠","Желание"),("fireworks","🎆","Фейерверк")],
-        "legendary": [("phoenix_l","🦅","Птица удачи"),("golden_fish","🐠","Золотая рыбка"),("jackpot","🎰","Джекпот"),("lucky_cat","🐈","Манэки-нэко"),("charm","🧿","Амулет")],
-        "mythic":    [("ladybug","🐞","Леди-Баг"),("fortune","🎡","Колесо фортуны"),("godsend","⚡","Дар богов"),("miracle","✨","Чудо"),("infinity_l","♾️","Вечная удача")],
-    },
-    "diamond_small": {
-        "common":    [("glass","🪟","Стекло"),("shard_c","🔹","Осколок"),("crystal_small","🔸","Кристаллик"),("pebble","⚪","Камешек"),("sand","🏖️","Песчинка")],
-        "uncommon":  [("shard_b","🔷","Синий осколок"),("shard_r","🔶","Красный осколок"),("quartz","💠","Кварц"),("prism","🌈","Призма"),("sparkle","✨","Искра")],
-        "rare":      [("emerald_s","💚","Изумруд"),("ruby_s","❤️","Рубин"),("sapphire_s","💙","Сапфир"),("topaz_s","🧡","Топаз"),("amethyst_s","💜","Аметист")],
-        "epic":      [("diamond_e","💎","Алмаз"),("brilliant","💠","Бриллиант"),("ring_d","💍","Кольцо с алмазом"),("tiara","👑","Тиара"),("scepter_d","🔱","Скипетр")],
-        "legendary": [("kohinoor","💎","Кохинур"),("cullinan","💠","Куллинан"),("regent","💍","Регент"),("hope","🔷","Алмаз Надежды"),("orlov","💠","Орлов")],
-        "mythic":    [("diamond_god","💎","Алмазный бог"),("eternal_d","♾️","Вечный алмаз"),("universe_d","🌌","Алмазная вселенная"),("creation","✨","Творение"),("absolute","⚡","Абсолют")],
-    },
-    "emerald": {
-        "common":    [("grass","🌱","Росток"),("leaf_e","🍃","Лист"),("moss","🌿","Мох"),("bamboo","🎋","Бамбук"),("vine","🌿","Лоза")],
-        "uncommon":  [("tree","🌳","Дерево"),("pine","🌲","Сосна"),("palm","🌴","Пальма"),("flower","🌸","Цветок"),("lotus","🪷","Лотос")],
-        "rare":      [("cactus","🌵","Кактус"),("shamrock","☘️","Трилистник"),("ivy","🌿","Плющ"),("herb","🌾","Трава"),("fern_e","🌿","Папоротник")],
-        "epic":      [("emerald_g","💚","Изумруд"),("tree_of_life","🌳","Древо жизни"),("forest","🌲","Лес"),("jungle","🌴","Джунгли"),("garden","🌺","Сад")],
-        "legendary": [("world_tree","🌳","Мировое древо"),("dryad","🧝","Дриада"),("gaia","🌍","Гея"),("serpent_g","🐍","Зелёный змей"),("titan_g","🗿","Зелёный титан")],
-        "mythic":    [("gaia_god","🌍","Богиня Гея"),("yggdrasil_e","🌳","Иггдрасиль"),("nature_core","🌿","Ядро природы"),("evergreen","♾️","Вечнозелёный"),("life_seed","✨","Семя жизни")],
-    },
-    "sapphire": {
-        "common":    [("droplet","💧","Капля"),("wave","🌊","Волна"),("bubble","🫧","Пузырь"),("shell","🐚","Ракушка"),("sand_s","🏖️","Песок")],
-        "uncommon":  [("fish","🐟","Рыба"),("crab","🦀","Краб"),("octopus","🐙","Осьминог"),("shrimp","🦐","Креветка"),("squid","🦑","Кальмар")],
-        "rare":      [("dolphin","🐬","Дельфин"),("whale","🐋","Кит"),("shark","🦈","Акула"),("turtle","🐢","Черепаха"),("seal","🦭","Тюлень")],
-        "epic":      [("sapphire_g","💙","Сапфир"),("mermaid","🧜","Русалка"),("trident","🔱","Трезубец"),("coral","🪸","Коралл"),("pearl_s","🦪","Жемчуг")],
-        "legendary": [("poseidon","🔱","Посейдон"),("kraken_s","🦑","Кракен"),("leviathan","🐋","Левиафан"),("atlantis","🏛️","Атлантида"),("ocean_god","🌊","Бог океана")],
-        "mythic":    [("deep_god","🌊","Владыка глубин"),("abyss_s","🕳️","Бездна"),("eternal_ocean","♾️","Вечный океан"),("primordial","🌌","Первозданный"),("tide","⚡","Прилив силы")],
-    },
-    "ruby": {
-        "common":    [("candle","🕯️","Свеча"),("ember","🔥","Уголёк"),("spark_r","✨","Искра"),("flint","🔥","Кремень"),("coal","⚫","Уголь")],
-        "uncommon":  [("torch","🔥","Факел"),("match","🔥","Спичка"),("lantern","🏮","Фонарь"),("fireball","🔴","Огненный шар"),("flame_small","🔥","Пламя")],
-        "rare":      [("ruby_g","❤️","Рубин"),("lava","🌋","Лава"),("phoenix_r","🔥","Феникс"),("salamander","🦎","Саламандра"),("dragon_egg_r","🥚","Огненное яйцо")],
-        "epic":      [("dragon_r","🐉","Красный дракон"),("volcano","🌋","Вулкан"),("meteor","☄️","Метеор"),("fire_god","🔥","Бог огня"),("sun_flare","☀️","Солнечная вспышка")],
-        "legendary": [("ifrit","🔥","Ифрит"),("hellfire","🔥","Адское пламя"),("inferno","🌋","Инферно"),("phoenix_god","🦅","Феникс-бог"),("prometheus","🔥","Прометей")],
-        "mythic":    [("fire_primordial","🔥","Первородный огонь"),("supernova_r","💥","Сверхновая"),("sun_god","🌞","Бог Солнца"),("eternal_flame","♾️","Вечное пламя"),("big_bang","💥","Большой взрыв")],
-    },
-    "amethyst": {
-        "common":    [("star_small","⭐","Звёздочка"),("moon_dot","🌙","Луна"),("cloud_p","☁️","Облачко"),("dust","✨","Пыль"),("mist","🌫️","Туман")],
-        "uncommon":  [("crystal_p","🔮","Кристалл"),("orb","🔮","Сфера"),("pendulum","🔮","Маятник"),("rune_small","ᚱ","Руна"),("talisman","🧿","Талисман")],
-        "rare":      [("amethyst_g","💜","Аметист"),("wizard_hat","🧙","Шляпа мага"),("spellbook","📖","Книга заклинаний"),("wand","🪄","Волшебная палочка"),("potion","🧪","Зелье")],
-        "epic":      [("wizard","🧙","Волшебник"),("crystal_ball","🔮","Магический шар"),("portal","🌀","Портал"),("dragon_p","🐲","Дракон-маг"),("phylactery","💀","Филактерия")],
-        "legendary": [("archmage","🧙","Архимаг"),("lich","💀","Лич"),("sorcerer","🧙","Чародей"),("spell_god","✨","Бог магии"),("arcane","🔮","Тайное знание")],
-        "mythic":    [("arcane_god","🔮","Бог магии"),("reality","🌀","Ткань реальности"),("time_lord","⏳","Владыка времени"),("cosmic_mage","🌌","Космический маг"),("omniscient","👁️","Всевидящий")],
-    },
-    "topaz": {
-        "common":    [("bee_t","🐝","Пчела"),("flower_t","🌻","Подсолнух"),("sun_t","☀️","Солнышко"),("honey_drop","🍯","Капля мёда"),("seed","🌰","Семя")],
-        "uncommon":  [("lemon_t","🍋","Лимон"),("peach","🍑","Персик"),("apricot","🍑","Абрикос"),("mango","🥭","Манго"),("marmalade","🍯","Мармелад")],
-        "rare":      [("topaz_g","🧡","Топаз"),("amber","🟠","Янтарь"),("tiger_eye","🟫","Тигровый глаз"),("citrine","🟡","Цитрин"),("sunstone","☀️","Солнечный камень")],
-        "epic":      [("tiger","🐯","Тигр"),("cheetah","🐆","Гепард"),("sun_lion","🦁","Солнечный лев"),("fire_bird","🦅","Огненная птица"),("amber_dragon","🐲","Янтарный дракон")],
-        "legendary": [("sphinx","🐱","Сфинкс"),("sun_chariot","🛞","Колесница Солнца"),("ra_horus","🦅","Ра-Хор"),("solar_god","🌞","Солнечный бог"),("topaz_god","🧡","Топазовый бог")],
-        "mythic":    [("solar_primordial","🌞","Первородное Солнце"),("sun_eternal","☀️","Вечное Солнце"),("day_creator","🌅","Творец дня"),("light_core","✨","Ядро света"),("sun_abs","⚡","Абсолют Солнца")],
-    },
-    "opal": {
-        "common":    [("shell_o","🐚","Ракушка"),("pearl_drop","🤍","Капля жемчуга"),("cloud_o","☁️","Облако"),("mist_o","🌫️","Туман"),("foam","🫧","Пена")],
-        "uncommon":  [("moon_pearl","🌙","Лунный жемчуг"),("crystal_o","🔮","Кристалл"),("prism_o","🔷","Призма"),("rainbow_drop","💧","Радужная капля"),("aurora_drop","🌈","Капля авроры")],
-        "rare":      [("opal_g","🤍","Опал"),("fire_opal","🔥","Огненный опал"),("black_opal","🖤","Чёрный опал"),("white_opal","🤍","Белый опал"),("boulder_opal","🪨","Опал-булыжник")],
-        "epic":      [("mermaid_o","🧜‍♀️","Русалка"),("siren","🧜","Сирена"),("phoenix_o","🔥","Огненный феникс"),("chameleon","🦎","Хамелеон"),("peacock","🦚","Павлин")],
-        "legendary": [("world_opal","🌍","Мировой опал"),("unicorn_o","🦄","Единорог"),("aurora_god","🌈","Бог Авроры"),("celestial","✨","Небесный"),("opaline","🤍","Опалиновый")],
-        "mythic":    [("cosmic_opal","🌌","Космический опал"),("primordial_opal","🌠","Первородный опал"),("rainbow_god","🌈","Бог Радуги"),("infinite_opal","♾️","Бесконечный опал"),("creation_opal","✨","Опал творения")],
-    },
-    "onyx": {
-        "common":    [("shadow","🌑","Тень"),("night","🌙","Ночь"),("dark_stone","🪨","Тёмный камень"),("obsidian_chip","⚫","Осколок"),("ash","🌫️","Пепел")],
-        "uncommon":  [("raven","🐦‍⬛","Ворон"),("bat","🦇","Летучая мышь"),("black_cat","🐈‍⬛","Чёрный кот"),("spider","🕷️","Паук"),("snake_dark","🐍","Тёмный змей")],
-        "rare":      [("onyx_g","🖤","Оникс"),("black_pearl","🖤","Чёрный жемчуг"),("shadow_gem","🌑","Камень тени"),("obsidian","⚫","Обсидиан"),("void_crystal","🔮","Кристалл пустоты")],
-        "epic":      [("shadow_wolf","🐺","Теневой волк"),("phantom","👻","Фантом"),("wraith","💀","Призрак"),("void_dragon","🐲","Дракон пустоты"),("dark_knight","⚔️","Тёмный рыцарь")],
-        "legendary": [("death_god","💀","Бог смерти"),("hades","💀","Аид"),("anubis","🐺","Анубис"),("hel","👻","Хель"),("void_god","🕳️","Бог пустоты")],
-        "mythic":    [("primordial_dark","🌑","Первородная тьма"),("void_eternal","🕳️","Вечная пустота"),("chaos_god","🌪️","Бог хаоса"),("nonexistence","⚫","Небытие"),("darkness_abs","⚡","Абсолют тьмы")],
-    },
-    "pearl": {
-        "common":    [("drop_p","💧","Капля"),("foam_p","🫧","Пена"),("shell_small","🐚","Ракушка"),("pebble_p","⚪","Камешек"),("sand_p","🏖️","Песок")],
-        "uncommon":  [("seahorse","🐴","Морской конёк"),("starfish","⭐","Морская звезда"),("jellyfish","🪼","Медуза"),("fish_p","🐠","Рыбка"),("coral_p","🪸","Коралл")],
-        "rare":      [("pearl_g","🦪","Жемчужина"),("turtle_p","🐢","Черепаха"),("dolphin_p","🐬","Дельфин"),("seal_p","🦭","Тюлень"),("octopus_p","🐙","Осьминог")],
-        "epic":      [("mermaid_pearl","🧜","Жемчужная русалка"),("coral_castle","🏰","Коралловый замок"),("sea_god","🌊","Морской бог"),("dragon_p2","🐉","Дракон морей"),("leviathan_p","🐋","Левиафан")],
-        "legendary": [("pearl_god","🦪","Бог жемчуга"),("atlantis_pearl","🏛️","Жемчужина Атлантиды"),("nereid","🧜","Нереида"),("siren_p","🧜","Сирена"),("ocean_queen","👑","Королева океана")],
-        "mythic":    [("pearl_primordial","🦪","Первородный жемчуг"),("sea_abs","🌊","Абсолют моря"),("moon_ocean","🌙","Лунный океан"),("creation_pearl","✨","Жемчужина творения"),("eternity_pearl","♾️","Вечный жемчуг")],
-    },
-    "dragon_egg": {
-        "common":    [("shell_egg","🥚","Скорлупа"),("leaf_d","🍃","Лист"),("twig","🌿","Веточка"),("stone_egg","🪨","Каменное яйцо"),("nest","🪹","Гнездо")],
-        "uncommon":  [("lizard","🦎","Ящерица"),("gecko","🦎","Геккон"),("iguana","🦎","Игуана"),("hatchling","🐣","Птенец"),("egg_small","🥚","Маленькое яйцо")],
-        "rare":      [("dragon_egg_r","🥚","Яйцо дракона"),("wyvern_egg","🥚","Яйцо виверны"),("hydra_egg","🥚","Яйцо гидры"),("fire_egg","🔥","Огненное яйцо"),("ice_egg","❄️","Ледяное яйцо")],
-        "epic":      [("baby_dragon","🐲","Дракончик"),("hatchling_d","🐉","Драконыш"),("phoenix_egg","🥚","Яйцо феникса"),("hydra","🐍","Гидра"),("wyvern","🐲","Виверна")],
-        "legendary": [("dragon_lord","🐉","Владыка драконов"),("elder_dragon","🐲","Древний дракон"),("phoenix_lord","🦅","Владыка фениксов"),("titan_dragon","🐉","Титан-дракон"),("dragon_queen","👑","Королева драконов")],
-        "mythic":    [("dragon_god","🐉","Бог драконов"),("primordial_dragon","🐲","Первородный дракон"),("cosmic_dragon","🌌","Космический дракон"),("dragon_abs","⚡","Абсолют драконов"),("world_serpent","🐍","Мировой змей")],
-    },
-    "phoenix_fire": {
-        "common":    [("ember_p","🔥","Уголёк"),("ash_p","🌫️","Пепел"),("feather_s","🪶","Пёрышко"),("spark_p","✨","Искра"),("coal_p","⚫","Уголь")],
-        "uncommon":  [("flame_small","🔥","Пламя"),("torch_p","🔥","Факел"),("fireball_p","🔴","Огненный шар"),("match_p","🔥","Спичка"),("candle_p","🕯️","Свеча")],
-        "rare":      [("phoenix_feather","🪶","Перо феникса"),("fire_wings","🔥","Огненные крылья"),("fire_egg_p","🥚","Огненное яйцо"),("flame_dance","🔥","Танец пламени"),("fire_bird_small","🦅","Огненная птица")],
-        "epic":      [("phoenix","🦅","Феникс"),("fire_god_p","🔥","Бог огня"),("dragon_p3","🐉","Огненный дракон"),("salamander_p","🦎","Саламандра"),("inferno_p","🌋","Инферно")],
-        "legendary": [("phoenix_lord","🦅","Владыка фениксов"),("eternal_flame_p","🔥","Вечное пламя"),("fire_queen","👑","Королева огня"),("phoenix_king","🦅","Король фениксов"),("solar_phoenix","☀️","Солнечный феникс")],
-        "mythic":    [("phoenix_god","🦅","Бог фениксов"),("primordial_flame","🔥","Первородное пламя"),("cosmic_fire","🌌","Космический огонь"),("phoenix_abs","⚡","Абсолют фениксов"),("star_forge","⭐","Звёздная кузница")],
-    },
-    "ice_crystal": {
-        "common":    [("snowflake_s","❄️","Снежинка"),("frost_drop","💧","Капля мороза"),("ice_chip","🧊","Льдинка"),("snow","🌨️","Снег"),("wind_ice","💨","Морозный ветер")],
-        "uncommon":  [("icicle","🧊","Сосулька"),("ice_shard","❄️","Ледяной осколок"),("frost_flower","🌸","Морозный цветок"),("ice_cube","🧊","Кубик льда"),("snowball","❄️","Снежок")],
-        "rare":      [("ice_crystal_g","❄️","Ледяной кристалл"),("frost_ring","💍","Морозное кольцо"),("snowflake_l","❄️","Большая снежинка"),("ice_blade","🗡️","Ледяной клинок"),("frost_armor","🛡️","Морозная броня")],
-        "epic":      [("ice_dragon","🐲","Ледяной дракон"),("frost_golem","🗿","Морозный голем"),("yeti","🦍","Йети"),("ice_queen","👸","Снежная королева"),("winter_god","❄️","Бог зимы")],
-        "legendary": [("frost_god","❄️","Бог мороза"),("ice_phoenix","🦅","Ледяной феникс"),("winter_lord","👑","Владыка зимы"),("eternal_frost","❄️","Вечный мороз"),("polar_king","🐻‍❄️","Король льдов")],
-        "mythic":    [("primordial_ice","❄️","Первородный лёд"),("absolute_zero","🥶","Абсолютный ноль"),("frost_abs","⚡","Абсолют мороза"),("cosmic_ice","🌌","Космический лёд"),("eternal_winter","♾️","Вечная зима")],
-    },
-    "storm": {
-        "common":    [("cloud_s","☁️","Туча"),("rain_drop","💧","Капля дождя"),("wind_s","💨","Ветер"),("dust_s","🌫️","Пыль"),("mist_s","🌫️","Туман")],
-        "uncommon":  [("rain","🌧️","Дождь"),("lightning_small","⚡","Молния"),("thunder_small","🔊","Гром"),("breeze","🌬️","Бриз"),("cloudy","☁️","Облачно")],
-        "rare":      [("storm_g","⛈️","Гроза"),("lightning","⚡","Молния"),("thunder","🌩️","Гром"),("rainbow_s","🌈","Радуга"),("tornado_small","🌪️","Смерч")],
-        "epic":      [("thunder_god","⚡","Бог грома"),("storm_dragon","🐉","Штормовой дракон"),("lightning_bird","🦅","Молниевая птица"),("tempest","🌪️","Буря"),("hurricane","🌀","Ураган")],
-        "legendary": [("zeus_s","⚡","Зевс"),("thor_s","🔨","Тор"),("storm_lord","👑","Владыка бурь"),("weather_god","🌩️","Бог погоды"),("thunder_king","⚡","Король грома")],
-        "mythic":    [("storm_abs","⚡","Абсолют шторма"),("primordial_storm","🌪️","Первородная буря"),("cosmic_storm","🌌","Космический шторм"),("lightning_god","⚡","Бог молний"),("eternal_storm","♾️","Вечный шторм")],
-    },
-    "volcano": {
-        "common":    [("ash_v","🌫️","Пепел"),("stone_v","🪨","Камень"),("ember_v","🔥","Уголёк"),("dust_v","🌫️","Пыль"),("smoke","💨","Дым")],
-        "uncommon":  [("lava_drop","🔥","Капля лавы"),("flame_v","🔥","Пламя"),("magma_chip","🌋","Осколок магмы"),("cinder","🔥","Жар"),("rock_v","🪨","Вулканическая порода")],
-        "rare":      [("lava","🌋","Лава"),("volcano_g","🌋","Вулкан"),("magma","🔥","Магма"),("lava_river","🔥","Лавовая река"),("obsidian_v","⚫","Обсидиан")],
-        "epic":      [("lava_golem","🗿","Лавовый голем"),("fire_elemental","🔥","Огненный элементаль"),("magma_dragon","🐉","Магмовый дракон"),("phoenix_v","🦅","Феникс вулкана"),("volcano_god_s","🌋","Дух вулкана")],
-        "legendary": [("volcano_god","🌋","Бог вулканов"),("lava_lord","👑","Владыка лавы"),("magma_titan","🗿","Магмовый титан"),("fire_mountain","🏔️","Огненная гора"),("inferno_v","🔥","Инферно")],
-        "mythic":    [("primordial_lava","🌋","Первородная лава"),("volcano_abs","⚡","Абсолют вулкана"),("cosmic_volcano","🌌","Космический вулкан"),("earth_core","🌍","Ядро Земли"),("eternal_fire","♾️","Вечный огонь")],
-    },
-    "abyss": {
-        "common":    [("deep_stone","🪨","Тёмный камень"),("void_dust","🌫️","Пыль пустоты"),("shadow_chip","🌑","Осколок тени"),("dark_drop","💧","Тёмная капля"),("whisper","👻","Шёпот")],
-        "uncommon":  [("abyss_fish","🐟","Глубинная рыба"),("anglerfish","🐠","Удильщик"),("deep_crab","🦀","Глубинный краб"),("void_jelly","🪼","Пустотная медуза"),("dark_squid","🦑","Тёмный кальмар")],
-        "rare":      [("abyss_g","🕳️","Бездна"),("void_crystal_a","🔮","Кристалл пустоты"),("dark_pearl","🖤","Тёмный жемчуг"),("shadow_gem_a","🌑","Камень тени"),("void_ring","💍","Кольцо пустоты")],
-        "epic":      [("abyss_dragon","🐉","Дракон бездны"),("void_kraken","🦑","Кракен пустоты"),("shadow_leviathan","🐋","Теневой левиафан"),("abyss_lord","👑","Владыка бездны"),("void_god_small","🕳️","Бог пустоты")],
-        "legendary": [("abyss_god","🕳️","Бог бездны"),("void_titan","🗿","Титан пустоты"),("dark_poseidon","🔱","Тёмный Посейдон"),("shadow_kraken","🦑","Теневой кракен"),("abyss_queen","👑","Королева бездны")],
-        "mythic":    [("primordial_void","🕳️","Первородная пустота"),("abyss_abs","⚡","Абсолют бездны"),("cosmic_abyss","🌌","Космическая бездна"),("nothing","⚫","Ничто"),("eternal_abyss","♾️","Вечная бездна")],
-    },
-    "galaxy": {
-        "common":    [("star_g","⭐","Звезда"),("dust_g","✨","Космическая пыль"),("comet_small","☄️","Комета"),("asteroid","🪨","Астероид"),("meteorite","☄️","Метеорит")],
-        "uncommon":  [("moon_g","🌙","Луна"),("planet_small","🪐","Планета"),("spaceship","🚀","Корабль"),("satellite","🛰️","Спутник"),("telescope","🔭","Телескоп")],
-        "rare":      [("galaxy_g","🌌","Галактика"),("nebula_small","🌠","Туманность"),("black_hole_small","🕳️","Чёрная дыра"),("supernova_small","💥","Сверхновая"),("pulsar","📡","Пульсар")],
-        "epic":      [("alien_g","👽","Пришелец"),("ufo","🛸","НЛО"),("cosmic_whale","🐋","Космический кит"),("star_dragon","🐉","Звёздный дракон"),("galaxy_lord","👑","Владыка галактик")],
-        "legendary": [("galaxy_god","🌌","Бог галактик"),("cosmic_titan","🗿","Космический титан"),("nebula_queen","👑","Королева туманностей"),("star_king","⭐","Король звёзд"),("universal_lord","🌌","Владыка вселенной")],
-        "mythic":    [("universe_god","🌌","Бог вселенной"),("big_bang_g","💥","Большой взрыв"),("cosmic_abs","⚡","Космический абсолют"),("multiverse","🌀","Мультивселенная"),("infinity_g","♾️","Бесконечность")],
-    },
-    "nebula": {
-        "common":    [("gas_cloud","☁️","Облако газа"),("cosmic_dust","✨","Космическая пыль"),("star_dust","⭐","Звёздная пыль"),("mist_n","🌫️","Туман"),("glow","✨","Свечение")],
-        "uncommon":  [("small_nebula","🌠","Малая туманность"),("gas_giant","🪐","Газовый гигант"),("comet_n","☄️","Комета"),("pulsar_n","📡","Пульсар"),("quasar_small","✨","Квазар")],
-        "rare":      [("nebula_g","🌠","Туманность"),("galaxy_small","🌌","Галактика"),("star_nursery","✨","Звёздные ясли"),("cosmic_flower","🌸","Космический цветок"),("aurora_n","🌈","Аврора")],
-        "epic":      [("nebula_dragon","🐉","Дракон туманности"),("star_phoenix","🦅","Феникс звёзд"),("cosmic_angel","👼","Космический ангел"),("nebula_lord","👑","Владыка туманностей"),("star_weaver","🕸️","Ткач звёзд")],
-        "legendary": [("nebula_god","🌠","Бог туманностей"),("cosmic_queen","👑","Космическая королева"),("star_forge","⭐","Кузница звёзд"),("nebula_titan","🗿","Титан туманности"),("aurora_god","🌈","Бог Авроры")],
-        "mythic":    [("nebula_abs","⚡","Абсолют туманностей"),("cosmic_creation","✨","Космическое творение"),("stellar_god","⭐","Бог звёзд"),("universe_forge","🌌","Кузница вселенной"),("eternal_nebula","♾️","Вечная туманность")],
-    },
-    "supernova": {
-        "common":    [("spark_sn","✨","Искра"),("dust_sn","🌫️","Пыль"),("ember_sn","🔥","Уголёк"),("gas_sn","☁️","Газ"),("fragment","🪨","Фрагмент")],
-        "uncommon":  [("flare","🔥","Вспышка"),("blast","💥","Взрыв"),("shockwave","🌊","Ударная волна"),("radiation","☢️","Радиация"),("plasma","⚡","Плазма")],
-        "rare":      [("supernova_g","💥","Сверхновая"),("neutron_star","⭐","Нейтронная звезда"),("white_dwarf","⚪","Белый карлик"),("red_giant","🔴","Красный гигант"),("star_core","🌟","Ядро звезды")],
-        "epic":      [("star_explosion","💥","Взрыв звезды"),("hypernova","💥","Гиперновая"),("quasar","✨","Квазар"),("cosmic_fire","🔥","Космический огонь"),("star_destroyer","💀","Разрушитель звёзд")],
-        "legendary": [("supernova_god","💥","Бог сверхновых"),("star_abs","⭐","Абсолют звезды"),("cosmic_destroyer","💀","Космический разрушитель"),("creation_flame","🔥","Пламя творения"),("big_bang_sn","💥","Большой взрыв")],
-        "mythic":    [("supernova_abs","⚡","Абсолют сверхновой"),("universe_creator","🌌","Творец вселенной"),("star_god","⭐","Бог звёзд"),("cosmic_abs_sn","💥","Космический абсолют"),("eternal_blast","♾️","Вечный взрыв")],
-    },
-    "black_hole": {
-        "common":    [("void_dust_bh","🌫️","Пыль пустоты"),("dark_matter","⚫","Тёмная материя"),("gravity_chip","🌑","Осколок гравитации"),("shadow_drop","💧","Тёмная капля"),("void_gas","☁️","Газ пустоты")],
-        "uncommon":  [("event_horizon_small","⭕","Горизонт"),("accretion_disk","🌀","Аккреционный диск"),("singularity_small","🕳️","Сингулярность"),("dark_star","⭐","Тёмная звезда"),("void_comet","☄️","Комета пустоты")],
-        "rare":      [("black_hole_g","🕳️","Чёрная дыра"),("event_horizon","⭕","Горизонт событий"),("singularity","🕳️","Сингулярность"),("dark_quasar","✨","Тёмный квазар"),("void_star","⭐","Звезда пустоты")],
-        "epic":      [("void_dragon_bh","🐉","Дракон пустоты"),("cosmic_devourer","🕳️","Пожиратель миров"),("dark_titan","🗿","Тёмный титан"),("void_angel","👼","Ангел пустоты"),("black_lord","👑","Владыка тьмы")],
-        "legendary": [("black_hole_god","🕳️","Бог чёрных дыр"),("void_abs_small","⚡","Абсолют пустоты"),("cosmic_devourer_l","🌌","Пожиратель галактик"),("dark_creator","✨","Тёмный создатель"),("void_king","👑","Король пустоты")],
-        "mythic":    [("black_hole_abs","⚡","Абсолют чёрной дыры"),("primordial_void_bh","🕳️","Первородная пустота"),("end_of_universe","🌌","Конец вселенной"),("absolute_nothing","⚫","Абсолютное ничто"),("eternal_void","♾️","Вечная пустота")],
-    },
-    "quantum": {
-        "common":    [("atom_small","⚛️","Атом"),("particle","⚪","Частица"),("photon","💡","Фотон"),("electron","🔵","Электрон"),("proton","🔴","Протон")],
-        "uncommon":  [("atom","⚛️","Атом"),("molecule","🔬","Молекула"),("dna_small","🧬","ДНК"),("cell","🦠","Клетка"),("crystal_q","🔮","Кристалл")],
-        "rare":      [("quantum_g","🔬","Квант"),("entangled","🔗","Запутанность"),("superposition","⚡","Суперпозиция"),("qubit","💠","Кубит"),("quantum_ring","💍","Квантовое кольцо")],
-        "epic":      [("quantum_computer","💻","Квантовый компьютер"),("teleport","🌀","Телепорт"),("quantum_dragon","🐉","Квантовый дракон"),("quantum_angel","👼","Квантовый ангел"),("quantum_god_s","⚛️","Квантовый бог")],
-        "legendary": [("quantum_god","⚛️","Бог квантов"),("quantum_abs_small","⚡","Квантовый абсолют"),("reality_bender","🌀","Исказитель реальности"),("quantum_phoenix","🦅","Квантовый феникс"),("quantum_lord","👑","Владыка квантов")],
-        "mythic":    [("quantum_abs","⚡","Абсолют кванта"),("reality_weaver","🕸️","Ткач реальности"),("universe_sim","💻","Симуляция вселенной"),("quantum_god_abs","⚛️","Абсолютный квантовый бог"),("infinite_q","♾️","Бесконечный квант")],
-    },
-    "infinity": {
-        "common":    [("number_1","1️⃣","Единица"),("number_2","2️⃣","Двойка"),("number_3","3️⃣","Тройка"),("number_4","4️⃣","Четвёрка"),("number_5","5️⃣","Пятёрка")],
-        "uncommon":  [("number_7","7️⃣","Семёрка"),("number_9","9️⃣","Девятка"),("hundred","💯","Сотня"),("thousand","🔢","Тысяча"),("million","💰","Миллион")],
-        "rare":      [("infinity_g","♾️","Бесконечность"),("loop","🔁","Петля"),("mobius","♾️","Лента Мёбиуса"),("spiral","🌀","Спираль"),("cycle","🔄","Цикл")],
-        "epic":      [("infinity_dragon","🐉","Дракон бесконечности"),("ouroboros","🐍","Уроборос"),("eternal_phoenix","🦅","Вечный феникс"),("infinite_angel","👼","Ангел бесконечности"),("time_lord_i","⏳","Владыка времени")],
-        "legendary": [("infinity_god","♾️","Бог бесконечности"),("eternity_lord","👑","Владыка вечности"),("time_weaver","🕸️","Ткач времени"),("infinity_titan","🗿","Титан бесконечности"),("eternal_dragon","🐉","Вечный дракон")],
-        "mythic":    [("infinity_abs","⚡","Абсолют бесконечности"),("ouroboros_god","🐍","Бог Уроборос"),("eternity_abs","⏳","Абсолют вечности"),("time_abs","🕰️","Абсолют времени"),("cosmic_infinity","🌌","Космическая бесконечность")],
-    },
-    "chronos": {
-        "common":    [("second","⏱️","Секунда"),("minute","⏲️","Минута"),("hour","🕐","Час"),("day","📅","День"),("week","📆","Неделя")],
-        "uncommon":  [("month","🗓️","Месяц"),("year","📅","Год"),("decade","📆","Десятилетие"),("century","📜","Век"),("millennium","📜","Тысячелетие")],
-        "rare":      [("hourglass","⏳","Песочные часы"),("clock","🕰️","Часы"),("chronos_g","⏳","Хронос"),("time_ring","💍","Кольцо времени"),("time_crystal","🔮","Кристалл времени")],
-        "epic":      [("time_dragon","🐉","Дракон времени"),("chrono_phoenix","🦅","Хроно-феникс"),("time_keeper","⏳","Хранитель времени"),("chrono_angel","👼","Ангел времени"),("time_lord_small","⏰","Владыка времени")],
-        "legendary": [("chronos_god","⏳","Бог Хронос"),("time_abs_small","⚡","Абсолют времени"),("eternal_clock","🕰️","Вечные часы"),("chrono_titan","🗿","Титан времени"),("time_queen","👑","Королева времени")],
-        "mythic":    [("time_abs","⚡","Абсолют времени"),("chronos_abs","⏳","Абсолют Хроноса"),("cosmic_time","🌌","Космическое время"),("eternity_clock","♾️","Часы вечности"),("primordial_time","🕰️","Первородное время")],
-    },
-    "poseidon": {
-        "common":    [("wave_p","🌊","Волна"),("shell_p","🐚","Ракушка"),("sand_p2","🏖️","Песок"),("foam_p2","🫧","Пена"),("drop_p2","💧","Капля")],
-        "uncommon":  [("fish_p2","🐟","Рыба"),("crab_p","🦀","Краб"),("octopus_p2","🐙","Осьминог"),("seahorse_p","🐴","Морской конёк"),("jellyfish_p","🪼","Медуза")],
-        "rare":      [("dolphin_p2","🐬","Дельфин"),("whale_p","🐋","Кит"),("shark_p","🦈","Акула"),("turtle_p2","🐢","Черепаха"),("coral_p2","🪸","Коралл")],
-        "epic":      [("trident_p","🔱","Трезубец"),("poseidon_small","🔱","Посейдон"),("sea_dragon","🐉","Морской дракон"),("mermaid_p","🧜","Русалка"),("kraken_p","🦑","Кракен")],
-        "legendary": [("poseidon_god","🔱","Бог Посейдон"),("sea_titan","🗿","Морской титан"),("ocean_lord","👑","Владыка океана"),("kraken_lord","🦑","Владыка кракенов"),("sea_phoenix","🦅","Морской феникс")],
-        "mythic":    [("poseidon_abs","⚡","Абсолют Посейдона"),("ocean_abs","🌊","Абсолют океана"),("primordial_sea","🌊","Первородное море"),("atlantis_lord","🏛️","Владыка Атлантиды"),("eternal_sea","♾️","Вечное море")],
-    },
-    "zeus": {
-        "common":    [("spark_z","✨","Искра"),("lightning_small_z","⚡","Молния"),("cloud_z","☁️","Облако"),("thunder_small_z","🔊","Гром"),("wind_z","💨","Ветер")],
-        "uncommon":  [("bolt","⚡","Молния"),("storm_cloud","⛈️","Грозовая туча"),("lightning_ring","💍","Кольцо молний"),("thunder_stone","🪨","Гром-камень"),("sky_drop","💧","Небесная капля")],
-        "rare":      [("zeus_g","⚡","Зевс"),("thunderbolt","⚡","Перун"),("lightning_god_small","⚡","Бог молний"),("sky_crown","👑","Небесная корона"),("storm_ring","💍","Штормовое кольцо")],
-        "epic":      [("thunder_dragon","🐉","Громовой дракон"),("zeus_eagle","🦅","Орёл Зевса"),("storm_phoenix","🦅","Штормовой феникс"),("lightning_titan","🗿","Титан молний"),("sky_lord","👑","Владыка неба")],
-        "legendary": [("zeus_god","⚡","Бог Зевс"),("olympus_lord","🏔️","Владыка Олимпа"),("lightning_king","⚡","Король молний"),("thunder_titan","🗿","Титан грома"),("sky_abs_small","☁️","Абсолют неба")],
-        "mythic":    [("zeus_abs","⚡","Абсолют Зевса"),("olympus_abs","🏔️","Абсолют Олимпа"),("sky_abs","☁️","Абсолют неба"),("thunder_abs","🔊","Абсолют грома"),("eternal_storm_z","♾️","Вечная гроза")],
-    },
-    "olympus": {
-        "common":    [("laurel","🌿","Лавр"),("amphora","🏺","Амфора"),("column_small","🏛️","Колонна"),("olive","🫒","Олива"),("shield_small","🛡️","Щит")],
-        "uncommon":  [("temple","🏛️","Храм"),("column","🏛️","Колонны"),("chariot","🛞","Колесница"),("helmet","⛑️","Шлем"),("spear","🗡️","Копьё")],
-        "rare":      [("olympus_g","🏔️","Олимп"),("golden_laurel","🏆","Золотой лавр"),("olympus_ring","💍","Кольцо Олимпа"),("ambrosia","🍯","Амброзия"),("nectar","🍷","Нектар")],
-        "epic":      [("hera","👑","Гера"),("athena","🦉","Афина"),("apollo","☀️","Аполлон"),("artemis","🌙","Артемида"),("ares","⚔️","Арес")],
-        "legendary": [("zeus_o","⚡","Зевс"),("poseidon_o","🔱","Посейдон"),("hades_o","💀","Аид"),("hera_o","👑","Гера"),("athena_o","🦉","Афина")],
-        "mythic":    [("olympus_god","🏔️","Бог Олимпа"),("olympus_abs","⚡","Абсолют Олимпа"),("primordial_gods","🌌","Первородные боги"),("titan_abs","🗿","Абсолют титанов"),("eternal_olympus","♾️","Вечный Олимп")],
-    },
-    "titan": {
-        "common":    [("stone_t","🪨","Камень"),("rock_t","🪨","Глыба"),("boulder","🪨","Валун"),("cliff","🏔️","Утёс"),("mountain_small","⛰️","Гора")],
-        "uncommon":  [("mountain","🏔️","Гора"),("volcano_t","🌋","Вулкан"),("peak","⛰️","Пик"),("glacier","🧊","Ледник"),("canyon","🏜️","Каньон")],
-        "rare":      [("titan_g","🗿","Титан"),("colossus_t","🗿","Колосс"),("giant_stone","🪨","Гигантский камень"),("mountain_king","👑","Горный король"),("stone_ring","💍","Каменное кольцо")],
-        "epic":      [("titan_statue","🗿","Статуя титана"),("stone_golem","🗿","Каменный голем"),("earth_dragon","🐉","Земляной дракон"),("mountain_titan","⛰️","Горный титан"),("titan_lord_small","👑","Владыка титанов")],
-        "legendary": [("titan_lord","👑","Владыка титанов"),("cronus","⏳","Кронос"),("atlas","🌍","Атлас"),("prometheus_t","🔥","Прометей"),("gaia_t","🌍","Гея")],
-        "mythic":    [("titan_abs","⚡","Абсолют титанов"),("cronus_abs","⏳","Абсолют Кроноса"),("earth_abs","🌍","Абсолют Земли"),("primordial_titan","🗿","Первородный титан"),("eternal_titan","♾️","Вечный титан")],
-    },
-}
+# CASE_ITEMS — оставь свой существующий словарь без изменений
 
 
 def _get_case_items(case_id: str):
@@ -2058,9 +1806,23 @@ def _roll_case(case_id: str):
     return item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult
 
 
+async def _roll_case_with_winrate(uid: int, case_id: str):
+    """ФИКС: единая функция с подкруткой для одиночного и мульти-спина"""
+    item_id, rarity_id, rar_emoji, rar_name, emoji, name, value_mult = _roll_case(case_id)
+    winrate, _ = await get_winrate(uid)
+    if winrate > 50 and rarity_id in ("common", "uncommon"):
+        if random.random() * 100 < (winrate - 50):
+            item_id, rarity_id, rar_emoji, rar_name, emoji, name, value_mult = _roll_case(case_id)
+    elif winrate < 50 and rarity_id in ("legendary", "mythic"):
+        if random.random() * 100 < (50 - winrate):
+            item_id, rarity_id, rar_emoji, rar_name, emoji, name, value_mult = _roll_case(case_id)
+    return item_id, rarity_id, rar_emoji, rar_name, emoji, name, value_mult
+
+
 def _build_track(case_id: str, price_coins: int, win_item: dict):
     TRACK_LEN = 60
-    WIN_POS = 55
+    # ФИКС: рандомная позиция вместо 55
+    WIN_POS = random.randint(50, 58)
     items_pool = _get_case_items(case_id)
     track = []
     for i in range(TRACK_LEN):
@@ -2084,39 +1846,7 @@ def _build_track(case_id: str, price_coins: int, win_item: dict):
     return track, WIN_POS
 
 
-CASES = [
-    ("starter",       "Стартовый",        "📦",  10, "Первый шаг в мир кейсов"),
-    ("bronze",        "Бронзовый",        "🥉",  20, "Для начинающих игроков"),
-    ("silver",        "Серебряный",       "🥈",  30, "Немного серьёзнее"),
-    ("gold",          "Золотой",          "🥇",  50, "Классика жанра"),
-    ("lucky",         "Счастливый",       "🍀",  75, "Клевер на удачу"),
-    ("diamond_small", "Малый Алмаз",      "💎", 100, "Блеск и шик"),
-    ("emerald",       "Изумрудный",       "💚", 150, "Зелёная волна"),
-    ("sapphire",      "Сапфировый",       "💙", 200, "Синяя бездна"),
-    ("ruby",          "Рубиновый",        "❤️", 250, "Огненный рубин"),
-    ("amethyst",      "Аметистовый",      "💜", 300, "Фиолетовый туман"),
-    ("topaz",         "Топазовый",        "🧡", 350, "Тёплый топаз"),
-    ("opal",          "Опаловый",         "🤍", 400, "Лунный камень"),
-    ("onyx",          "Ониксовый",        "🖤", 450, "Чёрный оникс"),
-    ("pearl",         "Жемчужный",        "🦪", 500, "Глубины океана"),
-    ("dragon_egg",    "Яйцо Дракона",     "🥚", 750, "Что внутри?"),
-    ("phoenix_fire",  "Пламя Феникса",    "🔥", 900, "Возрождение"),
-    ("ice_crystal",   "Ледяной Кристалл", "❄️",1000, "Вечный холод"),
-    ("storm",         "Штормовой",        "🌩️",1200, "Гроза морей"),
-    ("volcano",       "Вулканический",    "🌋",1500, "Раскалённая лава"),
-    ("abyss",         "Бездна",           "🕳️",1800, "Тёмная сторона"),
-    ("galaxy",        "Галактический",    "🌌",2500, "Звёздная пыль"),
-    ("nebula",        "Туманность",       "🌠",3000, "Космический туман"),
-    ("supernova",     "Сверхновая",       "💥",3500, "Взрыв звезды"),
-    ("black_hole",    "Чёрная Дыра",      "⚫",4000, "Гравитация вне закона"),
-    ("quantum",       "Квантовый",        "🔬",4500, "Микро и макро"),
-    ("infinity",      "Бесконечность",    "♾️",5000, "Предела нет"),
-    ("chronos",       "Хронос",           "⏳",5500, "Власть над временем"),
-    ("poseidon",      "Посейдон",         "🔱",6000, "Гнев морей"),
-    ("zeus",          "Зевс",             "⚡",7000, "Повелитель молний"),
-    ("olympus",       "Олимп",            "🏔️",8000, "Обитель богов"),
-    ("titan",         "Титан",            "🗿",10000, "Древняя сила"),
-]
+# CASES — оставь свой существующий список без изменений
 
 
 @app.post("/api/cases/list")
@@ -2126,11 +1856,8 @@ async def api_cases_list(request: Request):
     return {
         "cases": [
             {
-                "id": c[0],
-                "name": c[1],
-                "emoji": c[2],
-                "price_stars": c[3],
-                "price_coins": c[3] * RATE,
+                "id": c[0], "name": c[1], "emoji": c[2],
+                "price_stars": c[3], "price_coins": c[3] * RATE,
                 "desc": c[4],
             }
             for c in CASES
@@ -2162,26 +1889,18 @@ async def api_cases_info(request: Request):
             item_chance = rarity_chance / len(pool)
             value = int(price_coins * value_mult)
             items.append({
-                "item_id": item_id,
-                "emoji": emoji,
-                "name": name,
-                "rarity": rar_id,
-                "rarity_name": rar_name,
-                "rarity_emoji": rar_emoji,
-                "value": value,
+                "item_id": item_id, "emoji": emoji, "name": name,
+                "rarity": rar_id, "rarity_name": rar_name,
+                "rarity_emoji": rar_emoji, "value": value,
                 "chance": round(item_chance * 100, 3),
             })
 
     items.sort(key=lambda x: -x["value"])
 
     return {
-        "case_id": case_id,
-        "name": case[1],
-        "emoji": case[2],
-        "price_stars": case[3],
-        "price_coins": price_coins,
-        "desc": case[4],
-        "items": items,
+        "case_id": case_id, "name": case[1], "emoji": case[2],
+        "price_stars": case[3], "price_coins": price_coins,
+        "desc": case[4], "items": items,
     }
 
 
@@ -2203,15 +1922,9 @@ async def api_cases_spin(request: Request):
 
     await add_balance(uid, -price_coins)
 
-    item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
-
-    winrate, _ = await get_winrate(uid)
-    if winrate > 50 and rarity_id in ("common", "uncommon"):
-        if random.random() * 100 < (winrate - 50):
-            item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
-    elif winrate < 50 and rarity_id in ("legendary", "mythic"):
-        if random.random() * 100 < (50 - winrate):
-            item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+    # ФИКС: используем _roll_case_with_winrate
+    item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = \
+        await _roll_case_with_winrate(uid, case_id)
 
     value = int(price_coins * value_mult)
     _, payout_mult = await get_winrate(uid)
@@ -2234,28 +1947,17 @@ async def api_cases_spin(request: Request):
         await unlock_achievement(uid, "jackpot")
 
     win_item = {
-        "emoji": emoji,
-        "name": name,
-        "rarity": rarity_id,
-        "rarity_name": rarity_name,
-        "rarity_emoji": rarity_emoji,
-        "value": value,
+        "emoji": emoji, "name": name, "rarity": rarity_id,
+        "rarity_name": rarity_name, "rarity_emoji": rarity_emoji, "value": value,
     }
     track, win_pos = _build_track(case_id, price_coins, win_item)
 
     return {
-        "track": track,
-        "win_pos": win_pos,
+        "track": track, "win_pos": win_pos,
         "result": {
-            "case_id": case_id,
-            "item_id": item_id,
-            "rarity": rarity_id,
-            "rarity_name": rarity_name,
-            "rarity_emoji": rarity_emoji,
-            "emoji": emoji,
-            "name": name,
-            "value": value,
-            "kind": kind,
+            "case_id": case_id, "item_id": item_id, "rarity": rarity_id,
+            "rarity_name": rarity_name, "rarity_emoji": rarity_emoji,
+            "emoji": emoji, "name": name, "value": value, "kind": kind,
         },
         "balance": await get_balance(uid),
     }
@@ -2286,21 +1988,20 @@ async def api_cases_spin_multi(request: Request):
 
     results = []
     for _ in range(count):
-        item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+        # ФИКС: подкрутка работает и в мульти-спине
+        item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = \
+            await _roll_case_with_winrate(uid, case_id)
         value = int(price_coins * value_mult)
+        _, payout_mult = await get_winrate(uid)
+        value = max(0, int(value * payout_mult))
         kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
 
         await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
 
         results.append({
-            "item_id": item_id,
-            "rarity": rarity_id,
-            "rarity_name": rarity_name,
-            "rarity_emoji": rarity_emoji,
-            "emoji": emoji,
-            "name": name,
-            "value": value,
-            "kind": kind,
+            "item_id": item_id, "rarity": rarity_id,
+            "rarity_name": rarity_name, "rarity_emoji": rarity_emoji,
+            "emoji": emoji, "name": name, "value": value, "kind": kind,
         })
 
     await log_game(uid, total_cost, 0)
@@ -2311,21 +2012,15 @@ async def api_cases_spin_multi(request: Request):
 
     best = max(results, key=lambda r: r["value"])
     win_item = {
-        "emoji": best["emoji"],
-        "name": best["name"],
-        "rarity": best["rarity"],
-        "rarity_name": best["rarity_name"],
-        "rarity_emoji": best["rarity_emoji"],
-        "value": best["value"],
+        "emoji": best["emoji"], "name": best["name"],
+        "rarity": best["rarity"], "rarity_name": best["rarity_name"],
+        "rarity_emoji": best["rarity_emoji"], "value": best["value"],
     }
     track, win_pos = _build_track(case_id, price_coins, win_item)
 
     return {
-        "track": track,
-        "win_pos": win_pos,
-        "results": results,
-        "best": best,
-        "count": count,
+        "track": track, "win_pos": win_pos,
+        "results": results, "best": best, "count": count,
         "total_cost": total_cost,
         "balance": await get_balance(uid),
     }
@@ -2446,11 +2141,8 @@ async def api_upgrader_targets(request: Request):
     return {
         "targets": [
             {
-                "emoji": t[0],
-                "name": t[1],
-                "rarity": t[2],
-                "price_stars": t[3],
-                "price_coins": t[3] * RATE,
+                "emoji": t[0], "name": t[1], "rarity": t[2],
+                "price_stars": t[3], "price_coins": t[3] * RATE,
             }
             for t in UPGRADER_TARGETS
         ]
@@ -2469,10 +2161,8 @@ async def api_upgrader_play(request: Request):
 
     if extra_coins < 0:
         raise HTTPException(400, "Некорректная сумма монет")
-
     if not item_pks and extra_coins <= 0:
         raise HTTPException(400, "Выбери предметы или введи сумму монет")
-
     if target_idx < 0 or target_idx >= len(UPGRADER_TARGETS):
         raise HTTPException(400, "Неверная цель")
 
@@ -2488,13 +2178,11 @@ async def api_upgrader_play(request: Request):
         raise HTTPException(400, f"Недостаточно монет. Доступно: {balance}")
 
     total_value = items_total + extra_coins
-
     target = UPGRADER_TARGETS[target_idx]
     target_price_coins = target[3] * RATE
 
     if total_value <= 0:
         raise HTTPException(400, "Некорректная ставка")
-
     if target_price_coins <= total_value:
         raise HTTPException(400, "Цель дешевле твоей ставки — так нельзя")
 
@@ -2521,10 +2209,8 @@ async def api_upgrader_play(request: Request):
             kind="nft" if target[2] in ("epic", "legendary", "mythic") else "gift",
         )
         result_item = {
-            "emoji": target[0],
-            "name": target[1],
-            "rarity": target[2],
-            "value": target_price_coins,
+            "emoji": target[0], "name": target[1],
+            "rarity": target[2], "value": target_price_coins,
         }
     else:
         result_item = None
@@ -2535,16 +2221,12 @@ async def api_upgrader_play(request: Request):
     await update_quest_progress(uid, "upgrades", 1)
 
     return {
-        "win": win,
-        "chance": round(chance * 100, 2),
-        "total_value": total_value,
-        "items_total": items_total,
+        "win": win, "chance": round(chance * 100, 2),
+        "total_value": total_value, "items_total": items_total,
         "extra_coins": extra_coins,
         "target": {
-            "emoji": target[0],
-            "name": target[1],
-            "rarity": target[2],
-            "price_coins": target_price_coins,
+            "emoji": target[0], "name": target[1],
+            "rarity": target[2], "price_coins": target_price_coins,
         },
         "result_item": result_item,
         "balance": await get_balance(uid),
@@ -2643,21 +2325,16 @@ async def api_cases_free_open(request: Request):
 
     return {
         "case_id": "free_daily",
-        "item_id": item_id,
-        "rarity": rarity_id,
-        "rarity_name": rarity_name,
-        "rarity_emoji": rarity_emoji,
-        "emoji": emoji,
-        "name": name,
-        "value": base_value,
-        "kind": kind,
-        "streak": new_streak,
+        "item_id": item_id, "rarity": rarity_id,
+        "rarity_name": rarity_name, "rarity_emoji": rarity_emoji,
+        "emoji": emoji, "name": name, "value": base_value,
+        "kind": kind, "streak": new_streak,
         "streak_mult": round(streak_mult, 2),
         "balance": await get_balance(uid),
     }
 
 
-# ═══════════ ВЫВОД: ОБЩИЕ ФУНКЦИИ ═══════════
+# ═══════════ ВЫВОД ═══════════
 
 @app.post("/api/withdraw/methods")
 async def api_withdraw_methods(request: Request):
@@ -2666,19 +2343,14 @@ async def api_withdraw_methods(request: Request):
     return {
         "methods": [
             {"id": "stars", "name": "Telegram Stars", "icon": "⭐",
-             "rate": WITHDRAW_RATES['stars']['rate'], "min": WITHDRAW_RATES['stars']['min'],
-             "unit": "⭐"},
+             "rate": WITHDRAW_RATES['stars']['rate'], "min": WITHDRAW_RATES['stars']['min'], "unit": "⭐"},
             {"id": "usdc",  "name": "USDC · Polygon",  "icon": "💎",
-             "rate": WITHDRAW_RATES['usdc']['rate'],  "min": WITHDRAW_RATES['usdc']['min'],
-             "unit": "USDC"},
+             "rate": WITHDRAW_RATES['usdc']['rate'],  "min": WITHDRAW_RATES['usdc']['min'],  "unit": "USDC"},
             {"id": "ton",   "name": "TON",             "icon": "🪙",
-             "rate": WITHDRAW_RATES['ton']['rate'],   "min": WITHDRAW_RATES['ton']['min'],
-             "unit": "TON"},
+             "rate": WITHDRAW_RATES['ton']['rate'],   "min": WITHDRAW_RATES['ton']['min'],   "unit": "TON"},
         ]
     }
 
-
-# ═══════════ ВЫВОД: STARS ═══════════
 
 @app.post("/api/withdraw/stars")
 async def api_withdraw_stars(request: Request):
@@ -2692,11 +2364,7 @@ async def api_withdraw_stars(request: Request):
 
     allowed, days = await can_withdraw(uid)
     if not allowed:
-        raise HTTPException(
-            400,
-            f"Вывод доступен только после 3 дней активности. "
-            f"Заходили: {days} из 3. Осталось ещё {3 - days} дн."
-        )
+        raise HTTPException(400, f"Вывод доступен только после 3 дней активности. Заходили: {days} из 3.")
 
     amount = float(data.get("amount", 0))
     _validate_withdraw_amount('stars', amount)
@@ -2716,8 +2384,6 @@ async def api_withdraw_stars(request: Request):
             "balance": await get_balance(uid)}
 
 
-# ═══════════ ВЫВОД: СБП ═══════════
-
 @app.post("/api/withdraw/sbp")
 async def api_withdraw_sbp(request: Request):
     data = await request.json()
@@ -2726,11 +2392,7 @@ async def api_withdraw_sbp(request: Request):
 
     allowed, days = await can_withdraw(uid)
     if not allowed:
-        raise HTTPException(
-            400,
-            f"Вывод доступен только после 3 дней активности. "
-            f"Заходили: {days} из 3. Осталось ещё {3 - days} дн."
-        )
+        raise HTTPException(400, f"Вывод доступен только после 3 дней активности. Заходили: {days} из 3.")
 
     amount = float(data.get("amount", 0))
     _validate_withdraw_amount('sbp', amount)
@@ -2767,8 +2429,6 @@ async def api_withdraw_sbp(request: Request):
             "balance": await get_balance(uid)}
 
 
-# ═══════════ ВЫВОД: USDC ═══════════
-
 @app.post("/api/withdraw/usdc")
 async def api_withdraw_usdc(request: Request):
     data = await request.json()
@@ -2777,11 +2437,7 @@ async def api_withdraw_usdc(request: Request):
 
     allowed, days = await can_withdraw(uid)
     if not allowed:
-        raise HTTPException(
-            400,
-            f"Вывод доступен только после 3 дней активности. "
-            f"Заходили: {days} из 3. Осталось ещё {3 - days} дн."
-        )
+        raise HTTPException(400, f"Вывод доступен только после 3 дней активности.")
 
     amount = float(data.get("amount", 0))
     _validate_withdraw_amount('usdc', amount)
@@ -2798,22 +2454,15 @@ async def api_withdraw_usdc(request: Request):
     await add_balance(uid, -need)
 
     details = f"wallet={wallet}; network=Polygon"
-    wid = await create_withdrawal(
-        uid, user.get("username") or str(uid),
-        'usdc', amount, need, details
-    )
+    wid = await create_withdrawal(uid, user.get("username") or str(uid), 'usdc', amount, need, details)
 
-    await _notify_admin_withdraw(
-        wid, 'USDC (Polygon)', amount, 'USDC', need, uid,
-        extra=f"Кошелёк: <code>{wallet}</code>"
-    )
+    await _notify_admin_withdraw(wid, 'USDC (Polygon)', amount, 'USDC', need, uid,
+        extra=f"Кошелёк: <code>{wallet}</code>")
 
     return {"status": "pending", "id": wid,
             "message": f"Заявка №{wid} создана (USDC)",
             "balance": await get_balance(uid)}
 
-
-# ═══════════ ВЫВОД: TON ═══════════
 
 @app.post("/api/withdraw/ton")
 async def api_withdraw_ton(request: Request):
@@ -2823,11 +2472,7 @@ async def api_withdraw_ton(request: Request):
 
     allowed, days = await can_withdraw(uid)
     if not allowed:
-        raise HTTPException(
-            400,
-            f"Вывод доступен только после 3 дней активности. "
-            f"Заходили: {days} из 3. Осталось ещё {3 - days} дн."
-        )
+        raise HTTPException(400, f"Вывод доступен только после 3 дней активности.")
 
     amount = float(data.get("amount", 0))
     _validate_withdraw_amount('ton', amount)
@@ -2844,15 +2489,10 @@ async def api_withdraw_ton(request: Request):
     await add_balance(uid, -need)
 
     details = f"wallet={wallet}; network=TON"
-    wid = await create_withdrawal(
-        uid, user.get("username") or str(uid),
-        'ton', amount, need, details
-    )
+    wid = await create_withdrawal(uid, user.get("username") or str(uid), 'ton', amount, need, details)
 
-    await _notify_admin_withdraw(
-        wid, 'TON', amount, 'TON', need, uid,
-        extra=f"Кошелёк: <code>{wallet}</code>"
-    )
+    await _notify_admin_withdraw(wid, 'TON', amount, 'TON', need, uid,
+        extra=f"Кошелёк: <code>{wallet}</code>")
 
     return {"status": "pending", "id": wid,
             "message": f"Заявка №{wid} создана (TON)",
@@ -2867,10 +2507,8 @@ async def api_withdraw_status(request: Request):
 
     allowed, days = await can_withdraw(uid)
     return {
-        "allowed": allowed,
-        "days": days,
-        "required": 3,
-        "days_left": max(0, 3 - days),
+        "allowed": allowed, "days": days,
+        "required": 3, "days_left": max(0, 3 - days),
     }
 
 
@@ -2889,7 +2527,6 @@ async def api_promo(request: Request):
     promo = await get_promo(code)
     if not promo:
         raise HTTPException(400, "Промокод не найден")
-
     if await promo_already_used(uid, code):
         raise HTTPException(400, "Уже использован")
 
@@ -2901,8 +2538,7 @@ async def api_promo(request: Request):
 
     if kind == "coins":
         nb = await add_balance(uid, value)
-        return {"kind": "coins", "value": value, "balance": nb,
-                "message": f"+{value} монет"}
+        return {"kind": "coins", "value": value, "balance": nb, "message": f"+{value} монет"}
 
     if kind == "discount":
         return {"kind": "discount", "value": value,
@@ -2920,10 +2556,7 @@ async def api_daily(request: Request):
     uid = user["id"]
 
     if not await has_deposited(uid, min_stars=10):
-        raise HTTPException(
-            400,
-            "Ежедневный бонус доступен только после пополнения на 10+ ⭐"
-        )
+        raise HTTPException(400, "Ежедневный бонус доступен только после пополнения на 10+ ⭐")
 
     last, streak = await get_daily_info(uid)
     now = datetime.datetime.utcnow()
@@ -2947,14 +2580,13 @@ async def api_daily(request: Request):
     return {"reward": reward, "streak": new_streak, "balance": nb}
 
 
-# ═══════════ ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ═══════════
+# ═══════════ ЗАДАНИЯ ═══════════
 
 @app.post("/api/quests/list")
 async def api_quests_list(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
-
     quests = await get_daily_quests(uid)
     return {"quests": quests}
 
@@ -2970,19 +2602,13 @@ async def api_quests_claim(request: Request):
         raise HTTPException(400, "Не указан quest_id")
 
     success, reward, message = await claim_quest_reward(uid, quest_id)
-
     if not success:
         raise HTTPException(400, message)
 
     new_balance = await add_balance(uid, reward)
     await unlock_achievement(uid, "first_win")
 
-    return {
-        "ok": True,
-        "reward": reward,
-        "message": message,
-        "balance": new_balance,
-    }
+    return {"ok": True, "reward": reward, "message": message, "balance": new_balance}
 
 
 # ═══════════ BATTLE PASS ═══════════
@@ -2995,21 +2621,12 @@ async def api_bp_status(request: Request):
 
     bp = await get_battle_pass(uid)
     return {
-        "xp": bp["xp"],
-        "level": bp["level"],
-        "season": bp["season"],
+        "xp": bp["xp"], "level": bp["level"], "season": bp["season"],
         "premium": bp["premium"],
-        "xp_per_level": XP_PER_LEVEL,
-        "max_level": MAX_LEVEL,
-        "claimed_free": bp["claimed_free"],
-        "claimed_premium": bp["claimed_premium"],
+        "xp_per_level": XP_PER_LEVEL, "max_level": MAX_LEVEL,
+        "claimed_free": bp["claimed_free"], "claimed_premium": bp["claimed_premium"],
         "rewards": [
-            {
-                "level": r[0],
-                "free_coins": r[1],
-                "premium_coins": r[2],
-                "bonus": r[3],
-            }
+            {"level": r[0], "free_coins": r[1], "premium_coins": r[2], "bonus": r[3]}
             for r in BATTLE_PASS_REWARDS
         ],
     }
@@ -3024,7 +2641,6 @@ async def api_bp_claim(request: Request):
     premium = bool(data.get("premium", False))
 
     success, coins, bonus, message = await claim_battle_pass_reward(uid, level, premium)
-
     if not success:
         raise HTTPException(400, message)
 
@@ -3040,13 +2656,7 @@ async def api_bp_claim(request: Request):
             kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
             await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
 
-    return {
-        "ok": True,
-        "coins": coins,
-        "bonus": bonus,
-        "message": message,
-        "balance": new_balance,
-    }
+    return {"ok": True, "coins": coins, "bonus": bonus, "message": message, "balance": new_balance}
 
 
 @app.post("/api/battlepass/buy-premium")
@@ -3069,7 +2679,7 @@ async def api_bp_buy_premium(request: Request):
     return {"link": link, "stars": 250}
 
 
-# ═══════════ ИНВОЙС (звёзды) ═══════════
+# ═══════════ ИНВОЙС ═══════════
 
 @app.post("/api/invoice")
 async def api_invoice(request: Request):
@@ -3136,15 +2746,11 @@ async def api_hourly_status(request: Request):
 
     STREAK_MULTS = [1.0, 1.2, 1.5, 2.0, 3.0, 5.0]
     mult = STREAK_MULTS[min(streak, len(STREAK_MULTS) - 1)]
-    base = 200
-    reward = int(base * mult)
+    reward = int(200 * mult)
 
     return {
-        "can_claim": can_claim,
-        "seconds_left": seconds_left,
-        "streak": streak,
-        "next_reward": reward,
-        "next_mult": mult,
+        "can_claim": can_claim, "seconds_left": seconds_left,
+        "streak": streak, "next_reward": reward, "next_mult": mult,
     }
 
 
@@ -3175,12 +2781,7 @@ async def api_hourly_claim(request: Request):
     await claim_hourly(uid, new_streak)
     nb = await add_balance(uid, reward)
 
-    return {
-        "reward": reward,
-        "streak": new_streak,
-        "mult": mult,
-        "balance": nb,
-    }
+    return {"reward": reward, "streak": new_streak, "mult": mult, "balance": nb}
 
 
 # ═══════════ КЭШБЭК ═══════════
@@ -3218,14 +2819,12 @@ async def api_referral_stats(request: Request):
     ref_link = f"https://t.me/{bot_username}?start=ref_{uid}"
 
     return {
-        "invited": invited,
-        "bonuses": bonuses,
-        "earnings": earnings,
-        "link": ref_link,
+        "invited": invited, "bonuses": bonuses,
+        "earnings": earnings, "link": ref_link,
     }
 
 
-# ═══════════ ПРОФИЛЬ (аватарки, рамки, титулы) ═══════════
+# ═══════════ ПРОФИЛЬ (кастомизация) ═══════════
 
 AVAILABLE_AVATARS = [
     {"id": "default", "emoji": "👤", "name": "Обычный",   "price": 0},
@@ -3266,7 +2865,6 @@ async def api_profile_customize_list(request: Request):
     uid = user["id"]
     current = await get_profile(uid)
 
-    # Достаём "owned" из профиля (json-строка)
     owned_raw = current.get("owned", "[]")
     try:
         owned = set(json.loads(owned_raw))
@@ -3318,7 +2916,6 @@ async def api_profile_customize_buy(request: Request):
     key = f"{kind}:{item_id}"
     price = item["price"]
 
-    # Если уже куплено — не списываем, просто применяем
     if key in owned or price == 0:
         if kind == "avatar":
             await set_profile(uid, avatar=item_id)
@@ -3327,8 +2924,7 @@ async def api_profile_customize_buy(request: Request):
         elif kind == "title":
             await set_profile(uid, title=item["name"])
         return {
-            "ok": True,
-            "already_owned": True,
+            "ok": True, "already_owned": True,
             "balance": await get_balance(uid),
             "profile": await get_profile(uid),
         }
@@ -3350,14 +2946,13 @@ async def api_profile_customize_buy(request: Request):
         await set_profile(uid, title=item["name"], owned=owned_str)
 
     return {
-        "ok": True,
-        "already_owned": False,
+        "ok": True, "already_owned": False,
         "balance": await get_balance(uid),
         "profile": await get_profile(uid),
     }
 
 
-# ═══════════ ТУРНИРЫ ═══════════
+# ═══════════ ТУРНИР ═══════════
 
 @app.post("/api/tournament/active")
 async def api_tournament_active(request: Request):
@@ -3379,19 +2974,16 @@ async def api_tournament_active(request: Request):
             break
 
     return {
-        "active": True,
-        "tournament": tour,
+        "active": True, "tournament": tour,
         "leaderboard": [
-            {"rank": i, "user_id": u_id, "username": uname or f"user_{u_id}",
-             "score": sc}
+            {"rank": i, "user_id": u_id, "username": uname or f"user_{u_id}", "score": sc}
             for i, (u_id, uname, sc) in enumerate(leaderboard, 1)
         ],
-        "my_rank": my_rank,
-        "my_score": my_score,
+        "my_rank": my_rank, "my_score": my_score,
     }
 
 
-# ═══════════ HALL OF FAME ═══════════
+# ═══════════ ЗАЛ СЛАВЫ ═══════════
 
 @app.post("/api/hall/list")
 async def api_hall_list(request: Request):
@@ -3427,10 +3019,7 @@ async def api_wheel_status(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
     info = await get_wheel_info(uid)
-    return {
-        "spins": info["spins"],
-        "prizes": WHEEL_PRIZES,
-    }
+    return {"spins": info["spins"], "prizes": WHEEL_PRIZES}
 
 
 @app.post("/api/wheel/spin")
@@ -3477,11 +3066,7 @@ async def api_wheel_spin(request: Request):
         new_balance = await add_balance(uid, amount)
         result_text = f"🎰 ДЖЕКПОТ +{amount} 🪙"
 
-    return {
-        "prize": chosen,
-        "result_text": result_text,
-        "balance": new_balance,
-    }
+    return {"prize": chosen, "result_text": result_text, "balance": new_balance}
 
 
 # ═══════════ УРОВЕНЬ ═══════════
@@ -3498,11 +3083,8 @@ async def api_level_status(request: Request):
     need = next_xp - cur_xp_base
 
     return {
-        "level": lvl["level"],
-        "xp": lvl["xp"],
-        "next_level_xp": next_xp,
-        "progress": progress,
-        "need": need,
+        "level": lvl["level"], "xp": lvl["xp"],
+        "next_level_xp": next_xp, "progress": progress, "need": need,
         "percent": min(100, int(progress / need * 100)) if need > 0 else 100,
     }
 
@@ -3523,10 +3105,8 @@ async def api_admin_stats(request: Request):
     s = await get_stats()
     h = await get_house_stats()
     return {
-        "users": s["users"],
-        "coins": s["coins"],
-        "withdrawals": s["withdrawals"],
-        "withdraw_stars": s["withdraw_stars"],
+        "users": s["users"], "coins": s["coins"],
+        "withdrawals": s["withdrawals"], "withdraw_stars": s["withdraw_stars"],
         "top": [
             {"user_id": u[0], "username": u[1] or f"user_{u[0]}", "balance": u[2]}
             for u in s["top"]
@@ -3754,8 +3334,6 @@ async def api_admin_steal_item(request: Request):
     return {"ok": True}
 
 
-# ═══════════ АДМИН: ПОДКРУТКА ШАНСОВ ═══════════
-
 @app.post("/api/admin/winrate/set")
 async def api_admin_winrate_set(request: Request):
     data = await request.json()
@@ -3785,10 +3363,8 @@ async def api_admin_winrate_set(request: Request):
                 raise HTTPException(400, "Некорректный ID")
 
     await set_winrate(target_id, winrate, payout_mult)
-    await log_admin_action(
-        admin["id"], "set_winrate", target_id,
-        f"winrate={winrate}% payout_mult={payout_mult}",
-    )
+    await log_admin_action(admin["id"], "set_winrate", target_id,
+        f"winrate={winrate}% payout_mult={payout_mult}")
     return {"ok": True, "target_id": target_id, "winrate": winrate, "payout_mult": payout_mult}
 
 
@@ -3800,11 +3376,8 @@ async def api_admin_winrate_list(request: Request):
     return {
         "settings": [
             {
-                "user_id": r[0],
-                "winrate": r[1],
-                "payout_mult": r[2],
-                "updated_at": r[3],
-                "is_global": r[0] is None,
+                "user_id": r[0], "winrate": r[1], "payout_mult": r[2],
+                "updated_at": r[3], "is_global": r[0] is None,
             }
             for r in rows
         ]
@@ -3855,42 +3428,11 @@ async def api_admin_broadcast(request: Request):
     return {"ok": True, "sent": sent, "failed": failed}
 
 
-# ═══════════ МИГРАЦИЯ (разовая) ═══════════
-
-@app.post("/api/admin/migrate_withdrawals")
-async def api_admin_migrate_withdrawals(request: Request):
-    """Разовый эндпоинт для добавления колонок в withdrawals.
-    После выполнения — удалить из кода."""
-    data = await request.json()
-    admin_only(data.get("initData", ""))
-
-    import aiosqlite
-    from database import DB_PATH
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        for col, definition in [
-            ("method",  "TEXT NOT NULL DEFAULT 'stars'"),
-            ("amount",  "REAL NOT NULL DEFAULT 0"),
-            ("details", "TEXT"),
-        ]:
-            try:
-                await db.execute(f"ALTER TABLE withdrawals ADD COLUMN {col} {definition}")
-                print(f"✅ column {col} added")
-            except Exception as e:
-                print(f"column {col}: {e}")
-
-        try:
-            await db.execute("UPDATE withdrawals SET amount = stars WHERE amount = 0")
-            await db.commit()
-            print("✅ amount synced")
-        except Exception as e:
-            print(f"sync amount: {e}")
-
-    return {"ok": True, "message": "Migration complete. Delete this endpoint."}
-
+# ═══════════ ЗАПУСК ═══════════
 
 if __name__ == "__main__":
     import os
     port = int(os.getenv("PORT", 8000))
     print(f"🚀 Запуск на порту {port}", flush=True)
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    # ФИКС: workers=1 — иначе in-memory игры сломаются
+    uvicorn.run(app, host="0.0.0.0", port=port, workers=1)
