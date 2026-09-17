@@ -58,6 +58,14 @@ MIN_WITHDRAW = 15
 BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
 
+
+# ═══════════ КУРСЫ ВЫВОДА ═══════════
+WITHDRAW_RATES = {
+    'stars': {'rate': 125,   'min': 15,   'unit': '⭐'},
+    'sbp':   {'rate': 1000,  'min': 500,  'unit': '₽'},
+    'usdc':  {'rate': 100,   'min': 5,    'unit': 'USDC'},
+    'ton':   {'rate': 5000,  'min': 1,    'unit': 'TON'},
+}
 # ═══════════ ПОДКРУТКА ШАНСОВ ═══════════
 
 async def _apply_winrate(uid: int, base_win: bool) -> bool:
@@ -2538,10 +2546,50 @@ async def api_cases_free_open(request: Request):
     }
 
 
-# ═══════════ ВЫВОД ═══════════
+# ═══════════ ВЫВОД: ОБЩИЕ ФУНКЦИИ ═══════════
 
-@app.post("/api/withdraw")
-async def api_withdraw(request: Request):
+def _calc_withdraw_need(method: str, amount: float) -> int:
+    """Сколько монет списать за вывод."""
+    cfg = WITHDRAW_RATES.get(method)
+    if not cfg:
+        raise HTTPException(400, "Неизвестный метод вывода")
+    return int(amount * cfg['rate'])
+
+
+def _validate_withdraw_amount(method: str, amount: float) -> None:
+    cfg = WITHDRAW_RATES.get(method)
+    if not cfg:
+        raise HTTPException(400, "Неизвестный метод вывода")
+    if amount < cfg['min']:
+        raise HTTPException(400, f"Минимум {cfg['min']} {cfg['unit']}")
+
+
+@app.post("/api/withdraw/methods")
+async def api_withdraw_methods(request: Request):
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+    return {
+        "methods": [
+            {"id": "stars", "name": "Telegram Stars", "icon": "⭐",
+             "rate": WITHDRAW_RATES['stars']['rate'], "min": WITHDRAW_RATES['stars']['min'],
+             "unit": "⭐"},
+            {"id": "sbp",   "name": "СБП / Карта РФ",  "icon": "🇷🇺",
+             "rate": WITHDRAW_RATES['sbp']['rate'],   "min": WITHDRAW_RATES['sbp']['min'],
+             "unit": "₽"},
+            {"id": "usdc",  "name": "USDC · Polygon",  "icon": "💎",
+             "rate": WITHDRAW_RATES['usdc']['rate'],  "min": WITHDRAW_RATES['usdc']['min'],
+             "unit": "USDC"},
+            {"id": "ton",   "name": "TON",             "icon": "🪙",
+             "rate": WITHDRAW_RATES['ton']['rate'],   "min": WITHDRAW_RATES['ton']['min'],
+             "unit": "TON"},
+        ]
+    }
+
+
+# ═══════════ ВЫВОД: STARS (старый метод) ═══════════
+
+@app.post("/api/withdraw/stars")
+async def api_withdraw_stars(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
@@ -2552,27 +2600,154 @@ async def api_withdraw(request: Request):
 
     allowed, days = await can_withdraw(uid)
     if not allowed:
-        left = 3 - days
         raise HTTPException(
             400,
             f"Вывод доступен только после 3 дней активности. "
-            f"Заходили: {days} из 3. Осталось ещё {left} дн."
+            f"Заходили: {days} из 3. Осталось ещё {3 - days} дн."
         )
 
-    stars = int(data.get("stars", 0))
-    if stars < MIN_WITHDRAW:
-        raise HTTPException(400, f"Минимум {MIN_WITHDRAW} ⭐")
+    amount = float(data.get("amount", 0))
+    _validate_withdraw_amount('stars', amount)
 
-    need = stars * WITHDRAW_RATE
+    need = _calc_withdraw_need('stars', amount)
     balance = await get_balance(uid)
     if balance < need:
-        raise HTTPException(400, f"Нужно {need}")
+        raise HTTPException(400, f"Нужно {need} 🪙")
 
     await add_balance(uid, -need)
-    wid = await create_withdrawal(uid, username, stars, need)
+    wid = await create_withdrawal(uid, username, 'stars', amount, need)
 
     return {"status": "pending", "id": wid,
-            "message": f"Заявка №{wid} создана",
+            "message": f"Заявка №{wid} создана (Stars)",
+            "balance": await get_balance(uid)}
+
+
+# ═══════════ ВЫВОД: СБП ═══════════
+
+@app.post("/api/withdraw/sbp")
+async def api_withdraw_sbp(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    allowed, days = await can_withdraw(uid)
+    if not allowed:
+        raise HTTPException(
+            400,
+            f"Вывод доступен только после 3 дней активности. "
+            f"Заходили: {days} из 3. Осталось ещё {3 - days} дн."
+        )
+
+    amount = float(data.get("amount", 0))
+    _validate_withdraw_amount('sbp', amount)
+
+    # реквизиты СБП
+    card = str(data.get("card", "")).strip()
+    bank = str(data.get("bank", "")).strip()
+    full_name = str(data.get("full_name", "")).strip()
+
+    if not card or len(card) < 12:
+        raise HTTPException(400, "Укажите номер карты / телефон")
+    if not full_name:
+        raise HTTPException(400, "Укажите ФИО получателя")
+
+    need = _calc_withdraw_need('sbp', amount)
+    balance = await get_balance(uid)
+    if balance < need:
+        raise HTTPException(400, f"Нужно {need} 🪙")
+
+    await add_balance(uid, -need)
+
+    details = f"card={card}; bank={bank}; name={full_name}"
+    wid = await create_withdrawal(
+        uid, user.get("username") or str(uid),
+        'sbp', amount, need, details
+    )
+
+    return {"status": "pending", "id": wid,
+            "message": f"Заявка №{wid} создана (СБП)",
+            "balance": await get_balance(uid)}
+
+
+# ═══════════ ВЫВОД: USDC ═══════════
+
+@app.post("/api/withdraw/usdc")
+async def api_withdraw_usdc(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    allowed, days = await can_withdraw(uid)
+    if not allowed:
+        raise HTTPException(
+            400,
+            f"Вывод доступен только после 3 дней активности. "
+            f"Заходили: {days} из 3. Осталось ещё {3 - days} дн."
+        )
+
+    amount = float(data.get("amount", 0))
+    _validate_withdraw_amount('usdc', amount)
+
+    wallet = str(data.get("wallet", "")).strip()
+    if not wallet.startswith("0x") or len(wallet) != 42:
+        raise HTTPException(400, "Неверный адрес USDC (Polygon)")
+
+    need = _calc_withdraw_need('usdc', amount)
+    balance = await get_balance(uid)
+    if balance < need:
+        raise HTTPException(400, f"Нужно {need} 🪙")
+
+    await add_balance(uid, -need)
+
+    details = f"wallet={wallet}; network=Polygon"
+    wid = await create_withdrawal(
+        uid, user.get("username") or str(uid),
+        'usdc', amount, need, details
+    )
+
+    return {"status": "pending", "id": wid,
+            "message": f"Заявка №{wid} создана (USDC)",
+            "balance": await get_balance(uid)}
+
+
+# ═══════════ ВЫВОД: TON ═══════════
+
+@app.post("/api/withdraw/ton")
+async def api_withdraw_ton(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    allowed, days = await can_withdraw(uid)
+    if not allowed:
+        raise HTTPException(
+            400,
+            f"Вывод доступен только после 3 дней активности. "
+            f"Заходили: {days} из 3. Осталось ещё {3 - days} дн."
+        )
+
+    amount = float(data.get("amount", 0))
+    _validate_withdraw_amount('ton', amount)
+
+    wallet = str(data.get("wallet", "")).strip()
+    if len(wallet) < 20:
+        raise HTTPException(400, "Неверный TON-кошелёк")
+
+    need = _calc_withdraw_need('ton', amount)
+    balance = await get_balance(uid)
+    if balance < need:
+        raise HTTPException(400, f"Нужно {need} 🪙")
+
+    await add_balance(uid, -need)
+
+    details = f"wallet={wallet}; network=TON"
+    wid = await create_withdrawal(
+        uid, user.get("username") or str(uid),
+        'ton', amount, need, details
+    )
+
+    return {"status": "pending", "id": wid,
+            "message": f"Заявка №{wid} создана (TON)",
             "balance": await get_balance(uid)}
 
 
@@ -2860,7 +3035,9 @@ async def api_admin_wd(request: Request):
         "withdrawals": [
             {
                 "id": w[0], "user_id": w[1], "username": w[2],
-                "stars": w[3], "coins": w[4], "status": w[5], "created_at": w[6],
+                "method": w[3], "stars": w[4], "amount": w[5],
+                "details": w[6], "coins": w[7], "status": w[8],
+                "created_at": w[9],
             }
             for w in rows
         ]
