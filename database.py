@@ -293,6 +293,30 @@ async def init_db():
 
         await db.commit()
 
+
+# ═══════════ БАЗОВЫЕ ФУНКЦИИ ═══════════
+
+async def has_deposited(user_id: int, min_stars: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT SUM(stars) FROM payments WHERE user_id = ?",
+            (user_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            total_stars = row[0] if row and row[0] else 0
+            return total_stars >= min_stars
+
+
+async def ensure_user(user_id: int, username: str = None):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO users (user_id, balance, username) VALUES (?, 0, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET username = COALESCE(?, username)",
+            (user_id, username, username),
+        )
+        await db.commit()
+
+
 async def get_balance(user_id: int) -> int:
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -341,14 +365,7 @@ async def save_payment(user_id: int, charge_id: str, stars: int, coins: int):
 
 async def create_withdrawal(user_id: int, username: str, method: str,
                             amount: float, coins: int, details: str = None) -> int:
-    """
-    method: 'stars' | 'sbp' | 'usdc' | 'ton'
-    amount: количество звёзд / рублей / USDC / TON
-    coins: сколько монет списали
-    details: реквизиты (номер карты, кошелёк и т.п.)
-    """
     async with aiosqlite.connect(DB_PATH) as db:
-        # для совместимости — если stars, пишем в stars
         stars_val = int(amount) if method == 'stars' else 0
         cursor = await db.execute(
             "INSERT INTO withdrawals "
@@ -390,10 +407,9 @@ async def get_all_user_ids():
 async def get_stats():
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT COUNT(*), COALESCE(SUM(stars), 0) FROM withdrawals "
-            "WHERE status = 'done'"
+            "SELECT COUNT(*), COALESCE(SUM(balance), 0) FROM users"
         ) as cur:
-            withdraw_count, withdraw_stars = await cur.fetchone()
+            users_count, total_coins = await cur.fetchone()
         async with db.execute(
             "SELECT COUNT(*), COALESCE(SUM(stars), 0) FROM withdrawals "
             "WHERE status = 'done'"
@@ -423,6 +439,8 @@ async def get_last_withdrawals(limit: int = 30):
         ) as cur:
             return await cur.fetchall()
 
+
+# ═══════════ ПРОМОКОДЫ ═══════════
 
 async def create_promo(code: str, kind: str, value: int, max_uses: int = 0) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
@@ -488,6 +506,8 @@ async def list_promos():
             return await cur.fetchall()
 
 
+# ═══════════ СКИДКИ ═══════════
+
 async def set_discount(user_id: int, percent: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -514,6 +534,8 @@ async def clear_discount(user_id: int):
         )
         await db.commit()
 
+
+# ═══════════ РЕФЕРАЛЫ ═══════════
 
 async def set_referrer(user_id: int, referrer_id: int) -> bool:
     if user_id == referrer_id:
@@ -568,6 +590,8 @@ async def add_referral_bonus(user_id: int):
         await db.commit()
 
 
+# ═══════════ ЕЖЕДНЕВНЫЙ БОНУС ═══════════
+
 async def get_daily_info(user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -589,6 +613,8 @@ async def claim_daily(user_id: int, streak: int):
         )
         await db.commit()
 
+
+# ═══════════ ИГРЫ И СТАТИСТИКА ═══════════
 
 async def log_game(user_id: int, wagered: int, won: int):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -622,6 +648,8 @@ async def get_top_players(limit: int = 10):
         ) as cur:
             return await cur.fetchall()
 
+
+# ═══════════ ДОСТИЖЕНИЯ ═══════════
 
 ACHIEVEMENTS = {
     "first_bet":    {"name": "🎯 Первая ставка",   "desc": "Сделать первую ставку"},
@@ -662,6 +690,8 @@ async def get_user_achievements(user_id: int):
             return await cur.fetchall()
 
 
+# ═══════════ АДМИН-ЛОГИ ═══════════
+
 async def log_admin_action(admin_id: int, action: str, target_id: int = None, details: str = None):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -681,6 +711,8 @@ async def get_admin_logs(limit: int = 30):
         ) as cur:
             return await cur.fetchall()
 
+
+# ═══════════ ВИЗИТЫ ═══════════
 
 async def log_visit(user_id: int):
     today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
@@ -708,6 +740,8 @@ async def can_withdraw(user_id: int) -> tuple:
     days = await count_recent_visits(user_id, days=7)
     return days >= 3, days
 
+
+# ═══════════ ИНВЕНТАРЬ ═══════════
 
 async def add_user_item(user_id: int, item_id: str, case_id: str,
                         rarity: str, emoji: str, name: str, value: int,
@@ -812,6 +846,8 @@ async def transfer_item(item_pk: int, from_user_id: int, to_user_id: int) -> boo
         return cursor.rowcount > 0
 
 
+# ═══════════ БЕСПЛАТНЫЙ КЕЙС ═══════════
+
 async def get_free_case_info(user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -834,6 +870,8 @@ async def claim_free_case(user_id: int, streak: int):
         )
         await db.commit()
 
+
+# ═══════════ ОБОРОТ КАЗИНО ═══════════
 
 async def log_house_flow(wagered: int, paid: int):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -862,8 +900,9 @@ async def get_house_stats():
             }
 
 
+# ═══════════ ЛЕНТА ВЫИГРЫШЕЙ ═══════════
+
 async def log_live_win(user_id: int, username: str, game: str, win: int):
-    """Записывает крупный выигрыш в ленту"""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             "INSERT INTO live_feed (user_id, username, game, win) VALUES (?, ?, ?, ?)",
@@ -878,7 +917,6 @@ async def log_live_win(user_id: int, username: str, game: str, win: int):
 
 
 async def get_live_feed(limit: int = 15):
-    """Возвращает последние крупные выигрыши"""
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT username, game, win, created_at FROM live_feed "
@@ -887,6 +925,8 @@ async def get_live_feed(limit: int = 15):
         ) as cur:
             return await cur.fetchall()
 
+
+# ═══════════ ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ═══════════
 
 DAILY_QUEST_POOL = [
     {"id": "bet_10",       "name": "🎯 Сделай 10 ставок",                "target": 10,     "reward": 500,   "type": "bets_count"},
@@ -1011,6 +1051,8 @@ async def claim_quest_reward(user_id: int, quest_id: str) -> tuple:
 
         return True, reward, "Награда получена!"
 
+
+# ═══════════ BATTLE PASS ═══════════
 
 SEASON_DURATION_DAYS = 30
 XP_PER_LEVEL = 1000
@@ -1235,8 +1277,9 @@ async def buy_premium_pass(user_id: int) -> bool:
         return True
 
 
+# ═══════════ ПОДКРУТКА ШАНСОВ ═══════════
+
 async def set_winrate(user_id, winrate: float, payout_mult: float = 1.0):
-    """user_id=None → глобально."""
     async with aiosqlite.connect(DB_PATH) as db:
         if user_id is None:
             await db.execute(
@@ -1258,7 +1301,6 @@ async def set_winrate(user_id, winrate: float, payout_mult: float = 1.0):
 
 
 async def get_winrate(user_id):
-    """Возвращает (winrate, payout_mult) с учётом приоритета."""
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT winrate, payout_mult FROM winrate_settings WHERE user_id = ?",
@@ -1285,6 +1327,16 @@ async def clear_winrate(user_id):
         else:
             await db.execute("DELETE FROM winrate_settings WHERE user_id = ?", (user_id,))
         await db.commit()
+
+
+async def list_winrates():
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT user_id, winrate, payout_mult, updated_at "
+            "FROM winrate_settings ORDER BY updated_at DESC LIMIT 50"
+        ) as cur:
+            return await cur.fetchall()
+
 
 # ═══════════ ДЖЕКПОТ ═══════════
 
@@ -1345,7 +1397,6 @@ async def claim_hourly(user_id: int, streak: int):
 # ═══════════ КЭШБЭК ═══════════
 
 async def add_to_cashback(user_id: int, lost: int):
-    """Добавляет проигранные монеты в счётчик кэшбэка."""
     if lost <= 0:
         return
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1366,7 +1417,6 @@ async def get_cashback_info(user_id: int):
             row = await cur.fetchone()
             lost = row[0] if row else 0
 
-    # Уровни кэшбэка
     if lost >= 10_000_000:
         pct, tier = 12, "💎 Платина"
     elif lost >= 1_000_000:
@@ -1435,7 +1485,7 @@ async def get_referral_earnings(user_id: int):
             return {"earned": 0, "from_bets": 0, "from_deposits": 0}
 
 
-# ═══════════ АВАТАРКИ / ТИТУЛЫ ═══════════
+# ═══════════ ПРОФИЛЬ ═══════════
 
 async def get_profile(user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1539,7 +1589,7 @@ async def get_hall_of_fame(limit: int = 30):
             return await cur.fetchall()
 
 
-# ═══════════ WHEEL (колесо) ═══════════
+# ═══════════ КОЛЕСО ФОРТУНЫ ═══════════
 
 async def get_wheel_info(user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
