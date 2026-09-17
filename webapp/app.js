@@ -2455,58 +2455,188 @@ async function cryptoPay(amountUsd) {
 }
 
 /* ═══ ВЫВОД ═══ */
+
+const WITHDRAW_METHODS = {
+    stars: { rate: 125,  min: 15,   unit: '⭐',   name: 'Stars' },
+    sbp:   { rate: 1000, min: 500,  unit: '₽',    name: 'СБП' },
+    usdc:  { rate: 100,  min: 5,    unit: 'USDC', name: 'USDC' },
+    ton:   { rate: 5000, min: 1,    unit: 'TON',  name: 'TON' },
+};
+
+let currentWithdrawMethod = 'stars';
+
 async function loadWithdrawStatus() {
     try {
         const d = await api('/api/withdraw/status');
         withdrawAllowed = d.allowed;
         withdrawDays = d.days;
 
-        const info = document.querySelector('#screen-withdraw .withdraw-info');
-        let warn = document.getElementById('withdrawWarn');
-        if (!withdrawAllowed) {
-            if (!warn) {
-                warn = document.createElement('div');
-                warn.id = 'withdrawWarn';
-                warn.className = 'withdraw-warn';
-                info.appendChild(warn);
+        // Показываем/скрываем предупреждение
+        const warnContainer = document.getElementById('withdrawWarnContainer');
+        if (warnContainer) {
+            if (!withdrawAllowed) {
+                warnContainer.innerHTML = `
+                    <div class="withdraw-warn">
+                        ⏳ <b>Вывод заблокирован</b><br>
+                        Активность: <b>${d.days}</b> из <b>${d.required}</b> дней<br>
+                        Осталось: <b>${d.days_left}</b> дн.
+                    </div>
+                `;
+            } else {
+                warnContainer.innerHTML = '';
             }
-            warn.innerHTML = `⏳ <b>Вывод заблокирован</b><br>Активность: <b>${d.days}</b> из <b>${d.required}</b> дней<br>Осталось: <b>${d.days_left}</b> дн.`;
-        } else if (warn) {
-            warn.remove();
         }
-        renderWithdraw();
+
+        // Обновляем инфу по текущему методу
+        withdrawRecalc(currentWithdrawMethod);
     } catch (e) {
         toast(e.message, 'error');
-        renderWithdraw();
     }
 }
 
-function renderWithdraw() {
-    const el = document.getElementById('withdrawGrid');
-    if (!el) return;
-    el.innerHTML = '';
+function switchWithdrawTab(method) {
+    haptic();
+    currentWithdrawMethod = method;
 
-    WITHDRAW_PACKS.forEach(s => {
-        const btn = document.createElement('button');
-        btn.className = 'withdraw-btn';
-        btn.textContent = `${s} ⭐`;
-        btn.onclick = () => withdrawStars(s);
-        if (!withdrawAllowed) btn.disabled = true;
-        el.appendChild(btn);
+    document.querySelectorAll('#withdrawTabs .topup-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.method === method);
     });
 
-    const max = Math.floor(profile.balance / 125);
-    if (max >= 15) {
-        const all = document.createElement('button');
-        all.className = 'withdraw-btn';
-        all.style.gridColumn = 'span 2';
-        all.textContent = `💯 Все звёзды (${max} ⭐)`;
-        all.onclick = () => withdrawStars(max);
-        if (!withdrawAllowed) all.disabled = true;
-        el.appendChild(all);
-    }
+    document.querySelectorAll('#screen-withdraw .topup-method').forEach(m => {
+        m.classList.toggle('active', m.id === `wd-method-${method}`);
+    });
+
+    withdrawRecalc(method);
 }
 
+function withdrawQuick(method, amount) {
+    haptic();
+    const inputId = method === 'stars' ? 'wdStarsAmount'
+                  : method === 'sbp'   ? 'wdSbpAmount'
+                  : method === 'usdc'  ? 'wdUsdcAmount'
+                  : 'wdTonAmount';
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.value = amount;
+    withdrawRecalc(method);
+}
+
+function withdrawRecalc(method) {
+    const cfg = WITHDRAW_METHODS[method];
+    if (!cfg) return;
+
+    const inputId = method === 'stars' ? 'wdStarsAmount'
+                  : method === 'sbp'   ? 'wdSbpAmount'
+                  : method === 'usdc'  ? 'wdUsdcAmount'
+                  : 'wdTonAmount';
+    const infoId = method === 'stars' ? 'wdStarsInfo'
+                 : method === 'sbp'   ? 'wdSbpInfo'
+                 : method === 'usdc'  ? 'wdUsdcInfo'
+                 : 'wdTonInfo';
+
+    const input = document.getElementById(inputId);
+    const info = document.getElementById(infoId);
+    if (!input || !info) return;
+
+    const amount = Number(input.value) || 0;
+    const need = Math.ceil(amount * cfg.rate);
+    const balance = profile.balance || 0;
+
+    if (amount <= 0) {
+        info.innerHTML = `Введите сумму · Мин: <b>${cfg.min} ${cfg.unit}</b> · Курс: 1 ${cfg.unit} = <b>${fmt(cfg.rate)}</b> 🪙`;
+        return;
+    }
+
+    const ok = amount >= cfg.min && need <= balance;
+
+    let statusColor = ok ? '#4ade80' : '#ef4444';
+    info.innerHTML = `
+        Спишется: <b>${fmt(need)}</b> 🪙<br>
+        Баланс: <b>${fmt(balance)}</b> 🪙<br>
+        <span style="color:${statusColor}">
+            ${amount < cfg.min ? `❌ Минимум ${cfg.min} ${cfg.unit}` :
+              need > balance ? `❌ Недостаточно монет (нужно ${fmt(need)})` :
+              `✅ Готово к выводу`}
+        </span>
+    `;
+}
+
+async function withdrawGo(method) {
+    if (!withdrawAllowed) {
+        toast('⏳ Вывод недоступен — нужно 3 дня активности', 'error');
+        return;
+    }
+
+    haptic('medium');
+    const cfg = WITHDRAW_METHODS[method];
+
+    let amount, payload;
+
+    if (method === 'stars') {
+        amount = Number(document.getElementById('wdStarsAmount').value) || 0;
+        payload = { amount };
+
+    } else if (method === 'sbp') {
+        amount = Number(document.getElementById('wdSbpAmount').value) || 0;
+        const card = document.getElementById('wdSbpCard').value.trim();
+        const bank = document.getElementById('wdSbpBank').value.trim();
+        const full_name = document.getElementById('wdSbpName').value.trim();
+        if (!card || !full_name) {
+            toast('Заполните карту и ФИО', 'error');
+            return;
+        }
+        payload = { amount, card, bank, full_name };
+
+    } else if (method === 'usdc') {
+        amount = Number(document.getElementById('wdUsdcAmount').value) || 0;
+        const wallet = document.getElementById('wdUsdcWallet').value.trim();
+        if (!wallet) {
+            toast('Введите адрес кошелька', 'error');
+            return;
+        }
+        payload = { amount, wallet };
+
+    } else if (method === 'ton') {
+        amount = Number(document.getElementById('wdTonAmount').value) || 0;
+        const wallet = document.getElementById('wdTonWallet').value.trim();
+        if (!wallet) {
+            toast('Введите TON-кошелёк', 'error');
+            return;
+        }
+        payload = { amount, wallet };
+    }
+
+    if (amount < cfg.min) {
+        toast(`Минимум ${cfg.min} ${cfg.unit}`, 'error');
+        return;
+    }
+
+    const need = Math.ceil(amount * cfg.rate);
+    if (need > (profile.balance || 0)) {
+        toast(`Нужно ${fmt(need)} 🪙`, 'error');
+        return;
+    }
+
+    if (!confirm(`Вывести ${amount} ${cfg.unit} за ${fmt(need)} 🪙?`)) return;
+
+    try {
+        const d = await api(`/api/withdraw/${method}`, payload);
+        updateBalance(d.balance);
+        toast(`✅ ${d.message}`, 'success');
+        SFX.cashout();
+        loadProfile();
+        // Очищаем поля
+        ['wdStarsAmount','wdSbpAmount','wdUsdcAmount','wdTonAmount',
+         'wdSbpCard','wdSbpBank','wdSbpName','wdUsdcWallet','wdTonWallet']
+            .forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+        withdrawRecalc(method);
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
 async function withdrawStars(stars) {
     haptic();
     try {
@@ -3608,13 +3738,23 @@ async function loadAdminWd() {
             const item = document.createElement('div');
             item.className = 'wd-item ' + w.status;
             const icon = { done: '✅', pending: '⏳', failed: '❌' }[w.status] || '❔';
+
+            const methodMeta = {
+                stars: { icon: '⭐',   unit: '⭐',   show: w.stars },
+                sbp:   { icon: '🇷🇺', unit: '₽',    show: w.amount },
+                usdc:  { icon: '💎',   unit: 'USDC', show: w.amount },
+                ton:   { icon: '🪙',   unit: 'TON',  show: w.amount },
+            }[w.method] || { icon: '❔', unit: '', show: w.amount };
+
             item.innerHTML = `
                 <div class="wd-header">
                     <span>${icon} #${w.id} @${w.username}</span>
-                    <b>${w.stars} ⭐</b>
+                    <b>${methodMeta.icon} ${methodMeta.show} ${methodMeta.unit}</b>
                 </div>
                 <div class="wd-info">
+                    Метод: <b>${w.method}</b><br>
                     Списано: ${fmt(w.coins)} 🪙 · ${w.created_at ? w.created_at.slice(0, 16) : ''}
+                    ${w.details ? `<br><span style="font-size:10px;color:#999;">${w.details}</span>` : ''}
                 </div>
                 ${w.status === 'pending' ? `
                     <div class="wd-actions">
