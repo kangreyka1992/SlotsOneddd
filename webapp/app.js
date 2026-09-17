@@ -64,9 +64,6 @@ const TOPUP_RATES = {
     ton: 500,
     stars: 10,
 };
-const SBP_PHONE = '+7 (961)-480-26-06';
-const SBP_NAME = 'Андрей З.';
-const SBP_BANK = 'Сбер-Банк';
 
 /* ═══ SOUND ═══ */
 let audioCtx = null;
@@ -153,6 +150,19 @@ async function api(url, body = {}) {
             signal: controller.signal,
         });
         clearTimeout(timeoutId);
+
+        if (res.status === 401) {
+            document.body.innerHTML = `
+                <div style="color:#fff; padding:40px 20px; text-align:center; font-family:sans-serif; background:#0a0e14; min-height:100vh;">
+                    <div style="font-size:64px; margin-bottom:16px;">⚠️</div>
+                    <div style="font-size:20px; font-weight:800; margin-bottom:12px;">Сессия истекла</div>
+                    <div style="font-size:14px; color:#8a92a3; line-height:1.7;">
+                        Перезапусти Mini App через бота <b>@SlotsGameFast_bot</b>
+                    </div>
+                </div>
+            `;
+            throw new Error('Unauthorized');
+        }
 
         if (!res.ok) {
             let msg = 'Ошибка';
@@ -300,7 +310,9 @@ function showScreen(name) {
     if (!screen) return;
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     screen.classList.add('active');
-    document.getElementById('app').scrollTop = 0;
+
+    const appEl = document.getElementById('app');
+    if (appEl) appEl.scrollTop = 0;
 
     document.querySelectorAll('.nav-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.nav === name);
@@ -1877,10 +1889,6 @@ function renderPay() {
                 <span class="pay-tab-icon">💎</span>
                 <span class="pay-tab-name">Крипта</span>
             </button>
-            <button class="pay-tab" data-method="sbp" onclick="switchPayTab('sbp')">
-                <span class="pay-tab-icon">🇷🇺</span>
-                <span class="pay-tab-name">СБП</span>
-            </button>
         </div>
 
         <div class="pay-method active" id="pay-method-stars">
@@ -1909,29 +1917,13 @@ function renderPay() {
             </div>
             <div class="pay-grid-inner" id="payGridCrypto"></div>
             <div class="pay-info">
-                💡 Отправьте <b>ровно указанную сумму</b> USDC в сети Polygon. Не отправляйте из других сетей.
-            </div>
-        </div>
-
-        <div class="pay-method" id="pay-method-sbp">
-            <div class="pay-header">
-                <div class="pay-header-icon">🇷🇺</div>
-                <div>
-                    <div class="pay-header-title">СБП / Карта РФ</div>
-                    <div class="pay-header-sub">Ручная обработка · 5-30 мин</div>
-                </div>
-                <div class="pay-badge">+10%</div>
-            </div>
-            <div class="pay-grid-inner" id="payGridSbp"></div>
-            <div class="pay-info">
-                💡 Переведите на карту, пришлите скриншот в поддержку — и мы зачислим баланс.
+                💡 Отправьте <b>ровно указанную сумму</b> USDC в сети Polygon.
             </div>
         </div>
     `;
 
     renderStarsButtons();
     renderCryptoButtons();
-    renderSbpButtons();
 }
 
 function switchPayTab(method) {
@@ -2010,69 +2002,6 @@ function renderCryptoButtons() {
     });
 }
 
-function renderSbpButtons() {
-    const el = document.getElementById('payGridSbp');
-    if (!el) return;
-    el.innerHTML = '';
-
-    const PACKS = [
-        { rub: 100,  coins: 500,   badge: 'Старт' },
-        { rub: 300,  coins: 1500,  badge: null },
-        { rub: 500,  coins: 2500,  badge: 'Популярно' },
-        { rub: 1000, coins: 5000,  badge: '+5%' },
-        { rub: 2000, coins: 10000, badge: '+10%' },
-        { rub: 5000, coins: 25000, badge: '+15%' },
-    ];
-
-    PACKS.forEach(p => {
-        const btn = document.createElement('button');
-        btn.className = 'pay-card';
-        btn.innerHTML = `
-            ${p.badge ? `<div class="pay-card-badge">${p.badge}</div>` : ''}
-            <div class="pay-card-top">
-                <span class="pay-card-amount">${p.rub}₽</span>
-                <span class="pay-card-icon">🇷🇺</span>
-            </div>
-            <div class="pay-card-bottom">
-                <span class="pay-card-coins">${fmt(p.coins)}</span>
-                <span class="pay-card-coin-icon">🪙</span>
-            </div>
-        `;
-        btn.onclick = () => sbpPay(p.rub, p.coins);
-        el.appendChild(btn);
-    });
-}
-
-function sbpPay(rub, coins) {
-    haptic('medium');
-    const overlay = document.createElement('div');
-    overlay.className = 'case-opening';
-    overlay.innerHTML = `
-        <div style="color:#fff; text-align:center; max-width:92%;">
-            <div style="font-size:22px; font-weight:800; margin-bottom:12px;">
-                🇷🇺 Оплата через СБП
-            </div>
-            <div style="font-size:14px; color:#8a92a3; margin-bottom:14px;">
-                Сумма к оплате: <b style="color:#fff;">${rub} ₽</b><br>
-                Зачисление: <b style="color:#3dd68c;">${fmt(coins)} 🪙</b>
-            </div>
-            <div style="background:#1a1d24; padding:16px; border-radius:12px; text-align:left; font-size:13px; line-height:1.7; color:#e8eaed;">
-                <b>📋 Инструкция:</b><br>
-                1. Переведите <b>${rub} ₽</b> по номеру:<br>
-                <b style="color:#ff9b26;">${SBP_PHONE}</b><br>
-                <span style="color:#8a92a3; font-size:11px;">(получатель: ${SBP_NAME})</span><br><br>
-                2. В комментарии укажите <b>ID: ${profile.user_id || '—'}</b><br><br>
-                3. Отправьте <b>скриншот чека</b> в поддержку: <b>@Gapp_Soul</b><br><br>
-                4. Зачисление в течение <b>5-30 минут</b>.
-            </div>
-            <button class="btn-secondary" onclick="this.closest('.case-opening').remove()" style="margin-top:16px;">
-                Закрыть
-            </button>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-}
-
 async function cryptoPay(amountUsd) {
     try {
         haptic('medium');
@@ -2104,8 +2033,7 @@ async function cryptoPay(amountUsd) {
                 </div>
                 <div style="margin-top:10px; font-size:11px; color:#5a6373; line-height:1.5;">
                     ⚠️ Отправьте <b>ровно эту сумму</b> в сети <b>Polygon</b>.<br>
-                    Зачисление: <b>${fmt(d.coins)}</b> 🪙<br>
-                    Не отправляйте из других сетей — потеряете деньги.
+                    Зачисление: <b>${fmt(d.coins)}</b> 🪙
                 </div>
                 <div style="margin-top:16px; font-size:13px; color:#ff9b26;" id="cryptoStatus">
                     ⏳ Ожидаем оплату...
@@ -2175,10 +2103,10 @@ function topupQuick(method, amount) {
 
 function topupRecalc(method) {
     const inputId = method === 'ton' ? 'tonAmount' : 'starsAmount';
-const input = document.getElementById(inputId);
-if (!input) return;
+    const input = document.getElementById(inputId);
+    if (!input) return;
 
-const infoId = method === 'ton' ? 'tonInfo' : 'starsInfo';
+    const infoId = method === 'ton' ? 'tonInfo' : 'starsInfo';
     const info = document.getElementById(infoId);
     const goBtn = document.querySelector(`#topup-${method} .topup-go`);
 
@@ -2195,11 +2123,11 @@ const infoId = method === 'ton' ? 'tonInfo' : 'starsInfo';
 
     const unit = method === 'ton' ? 'TON' : '⭐';
 
-info.innerHTML = `Зачислится: <b>${fmt(coins)}</b> 🪙 · Курс: 1 ${unit} = <b>${fmt(rate)}</b> 🪙`;
+    info.innerHTML = `Зачислится: <b>${fmt(coins)}</b> 🪙 · Курс: 1 ${unit} = <b>${fmt(rate)}</b> 🪙`;
 
-let valid = true;
-if (method === 'ton' && amount < 0.1) valid = false;
-if (method === 'stars' && (amount < 10 || amount > 10000)) valid = false;
+    let valid = true;
+    if (method === 'ton' && amount < 0.1) valid = false;
+    if (method === 'stars' && (amount < 10 || amount > 10000)) valid = false;
 
     if (goBtn) goBtn.disabled = !valid;
 }
@@ -2228,7 +2156,6 @@ async function topupTON() {
         toast(e.message, 'error');
     }
 }
-
 
 async function topupStars(starsOverride = null) {
     haptic('medium');
@@ -2338,7 +2265,6 @@ function switchWithdrawTab(method) {
 function withdrawQuick(method, amount) {
     haptic();
     const inputId = method === 'stars' ? 'wdStarsAmount'
-                  : method === 'sbp'   ? 'wdSbpAmount'
                   : method === 'usdc'  ? 'wdUsdcAmount'
                   : 'wdTonAmount';
     const input = document.getElementById(inputId);
@@ -2352,11 +2278,9 @@ function withdrawRecalc(method) {
     if (!cfg) return;
 
     const inputId = method === 'stars' ? 'wdStarsAmount'
-                  : method === 'sbp'   ? 'wdSbpAmount'
                   : method === 'usdc'  ? 'wdUsdcAmount'
                   : 'wdTonAmount';
     const infoId = method === 'stars' ? 'wdStarsInfo'
-                 : method === 'sbp'   ? 'wdSbpInfo'
                  : method === 'usdc'  ? 'wdUsdcInfo'
                  : 'wdTonInfo';
 
@@ -2401,18 +2325,6 @@ async function withdrawGo(method) {
     if (method === 'stars') {
         amount = Number(document.getElementById('wdStarsAmount').value) || 0;
         payload = { amount };
-
-    } else if (method === 'sbp') {
-        amount = Number(document.getElementById('wdSbpAmount').value) || 0;
-        const card = document.getElementById('wdSbpCard')?.value.trim() || '';
-        const bank = document.getElementById('wdSbpBank')?.value.trim() || '';
-        const full_name = document.getElementById('wdSbpName')?.value.trim() || '';
-        if (!card || !full_name) {
-            toast('Заполните карту и ФИО', 'error');
-            return;
-        }
-        payload = { amount, card, bank, full_name };
-
     } else if (method === 'usdc') {
         amount = Number(document.getElementById('wdUsdcAmount').value) || 0;
         const wallet = document.getElementById('wdUsdcWallet').value.trim();
@@ -2421,7 +2333,6 @@ async function withdrawGo(method) {
             return;
         }
         payload = { amount, wallet };
-
     } else if (method === 'ton') {
         amount = Number(document.getElementById('wdTonAmount').value) || 0;
         const wallet = document.getElementById('wdTonWallet').value.trim();
@@ -2451,8 +2362,8 @@ async function withdrawGo(method) {
         toast(`✅ ${d.message}`, 'success');
         SFX.cashout();
         loadProfile();
-        ['wdStarsAmount','wdSbpAmount','wdUsdcAmount','wdTonAmount',
-         'wdSbpCard','wdSbpBank','wdSbpName','wdUsdcWallet','wdTonWallet']
+        ['wdStarsAmount','wdUsdcAmount','wdTonAmount',
+         'wdUsdcWallet','wdTonWallet']
             .forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
@@ -3737,6 +3648,8 @@ async function updateJackpot() {
 }
 
 /* ═══ HOURLY BONUS ═══ */
+let hourlyTimer = null;
+
 async function loadHourlyStatus() {
     try {
         const d = await api('/api/hourly/status');
@@ -3752,6 +3665,20 @@ async function loadHourlyStatus() {
             banner.classList.remove('hidden');
             banner.classList.remove('ready');
             text.textContent = `⏳ Бонус через ${formatCooldown(d.seconds_left)} · серия ${d.streak}`;
+
+            // Тикаем каждую секунду
+            if (hourlyTimer) clearInterval(hourlyTimer);
+            let left = d.seconds_left;
+            hourlyTimer = setInterval(() => {
+                left--;
+                if (left <= 0) {
+                    clearInterval(hourlyTimer);
+                    hourlyTimer = null;
+                    loadHourlyStatus();
+                    return;
+                }
+                text.textContent = `⏳ Бонус через ${formatCooldown(left)} · серия ${d.streak}`;
+            }, 1000);
         }
     } catch (e) {}
 }
@@ -4189,7 +4116,6 @@ async function buyPremiumPass() {
 async function bootstrap() {
     console.log('🚀 bootstrap start, initData length:', (initData || '').length);
 
-    // Всегда скрываем сплэш через 3 секунды, даже если что-то упало
     const splashTimeout = setTimeout(() => {
         console.log('⏰ Force-hide splash by timeout');
         document.getElementById('splash')?.classList.add('hide');
@@ -4226,7 +4152,6 @@ async function bootstrap() {
     clearTimeout(splashTimeout);
     document.getElementById('splash')?.classList.add('hide');
 
-    // Остальные загрузки — каждая в своём try, чтобы одна ошибка не убила всё
     try { renderGamesGrid(); } catch (e) { console.error('games grid:', e); }
     try { renderHistory(); } catch (e) { console.error('history:', e); }
     try { loadCases().then(() => renderHomeInventoryPreview()); } catch (e) { console.error('cases:', e); }
