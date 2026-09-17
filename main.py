@@ -51,6 +51,17 @@ from database import (
     get_free_case_info, claim_free_case,
     log_house_flow, get_house_stats,
     get_winrate, set_winrate, clear_winrate, list_winrates,
+    get_referrer,
+    # ═══ НОВЫЕ ФИЧИ ═══
+    get_jackpot, add_to_jackpot, win_jackpot,
+    get_hourly_info, claim_hourly,
+    add_to_cashback, get_cashback_info, claim_cashback,
+    add_referral_commission, get_referral_earnings,
+    get_profile, set_profile,
+    get_active_tournament, add_tournament_score, get_tournament_leaderboard,
+    add_to_hall_of_fame, get_hall_of_fame,
+    get_wheel_info, add_wheel_spin, consume_wheel_spin,
+    get_user_level, add_user_xp,
 )
 
 WITHDRAW_RATE = 125
@@ -160,10 +171,93 @@ def _validate_withdraw_amount(method: str, amount: float) -> None:
         raise HTTPException(400, f"Минимум {cfg['min']} {cfg['unit']}")
 
 
+async def _process_game_rewards(uid: int, bet: int, win: int, game: str,
+                                username: str = None):
+    """
+    Начисляет:
+    - кэшбэк-накопление (если игрок в минусе)
+    - % рефереру от ставки
+    - вклад в джекпот
+    - вклад в турнир
+    - hall of fame для крупных выигрышей
+    - прогресс колеса
+    - XP пользователя
+    """
+    # Кэшбэк
+    if win < bet:
+        try:
+            await add_to_cashback(uid, bet - win)
+        except Exception as e:
+            print(f"cashback error: {e}")
+
+    # Реферальный %
+    try:
+        referrer = await get_referrer(uid)
+        if referrer:
+            await add_referral_commission(referrer, bet)
+    except Exception as e:
+        print(f"referral error: {e}")
+
+    # Джекпот
+    try:
+        await add_to_jackpot(max(1, int(bet * 0.01)))
+    except Exception as e:
+        print(f"jackpot error: {e}")
+
+    # Турнир
+    try:
+        tour = await get_active_tournament()
+        if tour and tour["game"] == game and win > 0:
+            await add_tournament_score(tour["id"], uid, win)
+    except Exception as e:
+        print(f"tournament error: {e}")
+
+    # Hall of Fame
+    try:
+        if win >= 100_000:
+            await add_to_hall_of_fame(uid, username or f"user_{uid}", game, win)
+    except Exception as e:
+        print(f"hall error: {e}")
+
+    # XP
+    try:
+        await add_user_xp(uid, max(1, bet // 1000))
+    except Exception as e:
+        print(f"xp error: {e}")
+
+    # Колесо: 5% шанс получить спин
+    try:
+        if random.random() < 0.05:
+            await add_wheel_spin(uid, 1)
+    except Exception as e:
+        print(f"wheel error: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(start_bot())
     print("🚀 Бот и веб-сервер запущены", flush=True)
+
+    # Инициализация турнира
+    try:
+        import aiosqlite
+        from database import DB_PATH
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                "SELECT COUNT(*) FROM tournaments WHERE status = 'active'"
+            ) as cur:
+                cnt = (await cur.fetchone())[0]
+            if cnt == 0:
+                await db.execute(
+                    "INSERT INTO tournaments (game, prize_pool, starts_at, ends_at) "
+                    "VALUES ('crash', 1000000, CURRENT_TIMESTAMP, "
+                    "datetime('now', '+7 days'))"
+                )
+                await db.commit()
+                print("🏆 Турнир создан", flush=True)
+    except Exception as e:
+        print(f"tournament init error: {e}")
+
     yield
     task.cancel()
 
@@ -347,6 +441,7 @@ async def api_profile(request: Request):
     stats = await get_user_full_stats(uid)
     invited, bonuses = await get_referral_stats(uid)
     discount = await get_discount(uid)
+    profile_custom = await get_profile(uid)
 
     return {
         "balance": balance,
@@ -356,6 +451,7 @@ async def api_profile(request: Request):
         "username": user.get("username") or user.get("first_name") or "игрок",
         "user_id": uid,
         "is_admin": is_admin(uid),
+        "profile": profile_custom,
         "stats": {
             "wagered": stats[1] if stats else 0,
             "won": stats[2] if stats else 0,
@@ -467,6 +563,7 @@ async def api_slots(request: Request):
     await log_game(uid, bet, win)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
+    await _process_game_rewards(uid, bet, win, "slots", user.get("username"))
     nb = await get_balance(uid)
 
     await update_quest_progress(uid, "bets_count", 1)
@@ -606,6 +703,7 @@ async def api_slots2_spin(request: Request):
     await log_game(uid, total_bet, total_win)
     await add_battle_pass_xp(uid, total_bet // 10)
     await log_house_flow(wagered=total_bet, paid=total_win)
+    await _process_game_rewards(uid, total_bet, total_win, "slots2", user.get("username"))
     nb = await get_balance(uid)
     await update_quest_progress(uid, "bets_count", 1)
     await update_quest_progress(uid, "wagered", total_bet)
@@ -726,6 +824,7 @@ async def api_mines_open(request: Request):
         await log_game(uid, bet, 0)
         await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=0)
+        await _process_game_rewards(uid, bet, 0, "mines", user.get("username"))
         await update_quest_progress(uid, "bets_count", 1)
         await update_quest_progress(uid, "wagered", bet)
         await update_quest_progress(uid, "game_mines", 1)
@@ -749,6 +848,7 @@ async def api_mines_open(request: Request):
         await log_game(uid, bet, win)
         await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=win)
+        await _process_game_rewards(uid, bet, win, "mines", user.get("username"))
         await update_quest_progress(uid, "bets_count", 1)
         await update_quest_progress(uid, "wagered", bet)
         await update_quest_progress(uid, "game_mines", 1)
@@ -797,6 +897,7 @@ async def api_mines_cashout(request: Request):
     await log_game(uid, bet, prize)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=prize)
+    await _process_game_rewards(uid, bet, prize, "mines", user.get("username"))
     if prize >= 1000:
         username = user.get("username") or "Игрок"
         await log_live_win(uid, username, "Mines", prize)
@@ -896,6 +997,7 @@ async def api_crash_status(request: Request):
         await log_game(uid, game["bet"], prize)
         await add_battle_pass_xp(uid, game["bet"] // 10)
         await log_house_flow(wagered=game["bet"], paid=prize)
+        await _process_game_rewards(uid, game["bet"], prize, "crash", user.get("username"))
         if prize >= 1000:
             username = user.get("username") or "Игрок"
             await log_live_win(uid, username, "Crash", prize)
@@ -917,6 +1019,7 @@ async def api_crash_status(request: Request):
         del crash_games[uid]
         await log_game(uid, bet, 0)
         await log_house_flow(wagered=bet, paid=0)
+        await _process_game_rewards(uid, bet, 0, "crash", user.get("username"))
         await update_quest_progress(uid, "bets_count", 1)
         await update_quest_progress(uid, "wagered", bet)
         await update_quest_progress(uid, "game_crash", 1)
@@ -965,6 +1068,7 @@ async def api_crash_cashout(request: Request):
     await log_game(uid, bet, prize)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=prize)
+    await _process_game_rewards(uid, bet, prize, "crash", user.get("username"))
     await update_quest_progress(uid, "bets_count", 1)
     await update_quest_progress(uid, "wagered", bet)
     await update_quest_progress(uid, "game_crash", 1)
@@ -1024,6 +1128,7 @@ async def api_dice(request: Request):
     await log_game(uid, bet, win)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
+    await _process_game_rewards(uid, bet, win, "dice", user.get("username"))
     if win >= 1000:
         username = user.get("username") or "Игрок"
         await log_live_win(uid, username, "Кости", win)
@@ -1097,6 +1202,7 @@ async def api_rr_spin(request: Request):
         await add_balance(uid, prize)
         await log_game(uid, bet, prize)
         await log_house_flow(wagered=bet, paid=prize)
+        await _process_game_rewards(uid, bet, prize, "rr", user.get("username"))
         await unlock_achievement(uid, "first_bet")
         await unlock_achievement(uid, "first_win")
         await unlock_achievement(uid, "rr_max")
@@ -1125,6 +1231,7 @@ async def api_rr_cashout(request: Request):
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
     await log_house_flow(wagered=bet, paid=prize)
+    await _process_game_rewards(uid, bet, prize, "rr", user.get("username"))
     await unlock_achievement(uid, "first_bet")
     return {"prize": prize, "mult": mult, "bet": bet, "balance": await get_balance(uid)}
 
@@ -1191,6 +1298,7 @@ async def api_plinko(request: Request):
     await log_game(uid, bet, win)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
+    await _process_game_rewards(uid, bet, win, "plinko", user.get("username"))
     if win >= 1000:
         username = user.get("username") or "Игрок"
         await log_live_win(uid, username, "Plinko", win)
@@ -1368,6 +1476,7 @@ async def api_penalti_kick(request: Request):
         await update_quest_progress(uid, "wins", 1)
         await log_game(uid, bet, prize)
         await log_house_flow(wagered=bet, paid=prize)
+        await _process_game_rewards(uid, bet, prize, "penalti", user.get("username"))
         await unlock_achievement(uid, "first_bet")
         await unlock_achievement(uid, "first_win")
         if prize >= 100000:
@@ -1418,6 +1527,7 @@ async def api_penalti_cashout(request: Request):
     await log_game(uid, bet, prize)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=prize)
+    await _process_game_rewards(uid, bet, prize, "penalti", user.get("username"))
     await unlock_achievement(uid, "first_bet")
     return {"prize": prize, "mult": mult, "balance": await get_balance(uid)}
 
@@ -1477,6 +1587,7 @@ async def api_coin_flip(request: Request):
     await log_game(uid, bet, win)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
+    await _process_game_rewards(uid, bet, win, "coin", user.get("username"))
     if win >= 1000:
         username = user.get("username") or "Игрок"
         await log_live_win(uid, username, "Монетка", win)
@@ -1568,6 +1679,8 @@ async def api_duel_join(request: Request):
     await log_game(uid, bet, prize if winner == uid else 0)
     await log_game(opponent["uid"], bet, prize if winner == opponent["uid"] else 0)
     await log_house_flow(wagered=bet * 2, paid=prize)
+    await _process_game_rewards(uid, bet, prize if winner == uid else 0, "duel", user.get("username"))
+    await _process_game_rewards(opponent["uid"], bet, prize if winner == opponent["uid"] else 0, "duel")
     await unlock_achievement(uid, "first_bet")
     await unlock_achievement(opponent["uid"], "first_bet")
     if winner == uid:
@@ -2099,6 +2212,7 @@ async def api_cases_spin(request: Request):
     await log_game(uid, price_coins, 0)
     await add_battle_pass_xp(uid, price_coins // 10)
     await log_house_flow(wagered=price_coins, paid=0)
+    await _process_game_rewards(uid, price_coins, 0, "case", user.get("username"))
     await update_quest_progress(uid, "cases_opened", 1)
     if value >= 1000:
         username = user.get("username") or "Игрок"
@@ -2182,6 +2296,7 @@ async def api_cases_spin_multi(request: Request):
     await log_game(uid, total_cost, 0)
     await add_battle_pass_xp(uid, total_cost // 10)
     await log_house_flow(wagered=total_cost, paid=0)
+    await _process_game_rewards(uid, total_cost, 0, "case", user.get("username"))
     await unlock_achievement(uid, "first_bet")
 
     best = max(results, key=lambda r: r["value"])
@@ -2202,47 +2317,6 @@ async def api_cases_spin_multi(request: Request):
         "best": best,
         "count": count,
         "total_cost": total_cost,
-        "balance": await get_balance(uid),
-    }
-
-
-@app.post("/api/cases/open")
-async def api_cases_open(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    case_id = data.get("case_id", "")
-
-    case = next((c for c in CASES if c[0] == case_id), None)
-    if not case:
-        raise HTTPException(400, "Кейс не найден")
-
-    price_coins = case[3] * RATE
-    balance = await get_balance(uid)
-    if balance < price_coins:
-        raise HTTPException(400, f"Нужно {price_coins} 🪙")
-
-    await add_balance(uid, -price_coins)
-
-    item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
-    value = int(price_coins * value_mult)
-    kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
-
-    await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
-    await log_game(uid, price_coins, 0)
-    await log_house_flow(wagered=price_coins, paid=0)
-    await unlock_achievement(uid, "first_bet")
-
-    return {
-        "case_id": case_id,
-        "item_id": item_id,
-        "rarity": rarity_id,
-        "rarity_name": rarity_name,
-        "rarity_emoji": rarity_emoji,
-        "emoji": emoji,
-        "name": name,
-        "value": value,
-        "kind": kind,
         "balance": await get_balance(uid),
     }
 
@@ -2447,6 +2521,7 @@ async def api_upgrader_play(request: Request):
 
     await log_game(uid, total_value, target_price_coins if win else 0)
     await log_house_flow(wagered=total_value, paid=target_price_coins if win else 0)
+    await _process_game_rewards(uid, total_value, target_price_coins if win else 0, "upgrader", user.get("username"))
     await update_quest_progress(uid, "upgrades", 1)
 
     return {
@@ -3017,6 +3092,373 @@ async def api_invoice(request: Request):
     return {"link": link, "coins": coins, "stars": final, "discount": d}
 
 
+# ═══════════ ДЖЕКПОТ ═══════════
+
+@app.post("/api/jackpot/info")
+async def api_jackpot_info(request: Request):
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+    amount = await get_jackpot()
+    return {"amount": amount}
+
+
+# ═══════════ ЕЖЕЧАСНЫЙ БОНУС ═══════════
+
+@app.post("/api/hourly/status")
+async def api_hourly_status(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    last, streak = await get_hourly_info(uid)
+    now = datetime.datetime.utcnow()
+    can_claim = True
+    seconds_left = 0
+
+    if last:
+        try:
+            last_dt = datetime.datetime.fromisoformat(last)
+            delta = (now - last_dt).total_seconds()
+            if delta < 3600:
+                can_claim = False
+                seconds_left = int(3600 - delta)
+            elif delta > 7200:
+                streak = 0
+        except (ValueError, TypeError):
+            pass
+
+    STREAK_MULTS = [1.0, 1.2, 1.5, 2.0, 3.0, 5.0]
+    mult = STREAK_MULTS[min(streak, len(STREAK_MULTS) - 1)]
+    base = 200
+    reward = int(base * mult)
+
+    return {
+        "can_claim": can_claim,
+        "seconds_left": seconds_left,
+        "streak": streak,
+        "next_reward": reward,
+        "next_mult": mult,
+    }
+
+
+@app.post("/api/hourly/claim")
+async def api_hourly_claim(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    last, streak = await get_hourly_info(uid)
+    now = datetime.datetime.utcnow()
+
+    if last:
+        try:
+            last_dt = datetime.datetime.fromisoformat(last)
+            if (now - last_dt).total_seconds() < 3600:
+                raise HTTPException(400, "Бонус пока недоступен")
+            if (now - last_dt).total_seconds() > 7200:
+                streak = 0
+        except (ValueError, TypeError):
+            pass
+
+    STREAK_MULTS = [1.0, 1.2, 1.5, 2.0, 3.0, 5.0]
+    mult = STREAK_MULTS[min(streak, len(STREAK_MULTS) - 1)]
+    reward = int(200 * mult)
+
+    new_streak = streak + 1
+    await claim_hourly(uid, new_streak)
+    nb = await add_balance(uid, reward)
+
+    return {
+        "reward": reward,
+        "streak": new_streak,
+        "mult": mult,
+        "balance": nb,
+    }
+
+
+# ═══════════ КЭШБЭК ═══════════
+
+@app.post("/api/cashback/info")
+async def api_cashback_info(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    return await get_cashback_info(uid)
+
+
+@app.post("/api/cashback/claim")
+async def api_cashback_claim(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    reward = await claim_cashback(uid)
+    if reward <= 0:
+        raise HTTPException(400, "Нечего забирать")
+    return {"reward": reward, "balance": await get_balance(uid)}
+
+
+# ═══════════ РЕФЕРАЛЬНАЯ СТАТИСТИКА ═══════════
+
+@app.post("/api/referral/stats")
+async def api_referral_stats(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    invited, bonuses = await get_referral_stats(uid)
+    earnings = await get_referral_earnings(uid)
+    bot_username = "SlotsGameFast_bot"
+    ref_link = f"https://t.me/{bot_username}?start=ref_{uid}"
+
+    return {
+        "invited": invited,
+        "bonuses": bonuses,
+        "earnings": earnings,
+        "link": ref_link,
+    }
+
+
+# ═══════════ ПРОФИЛЬ (аватарки, рамки, титулы) ═══════════
+
+AVAILABLE_AVATARS = [
+    {"id": "default", "emoji": "👤", "name": "Обычный",   "price": 0},
+    {"id": "cat",     "emoji": "🐱", "name": "Котик",     "price": 5000},
+    {"id": "dragon",  "emoji": "🐉", "name": "Дракон",    "price": 25000},
+    {"id": "unicorn", "emoji": "🦄", "name": "Единорог",  "price": 50000},
+    {"id": "alien",   "emoji": "👽", "name": "Пришелец",  "price": 75000},
+    {"id": "robot",   "emoji": "🤖", "name": "Робот",     "price": 100000},
+    {"id": "phoenix", "emoji": "🦅", "name": "Феникс",    "price": 150000},
+    {"id": "skull",   "emoji": "💀", "name": "Череп",     "price": 200000},
+    {"id": "crown",   "emoji": "👑", "name": "Корона",    "price": 500000},
+    {"id": "god",     "emoji": "⚡", "name": "Бог",       "price": 1000000},
+]
+
+AVAILABLE_FRAMES = [
+    {"id": "none",     "name": "Без рамки", "price": 0,      "color": "transparent"},
+    {"id": "bronze",   "name": "Бронза",    "price": 5000,   "color": "#cd7f32"},
+    {"id": "silver",   "name": "Серебро",   "price": 25000,  "color": "#c0c0c0"},
+    {"id": "gold",     "name": "Золото",    "price": 100000, "color": "#ffc107"},
+    {"id": "diamond",  "name": "Алмаз",     "price": 500000, "color": "#00d4ff"},
+    {"id": "mythic",   "name": "Мифик",     "price": 2000000,"color": "#ff4757"},
+]
+
+AVAILABLE_TITLES = [
+    {"id": "novice",     "name": "Новичок",    "price": 0},
+    {"id": "lucky",      "name": "Везунчик",   "price": 10000},
+    {"id": "highroller", "name": "Хайроллер",  "price": 50000},
+    {"id": "millioner",  "name": "Миллионер",  "price": 100000},
+    {"id": "legend",     "name": "Легенда",    "price": 500000},
+    {"id": "god",        "name": "Бог казино", "price": 5000000},
+]
+
+
+@app.post("/api/profile/customize/list")
+async def api_profile_customize_list(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    current = await get_profile(uid)
+
+    return {
+        "current": current,
+        "avatars": AVAILABLE_AVATARS,
+        "frames": AVAILABLE_FRAMES,
+        "titles": AVAILABLE_TITLES,
+    }
+
+
+@app.post("/api/profile/customize/buy")
+async def api_profile_customize_buy(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    kind = data.get("kind")
+    item_id = data.get("item_id")
+
+    if kind == "avatar":
+        item = next((a for a in AVAILABLE_AVATARS if a["id"] == item_id), None)
+    elif kind == "frame":
+        item = next((f for f in AVAILABLE_FRAMES if f["id"] == item_id), None)
+    elif kind == "title":
+        item = next((t for t in AVAILABLE_TITLES if t["id"] == item_id), None)
+    else:
+        raise HTTPException(400, "Неверный тип")
+
+    if not item:
+        raise HTTPException(404, "Не найдено")
+
+    price = item["price"]
+    balance = await get_balance(uid)
+    if balance < price:
+        raise HTTPException(400, f"Нужно {price} 🪙")
+
+    await add_balance(uid, -price)
+
+    if kind == "avatar":
+        await set_profile(uid, avatar=item_id)
+    elif kind == "frame":
+        await set_profile(uid, frame=item_id)
+    elif kind == "title":
+        await set_profile(uid, title=item["name"])
+
+    return {
+        "ok": True,
+        "balance": await get_balance(uid),
+        "profile": await get_profile(uid),
+    }
+
+
+# ═══════════ ТУРНИРЫ ═══════════
+
+@app.post("/api/tournament/active")
+async def api_tournament_active(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    tour = await get_active_tournament()
+    if not tour:
+        return {"active": False}
+
+    leaderboard = await get_tournament_leaderboard(tour["id"], 20)
+    my_rank = None
+    my_score = 0
+    for i, (u_id, uname, sc) in enumerate(leaderboard, 1):
+        if u_id == uid:
+            my_rank = i
+            my_score = sc
+            break
+
+    return {
+        "active": True,
+        "tournament": tour,
+        "leaderboard": [
+            {"rank": i, "user_id": u_id, "username": uname or f"user_{u_id}",
+             "score": sc}
+            for i, (u_id, uname, sc) in enumerate(leaderboard, 1)
+        ],
+        "my_rank": my_rank,
+        "my_score": my_score,
+    }
+
+
+# ═══════════ HALL OF FAME ═══════════
+
+@app.post("/api/hall/list")
+async def api_hall_list(request: Request):
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+    rows = await get_hall_of_fame(30)
+    return {
+        "records": [
+            {"user_id": r[0], "username": r[1] or f"user_{r[0]}",
+             "game": r[2], "win": r[3], "created_at": r[4]}
+            for r in rows
+        ]
+    }
+
+
+# ═══════════ КОЛЕСО ФОРТУНЫ ═══════════
+
+WHEEL_PRIZES = [
+    {"id": "coins_500",   "label": "500 🪙",    "type": "coins",  "value": 500,   "weight": 30},
+    {"id": "coins_1000",  "label": "1 000 🪙",  "type": "coins",  "value": 1000,  "weight": 25},
+    {"id": "coins_5000",  "label": "5 000 🪙",  "type": "coins",  "value": 5000,  "weight": 15},
+    {"id": "coins_25000", "label": "25 000 🪙", "type": "coins",  "value": 25000, "weight": 10},
+    {"id": "case_starter","label": "Кейс",      "type": "case",   "value": "starter", "weight": 10},
+    {"id": "case_gold",   "label": "Золотой кейс","type": "case", "value": "gold",    "weight": 5},
+    {"id": "coins_100000","label": "100 000 🪙","type": "coins",  "value": 100000,"weight": 4},
+    {"id": "jackpot",     "label": "🎰 ДЖЕКПОТ", "type": "jackpot","value": 0,     "weight": 1},
+]
+
+
+@app.post("/api/wheel/status")
+async def api_wheel_status(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    info = await get_wheel_info(uid)
+    return {
+        "spins": info["spins"],
+        "prizes": WHEEL_PRIZES,
+    }
+
+
+@app.post("/api/wheel/spin")
+async def api_wheel_spin(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    ok = await consume_wheel_spin(uid)
+    if not ok:
+        raise HTTPException(400, "Нет доступных прокрутов")
+
+    total_w = sum(p["weight"] for p in WHEEL_PRIZES)
+    r = random.randint(1, total_w)
+    cum = 0
+    chosen = WHEEL_PRIZES[0]
+    for p in WHEEL_PRIZES:
+        cum += p["weight"]
+        if r <= cum:
+            chosen = p
+            break
+
+    result_text = ""
+    new_balance = await get_balance(uid)
+
+    if chosen["type"] == "coins":
+        new_balance = await add_balance(uid, chosen["value"])
+        result_text = f"+{chosen['value']} 🪙"
+    elif chosen["type"] == "case":
+        case_id = chosen["value"]
+        case = next((c for c in CASES if c[0] == case_id), None)
+        if case:
+            price_coins = case[3] * RATE
+            item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+            value = int(price_coins * value_mult)
+            kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
+            await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
+            result_text = f"Кейс: {emoji} {name} ({value} 🪙)"
+        else:
+            new_balance = await add_balance(uid, 1000)
+            result_text = "+1000 🪙 (кейс не найден)"
+    elif chosen["type"] == "jackpot":
+        amount = await win_jackpot(uid)
+        new_balance = await add_balance(uid, amount)
+        result_text = f"🎰 ДЖЕКПОТ +{amount} 🪙"
+
+    return {
+        "prize": chosen,
+        "result_text": result_text,
+        "balance": new_balance,
+    }
+
+
+# ═══════════ УРОВЕНЬ ═══════════
+
+@app.post("/api/level/status")
+async def api_level_status(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    lvl = await get_user_level(uid)
+    next_xp = ((lvl["level"]) ** 2) * 500
+    cur_xp_base = ((lvl["level"] - 1) ** 2) * 500
+    progress = lvl["xp"] - cur_xp_base
+    need = next_xp - cur_xp_base
+
+    return {
+        "level": lvl["level"],
+        "xp": lvl["xp"],
+        "next_level_xp": next_xp,
+        "progress": progress,
+        "need": need,
+        "percent": min(100, int(progress / need * 100)) if need > 0 else 100,
+    }
+
+
 # ═══════════ АДМИНКА ═══════════
 
 @app.post("/api/admin/check")
@@ -3363,6 +3805,40 @@ async def api_admin_broadcast(request: Request):
 
     await log_admin_action(admin["id"], "broadcast", None, f"sent={sent} failed={failed}")
     return {"ok": True, "sent": sent, "failed": failed}
+
+
+# ═══════════ МИГРАЦИЯ (разовая) ═══════════
+
+@app.post("/api/admin/migrate_withdrawals")
+async def api_admin_migrate_withdrawals(request: Request):
+    """Разовый эндпоинт для добавления колонок в withdrawals.
+    После выполнения — удалить из кода."""
+    data = await request.json()
+    admin_only(data.get("initData", ""))
+
+    import aiosqlite
+    from database import DB_PATH
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        for col, definition in [
+            ("method",  "TEXT NOT NULL DEFAULT 'stars'"),
+            ("amount",  "REAL NOT NULL DEFAULT 0"),
+            ("details", "TEXT"),
+        ]:
+            try:
+                await db.execute(f"ALTER TABLE withdrawals ADD COLUMN {col} {definition}")
+                print(f"✅ column {col} added")
+            except Exception as e:
+                print(f"column {col}: {e}")
+
+        try:
+            await db.execute("UPDATE withdrawals SET amount = stars WHERE amount = 0")
+            await db.commit()
+            print("✅ amount synced")
+        except Exception as e:
+            print(f"sync amount: {e}")
+
+    return {"ok": True, "message": "Migration complete. Delete this endpoint."}
 
 
 if __name__ == "__main__":
