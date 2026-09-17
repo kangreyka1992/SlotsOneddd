@@ -3256,11 +3256,25 @@ async def api_profile_customize_list(request: Request):
     uid = user["id"]
     current = await get_profile(uid)
 
+    # Достаём "owned" из профиля (json-строка)
+    owned_raw = current.get("owned", "[]")
+    try:
+        owned = set(json.loads(owned_raw))
+    except Exception:
+        owned = set()
+
+    def mark_owned(items, kind):
+        out = []
+        for it in items:
+            key = f"{kind}:{it['id']}"
+            out.append({**it, "owned": key in owned or it.get("price", 0) == 0})
+        return out
+
     return {
         "current": current,
-        "avatars": AVAILABLE_AVATARS,
-        "frames": AVAILABLE_FRAMES,
-        "titles": AVAILABLE_TITLES,
+        "avatars": mark_owned(AVAILABLE_AVATARS, "avatar"),
+        "frames": mark_owned(AVAILABLE_FRAMES, "frame"),
+        "titles": mark_owned(AVAILABLE_TITLES, "title"),
     }
 
 
@@ -3285,22 +3299,49 @@ async def api_profile_customize_buy(request: Request):
     if not item:
         raise HTTPException(404, "Не найдено")
 
+    current = await get_profile(uid)
+    try:
+        owned = set(json.loads(current.get("owned", "[]")))
+    except Exception:
+        owned = set()
+
+    key = f"{kind}:{item_id}"
     price = item["price"]
+
+    # Если уже куплено — не списываем, просто применяем
+    if key in owned or price == 0:
+        if kind == "avatar":
+            await set_profile(uid, avatar=item_id)
+        elif kind == "frame":
+            await set_profile(uid, frame=item_id)
+        elif kind == "title":
+            await set_profile(uid, title=item["name"])
+        return {
+            "ok": True,
+            "already_owned": True,
+            "balance": await get_balance(uid),
+            "profile": await get_profile(uid),
+        }
+
     balance = await get_balance(uid)
     if balance < price:
         raise HTTPException(400, f"Нужно {price} 🪙")
 
     await add_balance(uid, -price)
 
+    owned.add(key)
+    owned_str = json.dumps(list(owned))
+
     if kind == "avatar":
-        await set_profile(uid, avatar=item_id)
+        await set_profile(uid, avatar=item_id, owned=owned_str)
     elif kind == "frame":
-        await set_profile(uid, frame=item_id)
+        await set_profile(uid, frame=item_id, owned=owned_str)
     elif kind == "title":
-        await set_profile(uid, title=item["name"])
+        await set_profile(uid, title=item["name"], owned=owned_str)
 
     return {
         "ok": True,
+        "already_owned": False,
         "balance": await get_balance(uid),
         "profile": await get_profile(uid),
     }
