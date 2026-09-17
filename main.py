@@ -9,6 +9,7 @@ import datetime
 from contextlib import asynccontextmanager
 from urllib.parse import parse_qsl, quote
 from fastapi.staticfiles import StaticFiles
+from database import init_db as db_init
 
 import aiohttp
 from fastapi import FastAPI, Request, HTTPException
@@ -16,6 +17,7 @@ from fastapi.responses import FileResponse
 import uvicorn
 
 from bot import bot, start_bot, RATE, STAR_PACKS
+from database import init_db as db_init
 from database import (
     get_balance, add_balance, set_balance, create_withdrawal,
     get_top_players, get_user_full_stats,
@@ -230,10 +232,11 @@ async def periodic_cleanup():
             print(f"cleanup_duel error: {e}")
 
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await db_init()
     task = asyncio.create_task(start_bot())
-    cleanup_task = asyncio.create_task(periodic_cleanup())
     print("🚀 Бот и веб-сервер запущены", flush=True)
 
     try:
