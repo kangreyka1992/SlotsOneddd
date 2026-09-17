@@ -48,7 +48,6 @@ html, body {
   color: var(--text-main);
   background: radial-gradient(ellipse at top, #151b26 0%, #0a0e14 60%);
   overscroll-behavior: none;
-  -webkit-overflow-scrolling: touch;
 }
 body { user-select: none; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
@@ -62,9 +61,11 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   max-width: 520px;
   margin: 0 auto;
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 70px; /* под фиксированное нижнее меню */
 }
-
 /* ═══════════ HEADER ═══════════ */
 .header {
   display: flex; align-items: center; justify-content: space-between;
@@ -104,26 +105,20 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 
 /* ═══════════ SCREENS ═══════════ */
 .screens {
-  flex: 1 1 0;
-  min-height: 0;
   position: relative;
-  overflow: hidden;
+  flex-shrink: 0;
 }
 .screen {
-  position: absolute;
-  inset: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  padding: 16px 16px 90px;
+  display: none;
+  padding: 16px 16px 20px;
   opacity: 0;
-  transform: translateX(30px);
-  pointer-events: none;
-  transition: opacity 0.28s ease, transform 0.28s ease;
-  scrollbar-width: none;
+  transition: opacity 0.28s ease;
+}
+.screen.active {
+  display: block;
+  opacity: 1;
 }
 .screen::-webkit-scrollbar { display: none; }
-.screen.active { opacity: 1; transform: translateX(0); pointer-events: auto; }
 .section-title { font-size: 15px; font-weight: 700; margin: 20px 0 12px; letter-spacing: 0.3px; }
 
 /* ═══════════ CAROUSEL ═══════════ */
@@ -856,10 +851,19 @@ select.input { text-align: left; letter-spacing: 0; }
 
 /* ═══════════ BOTTOM NAV ═══════════ */
 .bottom-nav {
-  display: grid; grid-template-columns: repeat(5, 1fr);
-  background: var(--bg-glass); backdrop-filter: blur(20px);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255,255,255,0.06);
-  padding: 8px 0 max(8px, env(safe-area-inset-bottom)); flex-shrink: 0;
+  padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 520px;
+  margin: 0 auto;
+  z-index: 50;
 }
 .nav-btn {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -1763,9 +1767,6 @@ select.input { text-align: left; letter-spacing: 0; }
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 60;
 }
 .app-header-left { display: flex; align-items: center; gap: 10px; }
 .app-logo {
@@ -3296,8 +3297,5 @@ body.upgrade-running .bottom-nav {
 .hall-game { font-size: 11px; color: #8a92a3; padding: 2px 8px; background: rgba(255,255,255,0.05); border-radius: 6px; }
 .fixed-banners {
   flex-shrink: 0;
-  background: var(--bg-glass);
-  backdrop-filter: blur(20px);
-  z-index: 40;
 }
 .hall-win { font-family: var(--font-num); font-weight: 900; color: #3dd68c; }
