@@ -2069,15 +2069,6 @@ function topupRecalc(method) {
     if (goBtn) goBtn.disabled = !valid;
 }
 
-    // Валидация минималки
-    let valid = true;
-    if (method === 'ton' && amount < 0.1) valid = false;
-    if (method === 'crypto' && amount < 1) valid = false;
-    if (method === 'stars' && (amount < 10 || amount > 10000)) valid = false;
-
-    goBtn.disabled = !valid;
-}
-
 async function topupPay(method) {
     if (method === 'ton') return topupTON();
     if (method === 'sbp') return topupSBP();
