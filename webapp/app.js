@@ -366,7 +366,6 @@ const GAMES_META = {
     dice:    { name: 'Кости',     desc: 'До ×5.7',  icon: '🎲', cls: '',       sub: 'Угадай диапазон' },
     rr:      { name: 'Рулетка',   desc: 'До ×7',    icon: '🔫', cls: '',       sub: 'Русская рулетка' },
     coin:    { name: 'Монетка',   desc: '×1.95',    icon: '🪙', cls: '',       sub: '50/50' },
-    duel:    { name: 'PvP Дуэль', desc: '×1.96',    icon: '⚔️', cls: '',       sub: 'Против игрока' },
 };
 
 function renderGamesGrid() {
