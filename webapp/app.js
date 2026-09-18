@@ -44,17 +44,32 @@ function capitalize(s) {
 
 /* ═══ Уведомления ═══ */
 const NOTIFY_DEFAULTS = {
-    daily: false,
-    hourly: false,
-    battlepass: false,
-    promo: false,
+    daily: true,
+    hourly: true,
+    battlepass: true,
+    promo: true,
 };
 
 function loadNotifySettings() {
     const saved = localStorage.getItem('slots_notify');
-    const state = saved ? JSON.parse(saved) : { ...NOTIFY_DEFAULTS };
+
+    // Если пользователь ещё ничего не менял — берём все включённые по умолчанию
+    let state;
+    if (saved) {
+        try {
+            state = { ...NOTIFY_DEFAULTS, ...JSON.parse(saved) };
+        } catch (e) {
+            state = { ...NOTIFY_DEFAULTS };
+        }
+    } else {
+        state = { ...NOTIFY_DEFAULTS };
+        // Сразу сохраняем, чтобы при следующем заходе уже было
+        localStorage.setItem('slots_notify', JSON.stringify(state));
+    }
+
     Object.keys(state).forEach(key => {
-        const btn = document.getElementById('notify' + key.charAt(0).toUpperCase() + key.slice(1));
+        const btnId = 'notify' + key.charAt(0).toUpperCase() + key.slice(1);
+        const btn = document.getElementById(btnId);
         if (btn) btn.classList.toggle('on', !!state[key]);
     });
 }
@@ -68,13 +83,17 @@ function toggleNotify(key) {
     const isOn = btn.classList.contains('on');
 
     // Сохраняем в localStorage
-    const saved = localStorage.getItem('slots_notify');
-    const state = saved ? JSON.parse(saved) : { ...NOTIFY_DEFAULTS };
+    let state;
+    try {
+        state = JSON.parse(localStorage.getItem('slots_notify') || '{}');
+    } catch (e) {
+        state = {};
+    }
     state[key] = isOn;
     localStorage.setItem('slots_notify', JSON.stringify(state));
 
     haptic();
-    toast(isOn ? '✅ Уведомление включено' : '🔕 Уведомление выключено');
+    toast(isOn ? '🔔 Уведомление включено' : '🔕 Уведомление выключено');
 }
 
 /* ═══════════ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ═══════════ */
