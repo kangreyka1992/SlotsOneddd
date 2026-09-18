@@ -1551,10 +1551,10 @@ async def get_cashback_info(user_id: int):
         pct, tier = 12, "💎 Платина"
     elif lost >= 1_000_000:
         pct, tier = 8, "🥇 Золото"
-    elif lost >= 100_000:
-        pct, tier = 5, "🥈 Серебро"
-    elif lost >= 10_000:
-        pct, tier = 2, "🥉 Бронза"
+    elif lost >= 50_000:
+        pct, tier = 3, "🥈 Серебро"
+    elif lost >= 5_000:
+        pct, tier = 1, "🥉 Бронза"
     else:
         pct, tier = 0, "—"
 
