@@ -3544,20 +3544,6 @@ body.upgrade-running .bottom-nav {
   margin-bottom: 2px;
 }
 
-.upg-slot-emoji .tg-icon {
-  width: 64px;
-  height: 64px;
-  font-size: 34px;
-  border-radius: 16px;
-}
-
-.cr-reward-emoji .tg-icon {
-  width: 90px;
-  height: 90px;
-  font-size: 48px;
-  border-radius: 20px;
-}
-
 /* Свечение по редкости */
 .cr-item .tg-icon[data-rarity="legendary"] {
   box-shadow:
@@ -3588,5 +3574,12 @@ body.upgrade-running .bottom-nav {
 .cr-reward-emoji .tg-icon-img {
     width: 120px;
     height: 120px;
+    border-radius: 20px;
+    filter: drop-shadow(0 0 30px currentColor);
+}
+.cr-reward-emoji .tg-icon {
+    width: 120px;
+    height: 120px;
+    font-size: 64px;
     border-radius: 20px;
 }
