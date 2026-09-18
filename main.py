@@ -41,6 +41,7 @@ from database import (
     XP_PER_LEVEL,
     MAX_LEVEL,
     get_stats, get_last_withdrawals, update_withdrawal,
+    get_notif_settings, set_notif_setting,
     get_user_by_username, get_all_user_ids,
     create_promo, delete_promo, list_promos,
     log_admin_action, get_admin_logs,
@@ -554,7 +555,31 @@ async def api_profile(request: Request):
         "discount": discount,
     }
 
+# ═══════════ УВЕДОМЛЕНИЯ ═══════════
 
+@app.post("/api/notif/get")
+async def api_notif_get(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    settings = await get_notif_settings(uid)
+    return {"settings": settings}
+
+
+@app.post("/api/notif/settings")
+async def api_notif_settings(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    key = data.get("key", "")
+    enabled = bool(data.get("enabled", True))
+
+    ok = await set_notif_setting(uid, key, enabled)
+    if not ok:
+        raise HTTPException(400, "invalid_key")
+
+    return {"ok": True, "settings": await get_notif_settings(uid)}
+    
 @app.post("/api/feed/live")
 async def api_feed_live(request: Request):
     data = await request.json()
