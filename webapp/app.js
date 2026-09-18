@@ -42,6 +42,41 @@ function capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/* ═══ Уведомления ═══ */
+const NOTIFY_DEFAULTS = {
+    daily: false,
+    hourly: false,
+    battlepass: false,
+    promo: false,
+};
+
+function loadNotifySettings() {
+    const saved = localStorage.getItem('slots_notify');
+    const state = saved ? JSON.parse(saved) : { ...NOTIFY_DEFAULTS };
+    Object.keys(state).forEach(key => {
+        const btn = document.getElementById('notify' + key.charAt(0).toUpperCase() + key.slice(1));
+        if (btn) btn.classList.toggle('on', !!state[key]);
+    });
+}
+
+function toggleNotify(key) {
+    const btnId = 'notify' + key.charAt(0).toUpperCase() + key.slice(1);
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    btn.classList.toggle('on');
+    const isOn = btn.classList.contains('on');
+
+    // Сохраняем в localStorage
+    const saved = localStorage.getItem('slots_notify');
+    const state = saved ? JSON.parse(saved) : { ...NOTIFY_DEFAULTS };
+    state[key] = isOn;
+    localStorage.setItem('slots_notify', JSON.stringify(state));
+
+    haptic();
+    toast(isOn ? '✅ Уведомление включено' : '🔕 Уведомление выключено');
+}
+
 /* ═══════════ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ═══════════ */
 let profile = { balance: 0, stats: {}, referral: {} };
 let minesState = null;
@@ -4913,6 +4948,7 @@ async function bootstrap() {
     try { initSwipeNavigation(); } catch (e) { console.error('swipe:', e); }
     try { initPullToRefresh(); } catch (e) { console.error('ptr:', e); }
     try { loadTheme(); } catch (e) { console.error('theme:', e); }
+    try { loadNotifySettings(); } catch (e) { console.error('notify:', e); }
     try { updateQuickBadges(); } catch (e) { console.error('badges:', e); }
     try { loadLiveFeed(); } catch (e) { console.error('feed:', e); }
     try { updateJackpot(); } catch (e) { console.error('jackpot:', e); }
