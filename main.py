@@ -1869,12 +1869,12 @@ async def api_duel_cancel(request: Request):
 # ═══════════ CASE SYSTEM ═══════════
 
 RARITY_TABLE = [
-    ("common",    "⬜", "Обычный",     6500, 0.40),
-    ("uncommon",  "🟩", "Необычный",   2300, 0.75),
-    ("rare",      "🟦", "Редкий",       800, 1.60),
-    ("epic",      "🟪", "Эпический",    300, 3.80),
-    ("legendary", "🟨", "Легендарный",   85, 11.00),
-    ("mythic",    "🟥", "Мифический",    15, 35.00),
+    ("common",    "⬜", "Обычный",     8000, 0.20),
+    ("uncommon",  "🟩", "Необычный",   1500, 0.40),
+    ("rare",      "🟦", "Редкий",       400, 0.80),
+    ("epic",      "🟪", "Эпический",    100, 1.80),
+    ("legendary", "🟨", "Легендарный",   20, 5.00),
+    ("mythic",    "🟥", "Мифический",     3, 15.00),
 ]
 
 CASE_ITEMS = {
@@ -2156,16 +2156,21 @@ def _roll_case(case_id: str):
 
 
 async def _roll_case_with_winrate(uid: int, case_id: str):
-    """ФИКС: единая функция с подкруткой для одиночного и мульти-спина"""
-    item_id, rarity_id, rar_emoji, rar_name, emoji, name, value_mult = _roll_case(case_id)
+    item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
     winrate, _ = await get_winrate(uid)
+
     if winrate > 50 and rarity_id in ("common", "uncommon"):
         if random.random() * 100 < (winrate - 50):
-            item_id, rarity_id, rar_emoji, rar_name, emoji, name, value_mult = _roll_case(case_id)
+            item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
     elif winrate < 50 and rarity_id in ("legendary", "mythic"):
-        if random.random() * 100 < (50 - winrate):
-            item_id, rarity_id, rar_emoji, rar_name, emoji, name, value_mult = _roll_case(case_id)
-    return item_id, rarity_id, rar_emoji, rar_name, emoji, name, value_mult
+        # Штраф усилен: перебрасываем ВСЕГДА, а не только с шансом
+        if random.random() * 100 < (50 - winrate) * 1.5:
+            item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+            # И ещё раз, чтобы точно не дать топ
+            if rarity_id in ("legendary", "mythic"):
+                item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
+
+    return item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult
 
 
 def _build_track(case_id: str, price_coins: int, win_item: dict):
@@ -2594,7 +2599,19 @@ async def api_upgrader_play(request: Request):
 
     chance = total_value / target_price_coins
     chance = max(0.01, min(0.95, chance))
-
+    
+    # Скрытый штраф — игрок никогда не получает «честный» шанс
+    HOUSE_EDGE = 0.35   # 35% штраф
+    chance = chance * (1 - HOUSE_EDGE)
+    
+    # И дополнительный штраф для дорогих целей
+    if target_price_coins > 500_000:
+        chance *= 0.7
+    elif target_price_coins > 100_000:
+        chance *= 0.85
+    
+    chance = max(0.005, min(0.90, chance))   # потолок 90%, минимум 0.5%
+    
     roll = random.random()
     win = roll < chance
 
