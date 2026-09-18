@@ -68,6 +68,7 @@ from database import (
     get_notification_settings,
     update_notification_settings,
     get_users_for_broadcast,
+    get_daily_case_deal,
 )
 
 WITHDRAW_RATE = 125
