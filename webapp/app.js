@@ -11,6 +11,37 @@ const BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000];
 const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
 
+/* ═══ НАСТРОЙКИ УВЕДОМЛЕНИЙ ═══ */
+const NOTIF_KEYS = ['daily', 'hourly', 'battlepass', 'promo'];
+
+function loadNotifSettings() {
+    NOTIF_KEYS.forEach(k => {
+        const enabled = localStorage.getItem('notif_' + k) !== '0';
+        const sw = document.getElementById('notif' + capitalize(k) + 'Switch');
+        if (sw && sw.parentElement) {
+            sw.parentElement.classList.toggle('active', enabled);
+        }
+    });
+}
+
+function toggleNotif(key) {
+    const cur = localStorage.getItem('notif_' + key) !== '0';
+    const next = !cur;
+    localStorage.setItem('notif_' + key, next ? '1' : '0');
+
+    // Отправляем на сервер
+    api('/api/notif/settings', { key, enabled: next }).catch(() => {});
+
+    haptic();
+    toast(next ? '🔔 Включено' : '🔕 Выключено');
+
+    loadNotifSettings();
+}
+
+function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 /* ═══════════ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ═══════════ */
 let profile = { balance: 0, stats: {}, referral: {} };
 let minesState = null;
@@ -968,6 +999,8 @@ async function loadProfile() {
             if (titleEl) {
                 titleEl.textContent = d.profile?.title || '';
                 titleEl.style.display = d.profile?.title ? 'block' : 'none';
+            // Настройки уведомлений
+            loadNotifSettings();
             }
         }
 
