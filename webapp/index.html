@@ -416,9 +416,12 @@
   <!-- ═══ PROFILE ═══ -->
   <section class="screen" id="screen-profile">
     <div class="profile-card">
+      <div class="profile-avatar-wrapper">
       <div class="profile-avatar" id="profileAvatar">👤</div>
-      <div class="profile-title" id="profileTitle" style="display:none;"></div>
-      <div class="profile-name" id="profileName">Игрок</div>
+      <div class="profile-premium-badge hidden" id="profilePremiumBadge">👑 PREMIUM</div>
+    </div>
+    <div class="profile-title" id="profileTitle" style="display:none;"></div>
+    <div class="profile-name" id="profileName">Игрок</div>
       <div class="profile-level">
         <div class="level-bar"><div class="level-fill" id="levelFill"></div></div>
         <div class="level-text" id="levelText">Уровень 1</div>
@@ -546,21 +549,24 @@
   </section>
 
   <!-- ═══ BATTLE PASS ═══ -->
-  <section class="screen" id="screen-battlepass">
-    <h3 class="section-title">🏆 Battle Pass</h3>
-    <div class="bp-info" id="bpInfo">
-      <div class="bp-season">Сезон <span id="bpSeason">1</span></div>
-      <div class="bp-level">Уровень <span id="bpLevel">1</span></div>
-      <div class="bp-xp-bar">
-        <div class="bp-xp-fill" id="bpXpFill"></div>
-      </div>
-      <div class="bp-xp-text"><span id="bpXp">0</span> / <span id="bpXpMax">1000</span> XP</div>
+<section class="screen" id="screen-battlepass">
+  <h3 class="section-title">🏆 Battle Pass</h3>
+  <div class="bp-info" id="bpInfo">
+    <div class="bp-season">Сезон <span id="bpSeason">1</span></div>
+    <div class="bp-level">Уровень <span id="bpLevel">1</span></div>
+    <div class="bp-xp-bar">
+      <div class="bp-xp-fill" id="bpXpFill"></div>
     </div>
-    <button class="bp-premium-btn" id="bpPremiumBtn" onclick="buyPremiumPass()">
-      ⭐ Купить Premium Pass (250 ⭐)
-    </button>
-    <div class="bp-rewards" id="bpRewards"></div>
-  </section>
+    <div class="bp-xp-text"><span id="bpXp">0</span> / <span id="bpXpMax">1000</span> XP</div>
+  </div>
+  <button class="bp-premium-btn" id="bpPremiumBtn" onclick="buyPremiumPass()">
+    ⭐ Купить Premium Pass (250 ⭐)
+  </button>
+
+  <div class="bp-track-wrap">
+    <div class="bp-track" id="bpTrack"></div>
+  </div>
+</section>
 
   <!-- ═══ PAY (старый) ═══ -->
   <section class="screen" id="screen-pay">
