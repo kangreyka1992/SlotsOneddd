@@ -72,6 +72,14 @@ from database import (
     get_daily_case_deal,
 )
 
+CREATE TABLE IF NOT EXISTS notification_settings (
+    user_id INTEGER PRIMARY KEY,
+    daily INTEGER DEFAULT 1,
+    hourly INTEGER DEFAULT 1,
+    battlepass INTEGER DEFAULT 1,
+    promo INTEGER DEFAULT 1
+)
+
 WITHDRAW_RATE = 125
 MIN_WITHDRAW = 15
 BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
