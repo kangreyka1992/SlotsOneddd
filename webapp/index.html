@@ -96,6 +96,12 @@
   <div class="splash-loader"></div>
 </div>
 
+<!-- PULL-TO-REFRESH -->
+<div class="ptr-indicator" id="ptrIndicator">
+  <div class="ptr-spinner"></div>
+  <span>Обновление...</span>
+</div>
+
 <div id="app">
 
 <!-- ═══ HEADER ═══ -->
@@ -148,6 +154,7 @@
       <span>🎲</span><span>⭐</span><span>🍒</span>
     </div>
 
+    <!-- ХИРО-КАРУСЕЛЬ -->
     <div class="hero-carousel" id="heroCarousel">
       <div class="hero-slide" data-slide="0">
         <div class="hero-slide-content">
@@ -184,6 +191,7 @@
       <div class="hero-banner-timer" id="heroTimer">--:--:--</div>
     </div>
 
+    <!-- TOOLBAR -->
     <div class="toolbar">
       <div class="toolbar-tabs">
         <button class="toolbar-tab active" data-filter="all">Все</button>
@@ -194,6 +202,7 @@
       <button class="toolbar-search" onclick="toast('Поиск в разработке')">🔍</button>
     </div>
 
+    <!-- QUICK ACTIONS -->
     <div class="quick-actions-bar">
       <button class="qa-pill" onclick="showScreen('wheel')">
         <span class="qa-pill-icon">🎡</span>
@@ -216,6 +225,7 @@
       </button>
     </div>
 
+    <!-- БЕСПЛАТНЫЙ КЕЙС -->
     <div class="free-case-banner" id="freeCaseBtn" onclick="openFreeCase()">
       <div class="free-case-banner-left">
         <div class="free-case-banner-icon">🎁</div>
@@ -227,28 +237,31 @@
       <div class="free-case-banner-streak hidden" id="freeCaseStreak"></div>
     </div>
 
-    <div class="daily-deal-banner hidden" id="dailyDealBanner"></div>
-
+    <!-- КЕЙСЫ -->
     <div class="section-title-row">
       <h3 class="section-title">🎰 Кейсы</h3>
       <button class="section-link" onclick="showScreen('cases')">Все кейсы →</button>
     </div>
     <div class="cases-grid" id="homeCasesGrid"></div>
 
+    <!-- ИГРЫ -->
     <div class="section-title-row">
       <h3 class="section-title">🔥 Игры</h3>
     </div>
     <div class="games-grid" id="gamesGrid"></div>
 
+    <!-- BATTLE PASS -->
     <div class="section-title-row">
       <h3 class="section-title">🏆 Battle Pass</h3>
       <button class="section-link" onclick="showScreen('battlepass')">Открыть →</button>
     </div>
 
+    <!-- АДМИН -->
     <button class="admin-access-btn hidden" id="adminBtn" onclick="showScreen('admin')">
       ⚙️ Админ-панель
     </button>
 
+    <!-- ИНВЕНТАРЬ -->
     <div class="section-title-row">
       <h3 class="section-title">🎒 Мой инвентарь</h3>
       <button class="section-link" onclick="showScreen('inventory')">Открыть →</button>
@@ -259,40 +272,30 @@
   </section>
 
   <!-- ═══ WHEEL ═══ -->
-<section class="screen" id="screen-wheel">
-  <h3 class="section-title">🎡 Колесо Фортуны</h3>
+  <section class="screen" id="screen-wheel">
+    <h3 class="section-title">🎡 Колесо Фортуны</h3>
+    <div class="wheel-info">
+      <div class="inv-stat">
+        <div class="inv-stat-val" id="wheelSpins">0</div>
+        <div class="inv-stat-lbl">Доступно прокрутов</div>
+      </div>
+    </div>
 
-  <div class="wheel-status-bar">
-    <div class="wheel-status-item">
-      <div class="wheel-status-val" id="wheelSpins">0</div>
-      <div class="wheel-status-lbl">Прокрутов</div>
+    <div class="wheel-wrap">
+      <div class="wheel-pointer">▼</div>
+      <div class="wheel-disc" id="wheelDisc">
+        <div class="wheel-center">🎡</div>
+      </div>
     </div>
-    <div class="wheel-status-item">
-      <div class="wheel-status-val" id="wheelTimer">--:--:--</div>
-      <div class="wheel-status-lbl">Следующий</div>
-    </div>
-  </div>
 
-  <div class="wheel-stage">
-    <div class="wheel-pointer">▼</div>
-    <div class="wheel-rotor" id="wheelRotor">
-      <svg viewBox="0 0 300 300" class="wheel-svg" id="wheelSvg"></svg>
-      <div class="wheel-hub">🎰</div>
-    </div>
     <div class="wheel-result hidden" id="wheelResult"></div>
-  </div>
 
-  <button class="btn-primary wheel-spin-btn" id="wheelSpinBtn" onclick="spinWheel()">
-    🎡 Крутить колесо
-  </button>
+    <button class="btn-primary" id="wheelSpinBtn" onclick="spinWheel()">🎡 Крутить колесо</button>
 
-  <h4 class="admin-subtitle">🎁 Возможные призы</h4>
-  <div class="wheel-prizes-grid" id="wheelPrizesGrid"></div>
-
-  <div class="topup-info" style="margin-top:12px;">
-    💡 Бесплатный прокрут — раз в 24 часа
-  </div>
-</section>
+    <div class="topup-info" style="margin-top:12px;">
+      💡 Прокрут получаешь за активность и раз в сутки
+    </div>
+  </section>
 
   <!-- ═══ CASHBACK ═══ -->
   <section class="screen" id="screen-cashback">
@@ -468,36 +471,13 @@
         <span class="theme-toggle-switch" id="themeSwitch"></span>
       </button>
     </div>
-
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
       <div class="stat-card"><div class="stat-val" id="statWagered">0</div><div class="stat-lbl">Поставлено</div></div>
       <div class="stat-card"><div class="stat-val" id="statWon">0</div><div class="stat-lbl">Выиграно</div></div>
     </div>
-
     <h3 class="section-title">📜 История игр</h3>
     <div class="history-list" id="historyList"></div>
-
-    <!-- ═══ УВЕДОМЛЕНИЯ (в самом низу профиля) ═══ -->
-    <div class="notif-settings" id="notifSettings">
-      <h4 class="admin-subtitle">🔔 Уведомления</h4>
-      <div class="notif-row" onclick="toggleNotif('bonus_alerts')">
-        <span>🎁 Бонусы и акции</span>
-        <span class="theme-toggle-switch" id="notif-bonus_alerts"></span>
-      </div>
-      <div class="notif-row" onclick="toggleNotif('cashback_alerts')">
-        <span>💰 Кэшбэк</span>
-        <span class="theme-toggle-switch" id="notif-cashback_alerts"></span>
-      </div>
-      <div class="notif-row" onclick="toggleNotif('tournament_alerts')">
-        <span>🏆 Турниры</span>
-        <span class="theme-toggle-switch" id="notif-tournament_alerts"></span>
-      </div>
-      <div class="notif-row" onclick="toggleNotif('daily_deal_alerts')">
-        <span>🎯 Скидка дня</span>
-        <span class="theme-toggle-switch" id="notif-daily_deal_alerts"></span>
-      </div>
-    </div>
   </section>
 
   <!-- ═══ TOP ═══ -->
@@ -656,7 +636,6 @@
       <button class="topup-go" onclick="topupPay('ton')">Пополнить</button>
       <div class="topup-info" id="tonInfo"></div>
     </div>
-
 
     <div class="topup-method" id="topup-stars">
       <div class="topup-label">Количество Stars (10 – 10 000)</div>
