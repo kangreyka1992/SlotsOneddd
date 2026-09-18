@@ -657,6 +657,30 @@ function updateBalance(b) {
     }
 }
 
+/* Копия SLOT_LINES с бэкенда для подсветки */
+const SLOT_LINES_CLIENT = [
+    [[0,0],[0,1],[0,2],[0,3],[0,4]],
+    [[1,0],[1,1],[1,2],[1,3],[1,4]],
+    [[2,0],[2,1],[2,2],[2,3],[2,4]],
+    [[0,0],[1,1],[2,2],[1,3],[0,4]],
+    [[2,0],[1,1],[0,2],[1,3],[2,4]],
+    [[1,0],[0,1],[0,2],[0,3],[1,4]],
+    [[1,0],[2,1],[2,2],[2,3],[1,4]],
+    [[0,0],[1,1],[1,2],[1,3],[0,4]],
+    [[2,0],[1,1],[1,2],[1,3],[2,4]],
+    [[0,0],[0,1],[1,2],[2,3],[2,4]],
+    [[2,0],[2,1],[1,2],[0,3],[0,4]],
+    [[1,0],[1,1],[0,2],[1,3],[1,4]],
+    [[1,0],[1,1],[2,2],[1,3],[1,4]],
+    [[0,0],[1,1],[2,2],[2,3],[2,4]],
+    [[2,0],[1,1],[0,2],[0,3],[0,4]],
+    [[1,0],[0,1],[0,2],[1,3],[2,4]],
+    [[1,0],[2,1],[2,2],[1,3],[0,4]],
+    [[0,0],[1,1],[2,2],[1,3],[2,4]],
+    [[0,0],[0,1],[0,2],[1,3],[2,4]],
+    [[2,0],[2,1],[2,2],[1,3],[0,4]],
+];
+
 /* ═══ GAMES META ═══ */
 const GAMES_META = {
     slots2:  { name: 'Слоты 5×3', desc: 'До ×50',   icon: '🎰', cls: 'slots',  sub: '20 линий, джекпот' },
@@ -1015,21 +1039,56 @@ async function spinSlots2(bet) {
     res.className = 'game-result';
 
     const symbols = ['🍒', '🍋', '🍊', '🍇', '💎', '7️⃣', '🤑'];
+    const cells = document.querySelectorAll('#slots2Field .slot2-cell');
+    cells.forEach(c => c.classList.add('spinning'));
+
     const spinInt = setInterval(() => {
         SFX.spin();
-        document.querySelectorAll('#slots2Field .slot2-cell').forEach(cell => {
+        cells.forEach(cell => {
             cell.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-            cell.classList.add('spinning');
         });
     }, 80);
 
     try {
         const d = await gameApi('/api/slots2/spin', { bet, lines: slots2Lines });
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 600));
         clearInterval(spinInt);
-        document.querySelectorAll('#slots2Field .slot2-cell').forEach(c => c.classList.remove('spinning'));
 
+        // Финальное поле
         renderSlots2Field(d.field);
+
+        // Останавливаем барабаны по одному (слева направо)
+        const newCells = document.querySelectorAll('#slots2Field .slot2-cell');
+        newCells.forEach(c => c.classList.remove('spinning'));
+
+        for (let col = 0; col < 5; col++) {
+            for (let row = 0; row < 3; row++) {
+                const idx = row * 5 + col;
+                const cell = newCells[idx];
+                if (!cell) continue;
+                setTimeout(() => {
+                    cell.classList.add('reel-stopping');
+                    playTone(500 + col * 100, 0.05, 'square', 0.04);
+                    setTimeout(() => cell.classList.remove('reel-stopping'), 500);
+                }, col * 120 + row * 30);
+            }
+        }
+
+        await new Promise(r => setTimeout(r, 800));
+
+        // Подсветка выигрышных линий
+        if (d.win > 0 && d.line_wins && d.line_wins.length) {
+            d.line_wins.forEach(lw => {
+                const line = SLOT_LINES_CLIENT[lw.line];
+                if (!line) return;
+                line.forEach(([r, c]) => {
+                    const idx = r * 5 + c;
+                    const cell = newCells[idx];
+                    if (cell) cell.classList.add('win-line');
+                });
+            });
+        }
+
         updateBalance(d.balance);
         loadProfile();
         addHistory('slots2', d.bet, d.win);
@@ -1054,7 +1113,7 @@ async function spinSlots2(bet) {
         }, 300);
     } catch (e) {
         clearInterval(spinInt);
-        document.querySelectorAll('#slots2Field .slot2-cell').forEach(c => c.classList.remove('spinning'));
+        cells.forEach(c => c.classList.remove('spinning'));
         toast(e.message, 'error');
         gameLocked = false;
         renderBets('slots2Bets', spinSlots2, slots2Lines);
@@ -1123,10 +1182,14 @@ async function minesOpen(idx, cell) {
         updateBalance(d.balance);
 
         if (d.hit_mine) {
+            // Спавним частицы
+            spawnMineParticles(cell);
+
             cell.textContent = '💥';
             cell.classList.add('mine');
             SFX.explode();
             haptic('heavy');
+
             const cells = document.querySelectorAll('#minesGrid .mine-cell');
             (d.mines || []).forEach(mi => {
                 if (cells[mi] && !cells[mi].classList.contains('mine')) {
@@ -1166,6 +1229,28 @@ async function minesOpen(idx, cell) {
         document.getElementById('minesPrize').textContent = fmt(d.current_prize);
         document.getElementById('minesCashout').classList.remove('hidden');
     } catch (e) { toast(e.message, 'error'); }
+}
+
+function spawnMineParticles(cell) {
+    const rect = cell.getBoundingClientRect();
+    const parent = cell.parentElement;
+    const parentRect = parent.getBoundingClientRect();
+    const cx = rect.left - parentRect.left + rect.width / 2;
+    const cy = rect.top  - parentRect.top  + rect.height / 2;
+
+    for (let i = 0; i < 12; i++) {
+        const p = document.createElement('div');
+        p.className = 'mine-particle';
+        const angle = (Math.PI * 2 / 12) * i + Math.random() * 0.3;
+        const dist = 40 + Math.random() * 40;
+        p.style.left = cx + 'px';
+        p.style.top  = cy + 'px';
+        p.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+        p.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+        parent.style.position = 'relative';
+        parent.appendChild(p);
+        setTimeout(() => p.remove(), 700);
+    }
 }
 
 async function minesCashout() {
@@ -1235,6 +1320,19 @@ function startCrashCanvas() {
     crashCanvasCtx = canvas.getContext('2d');
     crashPoints = [];
 
+    // Ракета
+    let rocketEl = document.getElementById('crashRocket');
+    if (!rocketEl) {
+        rocketEl = document.createElement('div');
+        rocketEl.id = 'crashRocket';
+        rocketEl.className = 'crash-rocket';
+        rocketEl.textContent = '🚀';
+        field.appendChild(rocketEl);
+    }
+    rocketEl.style.left = '30px';
+    rocketEl.style.top = (canvas.height - 30) + 'px';
+    rocketEl.style.display = 'block';
+
     function draw() {
         if (!crashCanvasCtx) return;
         const ctx = crashCanvasCtx;
@@ -1271,6 +1369,22 @@ function startCrashCanvas() {
             ctx.shadowBlur = 30;
             ctx.fill();
             ctx.shadowBlur = 0;
+
+            // Двигаем ракету
+            if (rocketEl) {
+                rocketEl.style.left = last.x + 'px';
+                rocketEl.style.top = last.y + 'px';
+
+                // Трейл
+                if (Math.random() < 0.5) {
+                    const trail = document.createElement('div');
+                    trail.className = 'crash-trail';
+                    trail.style.left = (last.x - 6) + 'px';
+                    trail.style.top = (last.y + 6) + 'px';
+                    field.appendChild(trail);
+                    setTimeout(() => trail.remove(), 700);
+                }
+            }
         }
         crashAnimationId = requestAnimationFrame(draw);
     }
@@ -1280,6 +1394,8 @@ function startCrashCanvas() {
 function stopCrashCanvas() {
     if (crashAnimationId) { cancelAnimationFrame(crashAnimationId); crashAnimationId = null; }
     crashCanvasCtx = null;
+    const rocket = document.getElementById('crashRocket');
+    if (rocket) rocket.style.display = 'none';
 }
 
 function pollCrash() {
@@ -1627,6 +1743,9 @@ async function plinkoPlay(bet) {
     const slots = PLINKO_MULTIPLIERS[plinkoRisk].length;
     const finalXPercent = (slotIdx + 0.5) / slots * 100;
 
+    // Все колышки
+    const pegs = document.querySelectorAll('.plinko-peg');
+
     const steps = 12;
     for (let i = 1; i <= steps; i++) {
         await new Promise(r => setTimeout(r, 80));
@@ -1636,6 +1755,21 @@ async function plinkoPlay(bet) {
         const randX = 50 + noise + (finalXPercent - 50) * (i / steps);
         ball.style.top = top + 'px';
         ball.style.left = randX + '%';
+
+        // Трейл
+        const trail = document.createElement('div');
+        trail.className = 'plinko-ball-trail';
+        trail.style.top = top + 6 + 'px';
+        trail.style.left = `calc(${randX}% - 5px)`;
+        field.appendChild(trail);
+        setTimeout(() => trail.remove(), 600);
+
+        // Случайный колышек вспыхивает
+        if (pegs.length) {
+            const randomPeg = pegs[Math.floor(Math.random() * pegs.length)];
+            randomPeg.classList.add('hit');
+            setTimeout(() => randomPeg.classList.remove('hit'), 200);
+        }
     }
 
     ball.style.left = finalXPercent + '%';
