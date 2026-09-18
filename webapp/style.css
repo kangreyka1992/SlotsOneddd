@@ -3577,15 +3577,10 @@ body.upgrade-running .bottom-nav {
     border-radius: 20px;
     filter: drop-shadow(0 0 30px currentColor);
 }
+/* ═══ Крупная иконка дропа в рулетке ═══ */
 .cr-reward-emoji .tg-icon {
     width: 120px;
     height: 120px;
     font-size: 64px;
     border-radius: 20px;
-}
-.cr-reward-emoji .tg-icon-img {
-    width: 120px;
-    height: 120px;
-    mix-blend-mode: lighten;  /* убирает чёрный фон */
-    /* или multiply — убирает белый фон */
 }
