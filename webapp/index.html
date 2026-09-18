@@ -458,6 +458,25 @@
     <h3 class="section-title">📜 История игр</h3>
     <div class="history-list" id="historyList"></div>
   </section>
+    <div class="notif-settings" id="notifSettings">
+        <h4 class="admin-subtitle">🔔 Уведомления</h4>
+        <div class="notif-row" onclick="toggleNotif('bonus_alerts')">
+            <span>🎁 Бонусы и акции</span>
+            <span class="theme-toggle-switch" id="notif-bonus_alerts"></span>
+        </div>
+        <div class="notif-row" onclick="toggleNotif('cashback_alerts')">
+            <span>💰 Кэшбэк</span>
+            <span class="theme-toggle-switch" id="notif-cashback_alerts"></span>
+        </div>
+        <div class="notif-row" onclick="toggleNotif('tournament_alerts')">
+            <span>🏆 Турниры</span>
+            <span class="theme-toggle-switch" id="notif-tournament_alerts"></span>
+        </div>
+        <div class="notif-row" onclick="toggleNotif('daily_deal_alerts')">
+            <span>🎯 Скидка дня</span>
+            <span class="theme-toggle-switch" id="notif-daily_deal_alerts"></span>
+        </div>
+    </div>
 
   <!-- ═══ TOP ═══ -->
   <section class="screen" id="screen-top">
