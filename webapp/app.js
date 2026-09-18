@@ -262,6 +262,84 @@ async function updateQuickBadges() {
     } catch (e) {}
 }
 
+/* ═══════════ БЛОК 4: ПРОФИЛЬ И BATTLE PASS ═══════════ */
+
+/* ─── Level-Up: следим за изменением уровня ─── */
+let _lastKnownLevel = null;
+
+function checkLevelUp(newLevel, reward = 0) {
+    if (_lastKnownLevel === null) {
+        _lastKnownLevel = newLevel;
+        return;
+    }
+    if (newLevel > _lastKnownLevel) {
+        showLevelUpOverlay(newLevel, reward);
+    }
+    _lastKnownLevel = newLevel;
+}
+
+function showLevelUpOverlay(level, reward) {
+    const overlay = document.createElement('div');
+    overlay.className = 'levelup-overlay';
+    overlay.innerHTML = `
+        <div class="levelup-icon">🎉</div>
+        <div class="levelup-title">LEVEL UP</div>
+        <div class="levelup-level">${level}</div>
+        ${reward > 0 ? `<div class="levelup-reward">+${fmt(reward)} 🪙</div>` : ''}
+    `;
+    document.body.appendChild(overlay);
+
+    SFX.jackpot();
+    confettiJackpot();
+    haptic('success');
+
+    setTimeout(() => {
+        overlay.style.transition = 'opacity 0.4s';
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 400);
+    }, 2400);
+}
+
+/* ─── Профиль: Premium-бейдж ─── */
+function updatePremiumBadge(isPremium) {
+    const badge = document.getElementById('profilePremiumBadge');
+    if (!badge) return;
+    if (isPremium) badge.classList.remove('hidden');
+    else badge.classList.add('hidden');
+}
+
+/* ─── Мини-график активности ─── */
+function renderActivityChart(stats) {
+    // stats = { games: N, wagered: N, won: N }
+    // Показываем фиктивный график за 7 дней на основе stats.games
+    // (у тебя нет истории по дням, поэтому распределяем как заглушку)
+    const totalGames = stats?.games || 0;
+    const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+    // Генерируем псевдо-распределение: чем больше игр, тем выше бары
+    const base = Math.max(1, Math.floor(totalGames / 7));
+    const bars = days.map((_, i) => {
+        const factor = [0.6, 1.0, 0.8, 1.4, 1.1, 1.7, 0.9][i];
+        return Math.max(1, Math.floor(base * factor));
+    });
+    const max = Math.max(...bars, 1);
+
+    const container = document.getElementById('activityChart');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="activity-chart">
+            ${bars.map((v, i) => `
+                <div class="activity-bar" style="height:${(v / max) * 100}%"
+                     title="${days[i]}: ${v} игр"></div>
+            `).join('')}
+        </div>
+        <div class="activity-labels">
+            ${days.map(d => `<span>${d}</span>`).join('')}
+        </div>
+    `;
+}
+
 const BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000];
 const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
@@ -837,6 +915,9 @@ async function loadProfile() {
             }
         }
 
+        // Premium-бейдж (Блок 4)
+        updatePremiumBadge(!!d.premium);
+
         const sg = document.getElementById('statGames');
         const sw = document.getElementById('statWagered');
         const so = document.getElementById('statWon');
@@ -854,8 +935,16 @@ async function loadProfile() {
         if (lf) lf.style.width = progress + '%';
         if (lt) lt.textContent = `Уровень ${level} · ${games} игр`;
 
+        // Проверка level-up (Блок 4)
+        checkLevelUp(level);
+
+        // Мини-график активности (Блок 4)
+        renderActivityChart(d.stats);
+
+        // Админ-кнопка
         const adminBtn = document.getElementById('adminBtn');
         if (adminBtn && d.is_admin) adminBtn.classList.remove('hidden');
+
     } catch (e) {
         console.error('Profile load error:', e);
     }
@@ -4504,36 +4593,57 @@ async function loadBattlePass() {
 }
 
 function renderBattlePassRewards(d) {
-    const el = document.getElementById('bpRewards');
-    if (!el) return;
+    const track = document.getElementById('bpTrack');
+    if (!track) return;
 
-    el.innerHTML = d.rewards.map(r => {
+    track.innerHTML = d.rewards.map(r => {
         const reached = d.level >= r.level;
+        const isCurrent = r.level === d.level;
         const claimedFree = d.claimed_free.includes(String(r.level));
 
         const emoji = r.bonus ? '📦' : '🪙';
-        const freeText = r.bonus ? 'Кейс' : `+${fmt(r.free_coins)} 🪙`;
+        const contentText = r.bonus ? 'Кейс' : `+${fmt(r.free_coins)} 🪙`;
 
-        let buttons = '';
+        let btn = '';
+        if (isCurrent) {
+            btn = `<div class="bp-card-current-badge">СЕЙЧАС</div>`;
+        }
         if (reached && !claimedFree) {
-            buttons = `<button class="bp-reward-btn" onclick="claimBpReward(${r.level}, false)">Забрать</button>`;
+            btn += `<button class="bp-card-btn" onclick="claimBpReward(${r.level}, false)">Забрать</button>`;
         } else if (claimedFree) {
-            buttons = `<button class="bp-reward-btn" disabled>✅</button>`;
+            btn += `<button class="bp-card-btn" disabled>✅ Готово</button>`;
         } else {
-            buttons = `<span style="color:#666;font-size:11px;">Ур. ${r.level}</span>`;
+            btn += `<div class="bp-card-status">Ур. ${r.level}</div>`;
         }
 
+        const cls = [
+            'bp-card',
+            isCurrent ? 'current' : '',
+            reached ? 'reached' : 'locked',
+        ].filter(Boolean).join(' ');
+
         return `
-            <div class="bp-reward ${reached ? 'reached' : 'locked'}">
-                <div class="bp-reward-emoji">${emoji}</div>
-                <div class="bp-reward-info">
-                    <div class="bp-reward-level">Уровень ${r.level}</div>
-                    <div class="bp-reward-content">${freeText}</div>
-                </div>
-                ${buttons}
+            <div class="${cls}" data-level="${r.level}">
+                ${btn.includes('current-badge') ? '<div class="bp-card-current-badge">СЕЙЧАС</div>' : ''}
+                <div class="bp-card-level">Ур. ${r.level}</div>
+                <div class="bp-card-emoji">${emoji}</div>
+                <div class="bp-card-content">${contentText}</div>
+                ${reached && !claimedFree
+                    ? `<button class="bp-card-btn" onclick="claimBpReward(${r.level}, false)">Забрать</button>`
+                    : claimedFree
+                        ? `<button class="bp-card-btn" disabled>✅ Готово</button>`
+                        : `<div class="bp-card-status">Ур. ${r.level}</div>`}
             </div>
         `;
     }).join('');
+
+    // Прокручиваем к текущему уровню
+    setTimeout(() => {
+        const current = track.querySelector('.bp-card.current');
+        if (current) {
+            current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        }
+    }, 300);
 }
 
 async function claimBpReward(level, premium) {
