@@ -11,8 +11,22 @@ const BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000];
 const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
 
+/* ═══ GIF ПО РЕДКОСТЯМ ═══ */
+const RARITY_GIFS = {
+    common:    'img/rarity/common.gif',
+    uncommon:  'img/rarity/uncommon.gif',
+    rare:      'img/rarity/rare.gif',
+    epic:      'img/rarity/epic.gif',
+    legendary: 'img/rarity/legendary.gif',
+    mythic:    'img/rarity/mythic.gif',
+};
+
+/* ═══ GIF ДЛЯ ТОП-ПРЕДМЕТОВ (перебивают редкость) ═══ */
 const GIFT_GIFS = {
-    '*': 'pepe_gift.gif',
+    // Примеры — подставь свои item_id из main.py:
+    // 'crown_g':  'img/gifts/crown.gif',
+    // 'dragon':   'img/gifts/dragon.gif',
+    // 'blackhole':'img/gifts/blackhole.gif',
 };
 
 let profile = { balance: 0, stats: {}, referral: {} };
@@ -2705,11 +2719,15 @@ async function openCase(c, count = 1) {
         const sellPrice = document.getElementById('crSellPrice')
         
         if (r) {
-            const gifPath = GIFT_GIFS[r.item_id] || GIFT_GIFS['*'];
+            // 1. Приоритет: свой GIF для конкретного предмета
+            // 2. Фолбэк: GIF по редкости
+            // 3. Если ничего — эмодзи
+            const gifPath = GIFT_GIFS[r.item_id] || RARITY_GIFS[r.rarity];
+        
             const iconHtml = gifPath
                 ? iconWrap(gifPath, 'gift', '', r.rarity, true)
                 : iconWrap(r.emoji, kindFromRarity(r.rarity), '', r.rarity);
-
+        
             rewardEmoji.innerHTML = iconHtml;
             rewardName.textContent = r.name;
             rewardPrice.textContent = `${fmt(r.value)} 🪙`;
