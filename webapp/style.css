@@ -3992,3 +3992,228 @@ body.upgrade-running .bottom-nav {
     0%   { opacity: 0.9; transform: scale(1); }
     100% { opacity: 0; transform: scale(0.3); }
 }
+/* ═══════════ БЛОК 4: ПРОФИЛЬ И BATTLE PASS ═══════════ */
+
+/* ─── Level-Up оверлей ─── */
+.levelup-overlay {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle, rgba(255,193,7,0.15) 0%, rgba(0,0,0,0.95) 70%);
+    z-index: 5000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    animation: levelupFadeIn 0.4s ease-out;
+    backdrop-filter: blur(6px);
+}
+@keyframes levelupFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.levelup-icon {
+    font-size: 110px;
+    animation: levelupPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+    filter: drop-shadow(0 0 40px #ffc107);
+}
+@keyframes levelupPop {
+    0%   { transform: scale(0) rotate(-180deg); opacity: 0; }
+    60%  { transform: scale(1.3) rotate(20deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); }
+}
+.levelup-title {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: var(--gold);
+    text-shadow: 0 0 24px var(--gold);
+    text-transform: uppercase;
+}
+.levelup-level {
+    font-size: 56px;
+    font-weight: 900;
+    font-family: var(--font-num);
+    color: #fff;
+    text-shadow: 0 0 30px #ffc107;
+    animation: levelupBump 1s ease-out;
+}
+@keyframes levelupBump {
+    0%   { transform: scale(0.3); opacity: 0; }
+    60%  { transform: scale(1.25); opacity: 1; }
+    100% { transform: scale(1); }
+}
+.levelup-reward {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--green);
+    font-family: var(--font-num);
+}
+
+/* ─── Профиль: бейдж Premium ─── */
+.profile-premium-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, #ffc107, #ff8f00);
+    color: #000;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px #ffc107;
+    animation: premiumBadgePulse 2s infinite;
+    z-index: 3;
+}
+@keyframes premiumBadgePulse {
+    0%, 100% { box-shadow: 0 0 20px #ffc107; }
+    50%      { box-shadow: 0 0 35px #ffc107, 0 0 60px rgba(255,193,7,0.5); }
+}
+.profile-avatar-wrapper {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 12px;
+}
+
+/* ─── Мини-график активности ─── */
+.activity-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 4px;
+    height: 60px;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    margin-top: 12px;
+}
+.activity-bar {
+    flex: 1;
+    background: linear-gradient(180deg, var(--gold), #e07a00);
+    border-radius: 3px 3px 0 0;
+    min-height: 4px;
+    transition: height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    cursor: pointer;
+}
+.activity-bar:hover { filter: brightness(1.3); }
+.activity-bar-label {
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: var(--text-muted);
+    font-family: var(--font-num);
+    white-space: nowrap;
+}
+.activity-labels {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 0 12px;
+    margin-top: 4px;
+    font-size: 9px;
+    color: var(--text-muted);
+}
+.activity-labels span { flex: 1; text-align: center; }
+
+/* ─── Battle Pass: горизонтальный скролл ─── */
+.bp-track-wrap {
+    position: relative;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+.bp-track {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 16px 40% 24px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    scroll-behavior: smooth;
+}
+.bp-track::-webkit-scrollbar { display: none; }
+.bp-card {
+    flex-shrink: 0;
+    width: 130px;
+    padding: 14px 10px;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    scroll-snap-align: center;
+    position: relative;
+    transition: transform 0.2s, border-color 0.2s;
+}
+.bp-card.current {
+    border-color: var(--gold);
+    box-shadow: 0 0 30px rgba(255,193,7,0.4);
+    transform: scale(1.08);
+    z-index: 2;
+}
+.bp-card.reached {
+    border-color: rgba(61, 214, 140, 0.4);
+    background: linear-gradient(160deg, rgba(61,214,140,0.08), var(--bg-card));
+}
+.bp-card.locked { opacity: 0.4; }
+.bp-card-level {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+.bp-card-emoji {
+    font-size: 42px;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));
+    animation: bpFloat 3s ease-in-out infinite;
+}
+@keyframes bpFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-5px); }
+}
+.bp-card-content {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text-main);
+    text-align: center;
+    font-family: var(--font-num);
+}
+.bp-card-btn {
+    width: 100%;
+    padding: 8px;
+    background: linear-gradient(135deg, var(--green), #00b894);
+    color: #000;
+    font-size: 11px;
+    font-weight: 900;
+    border-radius: 8px;
+    text-transform: uppercase;
+}
+.bp-card-btn:disabled {
+    background: #2a2a2a;
+    color: #555;
+}
+.bp-card-status {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+.bp-card-current-badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 2px 10px;
+    background: var(--gold);
+    color: #000;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
