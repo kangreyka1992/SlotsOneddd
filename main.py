@@ -79,7 +79,7 @@ BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
 
 WITHDRAW_RATES = {
-    'stars': {'rate': 125,  'min': 1500,  'unit': '⭐'},
+    'stars': {'rate': 125,  'min': 1000,  'unit': '⭐'},
     'sbp':   {'rate': 1000, 'min': 500, 'unit': '₽'},
     'usdc':  {'rate': 100,  'min': 5,   'unit': 'USDC'},
     'ton':   {'rate': 5000, 'min': 1,   'unit': 'TON'},
