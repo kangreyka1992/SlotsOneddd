@@ -13,12 +13,12 @@ const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
 
 /* ═══ GIF ПО РЕДКОСТЯМ ═══ */
 const RARITY_GIFS = {
-    common:    'img/rarity/common.gif',
-    uncommon:  'img/rarity/uncommon.gif',
-    rare:      'img/rarity/rare.gif',
-    epic:      'img/rarity/epic.gif',
-    legendary: 'img/rarity/legendary.gif',
-    mythic:    'img/rarity/mythic.gif',
+    common:    'img/common.gif',
+    uncommon:  'img/uncommon.gif',
+    rare:      'img/rare.gif',
+    epic:      'img/epic.gif',
+    legendary: 'img/legendary.gif',
+    mythic:    'img/mythic.gif',
 };
 
 /* ═══ GIF ДЛЯ ТОП-ПРЕДМЕТОВ (перебивают редкость) ═══ */
