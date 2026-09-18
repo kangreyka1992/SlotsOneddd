@@ -3193,39 +3193,7 @@ body.upgrade-running .bottom-nav {
 .hourly-icon { font-size: 24px; }
 .hourly-text { font-size: 13px; font-weight: 700; color: #3dd68c; }
 
-/* ═══ WHEEL ═══ */
-.wheel-info { margin-bottom: 16px; }
-.wheel-container {
-  display: flex; flex-direction: column; align-items: center;
-  padding: 24px; background: linear-gradient(135deg, #1a1d24, #232732);
-  border-radius: 14px; margin-bottom: 16px; position: relative;
-  min-height: 240px;
-}
-.wheel-visual {
-  font-size: 180px;
-  filter: drop-shadow(0 0 30px #ffc107);
-  transition: transform 0.5s;
-}
-.wheel-visual.spinning {
-  animation: wheelSpinAnim 2s linear infinite;
-}
-@keyframes wheelSpinAnim {
-  0% { transform: rotate(0); }
-  100% { transform: rotate(360deg); }
-}
-.wheel-result {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.85);
-    border-radius: 50%;
-    backdrop-filter: blur(4px);
-    animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-    z-index: 8;
-}
+
 
 /* ═══ CASHBACK ═══ */
 .cashback-card {
@@ -4754,4 +4722,258 @@ body.theme-light .theme-toggle-switch::after {
 @keyframes wheelSpinAnim {
   from { transform: rotate(0deg); }
   to   { transform: rotate(var(--spin-deg, 1800deg)); }
+}
+/* ═══════════ КОЛЕСО ФОРТУНЫ 2.0 ═══════════ */
+
+/* ─── Карточка с прокрутами ─── */
+.wheel-spins-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, rgba(255,155,38,0.12), rgba(124,92,255,0.06));
+    border: 1px solid rgba(255,155,38,0.25);
+    border-radius: 16px;
+    margin-bottom: 20px;
+}
+.wheel-spins-val {
+    font-size: 42px;
+    font-weight: 900;
+    font-family: var(--font-num);
+    color: var(--gold);
+    text-shadow: 0 0 24px var(--gold);
+    line-height: 1;
+}
+.wheel-spins-lbl {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-top: 6px;
+    font-weight: 700;
+}
+
+/* ─── Сцена колеса ─── */
+.wheel-stage {
+    position: relative;
+    width: 100%;
+    max-width: 340px;
+    aspect-ratio: 1;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ─── Указатель ─── */
+.wheel-pointer-new {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+}
+.wheel-pointer-arrow {
+    width: 0;
+    height: 0;
+    border-left: 16px solid transparent;
+    border-right: 16px solid transparent;
+    border-top: 28px solid var(--gold);
+    filter: drop-shadow(0 0 12px var(--gold));
+    animation: pointerBounce 1.4s ease-in-out infinite;
+}
+@keyframes pointerBounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50%      { transform: translateY(4px) scale(1.05); }
+}
+.wheel-pointer-glow {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 20px var(--gold), 0 0 40px var(--gold);
+    margin-top: -6px;
+    animation: pointerGlow 1.4s ease-in-out infinite;
+}
+@keyframes pointerGlow {
+    0%, 100% { opacity: 0.6; }
+    50%      { opacity: 1; }
+}
+
+/* ─── Само колесо ─── */
+.wheel-disc-new {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: relative;
+    background:
+        conic-gradient(
+            #8b95a5 0deg 45deg,
+            #00d68f 45deg 90deg,
+            #4a9eff 90deg 135deg,
+            #7c5cff 135deg 180deg,
+            #ffc107 180deg 225deg,
+            #ff4757 225deg 270deg,
+            #a855f7 270deg 315deg,
+            #ff9b26 315deg 360deg
+        );
+    border: 8px solid #1a1d24;
+    box-shadow:
+        0 0 50px rgba(255,155,38,0.25),
+        inset 0 0 0 2px rgba(255,255,255,0.05),
+        inset 0 0 80px rgba(0,0,0,0.6);
+    transition: transform 4s cubic-bezier(0.17, 0.67, 0.16, 1);
+    will-change: transform;
+}
+.wheel-disc-new.wheel-spinning {
+    /* вращение через JS */
+}
+
+/* Внутренний круг с пунктиром */
+.wheel-disc-new::after {
+    content: '';
+    position: absolute;
+    inset: 22px;
+    border-radius: 50%;
+    border: 2px dashed rgba(255,255,255,0.15);
+    pointer-events: none;
+}
+
+/* ─── Центр колеса ─── */
+.wheel-center-new {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #2a2f3a 0%, #0a0e14 100%);
+    border: 4px solid var(--gold);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    z-index: 3;
+    box-shadow:
+        0 0 30px var(--gold),
+        inset 0 0 20px rgba(0,0,0,0.8);
+}
+.wheel-center-icon {
+    font-size: 26px;
+    filter: drop-shadow(0 0 8px var(--gold));
+}
+.wheel-center-text {
+    font-size: 8px;
+    font-weight: 900;
+    color: var(--gold);
+    letter-spacing: 2px;
+}
+
+/* ─── Иконки призов на сегментах ─── */
+.wheel-prize-slot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    pointer-events: none;
+    z-index: 2;
+    width: 70px;
+    text-align: center;
+    transform-origin: center;
+}
+.wheel-prize-emoji {
+    font-size: 26px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));
+}
+.wheel-prize-text {
+    font-size: 9px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    font-family: var(--font-num);
+    letter-spacing: 0.5px;
+}
+
+/* ─── Кнопка Крутить ─── */
+.wheel-spin-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 18px;
+    background: linear-gradient(135deg, var(--gold), #e07a00);
+    color: #000;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-radius: 14px;
+    box-shadow: 0 6px 24px var(--accent-glow);
+    transition: transform 0.15s, box-shadow 0.2s;
+    margin-bottom: 8px;
+}
+.wheel-spin-btn:active:not(:disabled) {
+    transform: scale(0.97);
+    box-shadow: 0 4px 16px var(--accent-glow);
+}
+.wheel-spin-btn:disabled {
+    background: var(--bg-elevated);
+    color: var(--text-dim);
+    box-shadow: none;
+    cursor: not-allowed;
+}
+.wheel-spin-btn-icon {
+    font-size: 20px;
+}
+
+/* ─── Оверлей результата ─── */
+.wheel-result-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.95) 70%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    z-index: 20;
+    animation: wheelResultPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    backdrop-filter: blur(6px);
+}
+.wheel-result-overlay.hidden { display: none; }
+@keyframes wheelResultPop {
+    0%   { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+.wheel-result-emoji {
+    font-size: 72px;
+    filter: drop-shadow(0 0 30px currentColor);
+    animation: wheelResultFloat 1.6s ease-in-out infinite;
+}
+@keyframes wheelResultFloat {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50%      { transform: translateY(-8px) scale(1.05); }
+}
+.wheel-result-text {
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--gold);
+    text-shadow: 0 0 20px var(--gold);
+    font-family: var(--font-num);
+    letter-spacing: 1px;
+    text-align: center;
+    padding: 0 20px;
 }
