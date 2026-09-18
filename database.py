@@ -403,6 +403,15 @@ async def init_db():
                 last_notified TIMESTAMP
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS notification_settings (
+                user_id INTEGER PRIMARY KEY,
+                daily INTEGER DEFAULT 1,
+                hourly INTEGER DEFAULT 1,
+                battlepass INTEGER DEFAULT 1,
+                promo INTEGER DEFAULT 1
+            )
+        """)
         await db.commit()
 
 
