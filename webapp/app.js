@@ -4469,32 +4469,78 @@ function buildWheelSVG(prizes) {
     svg.innerHTML = html;
 }
 
-async function loadWheel() {
+async function spinWheel() {
+    haptic('medium');
+
+    const disc = document.getElementById('wheelDisc');
+    const btn = document.getElementById('wheelSpinBtn');
+    if (!disc || !btn) return;
+
+    // Проверка прокрутов
     try {
         const status = await api('/api/wheel/status');
-        const prizesData = await api('/api/wheel/prizes');
-
-        wheelPrizes = prizesData.prizes || [];
-        buildWheelSVG(wheelPrizes);
-        renderWheelPrizesList();
-        renderWheelPrizes();   // ← рисуем иконки на колесе
-
-        const spinsEl = document.getElementById('wheelSpins');
-        if (spinsEl) spinsEl.textContent = status.spins;
-
-        const btn = document.getElementById('wheelSpinBtn');
-        if (btn) btn.disabled = status.spins <= 0 || wheelSpinning;
-
-        // Таймер до следующего прокрута
-        if (status.spins <= 0 && status.last_daily) {
-            startWheelTimer(status.last_daily);
-        } else {
-            stopWheelTimer();
-            const t = document.getElementById('wheelTimer');
-            if (t) t.textContent = 'готов';
+        if (status.spins <= 0) {
+            toast('Нет доступных прокрутов', 'error');
+            return;
         }
     } catch (e) {
-        console.error('wheel load error:', e);
+        toast(e.message, 'error');
+        return;
+    }
+
+    btn.disabled = true;
+
+    // Случайный угол
+    const spins = 5 + Math.floor(Math.random() * 3);
+    const extraDeg = Math.floor(Math.random() * 360);
+    const totalDeg = spins * 360 + extraDeg;
+
+    disc.style.transition = 'none';
+    disc.style.transform = 'rotate(0deg)';
+    void disc.offsetWidth;
+    disc.style.transition = 'transform 4.2s cubic-bezier(0.17, 0.67, 0.16, 1)';
+    disc.style.transform = `rotate(${totalDeg}deg)`;
+
+    // Звук тиков
+    let tickCount = 0;
+    const tickInterval = setInterval(() => {
+        playTone(900 + Math.random() * 300, 0.02, 'square', 0.02);
+        tickCount++;
+        if (tickCount > 40) clearInterval(tickInterval);
+    }, 100);
+
+    try {
+        const d = await api('/api/wheel/spin');
+        await new Promise(r => setTimeout(r, 4300));
+        clearInterval(tickInterval);
+
+        // Показываем результат
+        const resultEl = document.getElementById('wheelResult');
+        if (resultEl) {
+            resultEl.innerHTML = `
+                <div class="wheel-result-emoji">🎁</div>
+                <div class="wheel-result-text">${d.result_text}</div>
+            `;
+            resultEl.classList.remove('hidden');
+        }
+
+        updateBalance(d.balance);
+        SFX.jackpot();
+        confettiJackpot();
+        haptic('success');
+
+        setTimeout(() => {
+            if (resultEl) resultEl.classList.add('hidden');
+            // Сброс угла
+            disc.style.transition = 'none';
+            disc.style.transform = 'rotate(0deg)';
+            loadWheel();
+            btn.disabled = false;
+        }, 3000);
+    } catch (e) {
+        clearInterval(tickInterval);
+        btn.disabled = false;
+        toast(e.message, 'error');
     }
 }
 function renderWheelPrizesList() {
@@ -4574,32 +4620,46 @@ async function spinWheel() {
     disc.classList.remove('wheel-spinning');
     void disc.offsetWidth;
     disc.classList.add('wheel-spinning');
+    
+const WHEEL_SEGMENTS = [
+    { emoji: '🪙', text: '500',   rarity: 'common',    angle: 0 },
+    { emoji: '💎', text: '1K',    rarity: 'uncommon',  angle: 45 },
+    { emoji: '🎁', text: 'КЕЙС',  rarity: 'rare',      angle: 90 },
+    { emoji: '⭐', text: '5K',    rarity: 'epic',      angle: 135 },
+    { emoji: '👑', text: '25K',   rarity: 'legendary', angle: 180 },
+    { emoji: '💰', text: '100K',  rarity: 'mythic',    angle: 225 },
+    { emoji: '🎰', text: 'ДЖЕК',  rarity: 'legendary', angle: 270 },
+    { emoji: '🏆', text: '10K',   rarity: 'epic',      angle: 315 },
+];
+
 function renderWheelPrizes() {
     const disc = document.getElementById('wheelDisc');
     if (!disc) return;
 
-    // 8 сегментов — 8 иконок
-    const prizes = ['🪙', '💎', '🎁', '🏆', '🎰', '💰', '⭐', '🎡'];
-    const radius = 110; // от центра
-    const angleStep = 360 / prizes.length;
-
     // Удаляем старые иконки
-    disc.querySelectorAll('.wheel-prize').forEach(el => el.remove());
+    disc.querySelectorAll('.wheel-prize-slot').forEach(el => el.remove());
 
-    prizes.forEach((emoji, i) => {
-        const angle = i * angleStep + angleStep / 2; // центр сегмента
-        const rad = (angle - 90) * Math.PI / 180;
+    const radius = 100; // пикселей от центра
+    const total = WHEEL_SEGMENTS.length;
+    const step = 360 / total;
+
+    WHEEL_SEGMENTS.forEach((prize, i) => {
+        const angle = i * step + step / 2 - 90; // -90 чтобы 0° был сверху
+        const rad = angle * Math.PI / 180;
         const x = Math.cos(rad) * radius;
         const y = Math.sin(rad) * radius;
 
-        const el = document.createElement('div');
-        el.className = 'wheel-prize';
-        el.textContent = emoji;
-        el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${angle + 90}deg)`;
-        disc.appendChild(el);
+        const slot = document.createElement('div');
+        slot.className = 'wheel-prize-slot';
+        slot.style.transform =
+            `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+        slot.innerHTML = `
+            <div class="wheel-prize-emoji">${prize.emoji}</div>
+            <div class="wheel-prize-text">${prize.text}</div>
+        `;
+        disc.appendChild(slot);
     });
 }
-
     // Звук вращения
     let tickCount = 0;
     const tickInterval = setInterval(() => {
