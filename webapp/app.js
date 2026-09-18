@@ -1008,8 +1008,7 @@ async function loadProfile() {
         }
 
         updatePremiumBadge(!!d.premium);
-        // Настройки уведомлений
-        loadNotifSettings();
+
 
         const sg = document.getElementById('statGames');
         const sw = document.getElementById('statWagered');
@@ -4845,7 +4844,7 @@ async function bootstrap() {
     try { initSwipeNavigation(); } catch (e) { console.error('swipe:', e); }
     try { initPullToRefresh(); } catch (e) { console.error('ptr:', e); }
     try { loadTheme(); } catch (e) { console.error('theme:', e); }
-    try { loadNotifySettings(); } catch (e) { console.error('notify:', e); }
+    try { loadNotifSettings(); } catch (e) { console.error('notify:', e); }
     try { updateQuickBadges(); } catch (e) { console.error('badges:', e); }
     try { loadLiveFeed(); } catch (e) { console.error('feed:', e); }
     try { updateJackpot(); } catch (e) { console.error('jackpot:', e); }
