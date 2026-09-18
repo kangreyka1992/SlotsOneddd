@@ -375,6 +375,18 @@ async def init_db():
             )
         """)
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS notif_settings (
+                user_id INTEGER PRIMARY KEY,
+                daily INTEGER DEFAULT 1,
+                hourly INTEGER DEFAULT 1,
+                battlepass INTEGER DEFAULT 1,
+                promo INTEGER DEFAULT 1,
+                last_daily_notif TIMESTAMP,
+                last_hourly_notif TIMESTAMP,
+                last_bp_notif TIMESTAMP
+            )
+        """)
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS daily_case_deal (
                 date TEXT PRIMARY KEY,
                 case_id TEXT NOT NULL,
@@ -1902,3 +1914,115 @@ async def get_daily_case_deal():
             )
             await db.commit()
             return {"case_id": chosen, "discount": discount}
+# ═══════════ НАСТРОЙКИ УВЕДОМЛЕНИЙ ═══════════
+
+async def get_notif_settings(user_id: int) -> dict:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO notif_settings (user_id) VALUES (?)",
+            (user_id,)
+        )
+        await db.commit()
+        async with db.execute(
+            "SELECT daily, hourly, battlepass, promo FROM notif_settings WHERE user_id = ?",
+            (user_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return {"daily": True, "hourly": True, "battlepass": True, "promo": True}
+            return {
+                "daily": bool(row[0]),
+                "hourly": bool(row[1]),
+                "battlepass": bool(row[2]),
+                "promo": bool(row[3]),
+            }
+
+
+async def set_notif_setting(user_id: int, key: str, enabled: bool):
+    if key not in ("daily", "hourly", "battlepass", "promo"):
+        return False
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO notif_settings (user_id) VALUES (?)",
+            (user_id,)
+        )
+        await db.execute(
+            f"UPDATE notif_settings SET {key} = ? WHERE user_id = ?",
+            (1 if enabled else 0, user_id)
+        )
+        await db.commit()
+        return True
+
+
+async def get_users_for_daily_notif() -> list:
+    """Юзеры, у которых включён daily, и они не забирали бонус сегодня."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("""
+            SELECT u.user_id
+            FROM users u
+            LEFT JOIN notif_settings n ON n.user_id = u.user_id
+            WHERE COALESCE(n.daily, 1) = 1
+              AND (
+                u.daily_last IS NULL
+                OR datetime(u.daily_last) < datetime('now', '-23 hours')
+              )
+              AND datetime(u.created_at) < datetime('now', '-1 day')
+              AND (
+                n.last_daily_notif IS NULL
+                OR datetime(n.last_daily_notif) < datetime('now', '-22 hours')
+              )
+        """) as cur:
+            return [r[0] for r in await cur.fetchall()]
+
+
+async def get_users_for_hourly_notif() -> list:
+    """Юзеры с включённым hourly, не забравшие бонус за последний час."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("""
+            SELECT u.user_id
+            FROM users u
+            LEFT JOIN notif_settings n ON n.user_id = u.user_id
+            LEFT JOIN hourly_bonus h ON h.user_id = u.user_id
+            WHERE COALESCE(n.hourly, 1) = 1
+              AND (
+                h.last_claim IS NULL
+                OR datetime(h.last_claim) < datetime('now', '-55 minutes')
+              )
+              AND (
+                n.last_hourly_notif IS NULL
+                OR datetime(n.last_hourly_notif) < datetime('now', '-50 minutes')
+              )
+        """) as cur:
+            return [r[0] for r in await cur.fetchall()]
+
+
+async def get_users_for_promo_notif() -> list:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("""
+            SELECT u.user_id
+            FROM users u
+            LEFT JOIN notif_settings n ON n.user_id = u.user_id
+            WHERE COALESCE(n.promo, 1) = 1
+        """) as cur:
+            return [r[0] for r in await cur.fetchall()]
+
+
+async def mark_notif_sent(user_id: int, kind: str):
+    """kind: 'daily' | 'hourly' | 'bp'"""
+    col = {
+        "daily": "last_daily_notif",
+        "hourly": "last_hourly_notif",
+        "bp": "last_bp_notif",
+    }.get(kind)
+    if not col:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO notif_settings (user_id) VALUES (?)",
+            (user_id,)
+        )
+        await db.execute(
+            f"UPDATE notif_settings SET {col} = CURRENT_TIMESTAMP WHERE user_id = ?",
+            (user_id,)
+        )
+        await db.commit()
