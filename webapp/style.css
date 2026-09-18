@@ -4217,3 +4217,221 @@ body.upgrade-running .bottom-nav {
     border-radius: 10px;
     white-space: nowrap;
 }
+/* ═══════════ БЛОК 5: UX ═══════════ */
+
+/* ─── Свайпы между экранами ─── */
+.screens.swiping {
+    transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* ─── Pull-to-refresh ─── */
+.ptr-indicator {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(-60px);
+    padding: 10px 20px;
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    border-radius: 0 0 16px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    z-index: 40;
+    transition: transform 0.3s ease;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.ptr-indicator.active {
+    transform: translateX(-50%) translateY(0);
+}
+.ptr-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,155,38,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: ptrSpin 0.8s linear infinite;
+}
+@keyframes ptrSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* ─── Нижнее меню: выпуклая центральная кнопка ─── */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-width: 520px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+    z-index: 50;
+}
+.nav-btn {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px;
+    transition: transform 0.15s;
+}
+.nav-btn:active { transform: scale(0.9); }
+.nav-icon {
+    font-size: 20px;
+    filter: grayscale(1) opacity(0.6);
+    transition: filter 0.25s, transform 0.25s;
+}
+.nav-lbl {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-weight: 600;
+    transition: color 0.2s;
+}
+.nav-btn.active .nav-icon {
+    filter: none;
+    transform: scale(1.15) translateY(-2px);
+}
+.nav-btn.active .nav-lbl {
+    color: var(--accent);
+}
+.nav-btn.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 0 0 3px 3px;
+    box-shadow: 0 0 12px var(--accent-glow);
+    animation: navIndicator 0.3s ease-out;
+}
+@keyframes navIndicator {
+    from { transform: translateX(-50%) scaleX(0); }
+    to   { transform: translateX(-50%) scaleX(1); }
+}
+
+/* Центральная кнопка (Апгрейд) — выпуклая */
+.nav-btn[data-nav="upgrader"] .nav-icon {
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, var(--accent), #e07a00);
+    border-radius: 50%;
+    margin-top: -22px;
+    box-shadow: 0 6px 20px var(--accent-glow), 0 0 0 4px var(--bg-glass);
+    font-size: 22px;
+    filter: none;
+    transition: transform 0.25s, box-shadow 0.25s;
+}
+.nav-btn[data-nav="upgrader"]:active .nav-icon {
+    transform: scale(0.92);
+}
+.nav-btn[data-nav="upgrader"].active .nav-icon {
+    transform: scale(1.08) translateY(-2px);
+    box-shadow: 0 8px 28px var(--accent-glow), 0 0 0 4px var(--bg-glass);
+}
+.nav-btn[data-nav="upgrader"] .nav-lbl {
+    margin-top: 2px;
+    color: var(--accent);
+    font-weight: 800;
+}
+
+/* ─── Светлая тема ─── */
+body.theme-light {
+    --bg-main: #f5f6fa;
+    --bg-card: #ffffff;
+    --bg-elevated: #eef0f5;
+    --bg-glass: rgba(255, 255, 255, 0.85);
+
+    --text-main: #1a1d24;
+    --text-muted: #5a6373;
+    --text-dim: #8a92a3;
+
+    --border: rgba(0, 0, 0, 0.08);
+    --border-hover: rgba(255, 155, 38, 0.5);
+}
+body.theme-light {
+    background: radial-gradient(ellipse at top, #ffffff 0%, #eef0f5 70%);
+}
+body.theme-light .app-header {
+    background: rgba(255,255,255,0.9);
+    border-bottom-color: rgba(0,0,0,0.06);
+}
+body.theme-light .bottom-nav {
+    background: rgba(255,255,255,0.9);
+    border-top-color: rgba(0,0,0,0.06);
+}
+body.theme-light .bottom-nav .nav-icon {
+    filter: none;
+}
+body.theme-light .slot2-cell {
+    background: #f8f9fc;
+    border-color: rgba(255,155,38,0.15);
+}
+body.theme-light .cr-item {
+    background: linear-gradient(180deg, #ffffff, #f0f2f7);
+}
+body.theme-light .cr-viewport {
+    background: radial-gradient(ellipse at center, rgba(255,155,38,0.08) 0%, transparent 70%);
+}
+body.theme-light .penalti-sky,
+body.theme-light .penalti-grass {
+    filter: brightness(1.15) saturate(1.1);
+}
+body.theme-light .mine-cell {
+    background: #f0f2f7;
+}
+
+/* Переключатель темы */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    margin-top: 12px;
+    width: 100%;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+.theme-toggle-switch {
+    position: relative;
+    width: 46px;
+    height: 26px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 13px;
+    transition: background 0.25s;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.theme-toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+body.theme-light .theme-toggle-switch {
+    background: var(--accent);
+}
+body.theme-light .theme-toggle-switch::after {
+    transform: translateX(20px);
+}
