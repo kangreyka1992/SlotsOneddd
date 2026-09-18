@@ -479,6 +479,29 @@
         <span>🎨 <span id="themeLabel">Светлая тема</span></span>
         <span class="theme-toggle-switch" id="themeSwitch"></span>
       </button>
+      <div class="notif-settings">
+    <h4 class="admin-subtitle" style="margin-top:20px;">🔔 Уведомления</h4>
+
+    <button class="theme-toggle" onclick="toggleNotif('daily')">
+        <span>🎁 Ежедневный бонус</span>
+        <span class="theme-toggle-switch" id="notifDailySwitch"></span>
+    </button>
+
+    <button class="theme-toggle" onclick="toggleNotif('hourly')">
+        <span>⏰ Ежечасный бонус</span>
+        <span class="theme-toggle-switch" id="notifHourlySwitch"></span>
+    </button>
+
+    <button class="theme-toggle" onclick="toggleNotif('battlepass')">
+        <span>🏆 Battle Pass</span>
+        <span class="theme-toggle-switch" id="notifBpSwitch"></span>
+    </button>
+
+    <button class="theme-toggle" onclick="toggleNotif('promo')">
+        <span>🎟 Акции и промокоды</span>
+        <span class="theme-toggle-switch" id="notifPromoSwitch"></span>
+    </button>
+</div>
     </div>
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
