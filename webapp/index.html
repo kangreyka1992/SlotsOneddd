@@ -536,16 +536,16 @@
     </div>
 
     <div class="topup-method active" id="wd-method-stars">
-      <div class="topup-label">Сумма в звёздах (мин. 15 ⭐)</div>
+      <div class="topup-label">Сумма в звёздах (мин. 1000 ⭐)</div>
       <div class="topup-input-wrap">
-        <input type="number" class="topup-input" id="wdStarsAmount" placeholder="0" min="15" step="1" oninput="withdrawRecalc('stars')">
+        <input type="number" class="topup-input" id="wdStarsAmount" placeholder="0" min="1000" step="100" oninput="withdrawRecalc('stars')">
         <span class="topup-input-icon">⭐</span>
       </div>
       <div class="topup-quick">
-        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 15)">15</button>
-        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 50)">50</button>
-        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 100)">100</button>
-        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 500)">500</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 1000)">1 000</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 2500)">2 500</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 5000)">5 000</button>
+        <button class="topup-quick-btn" onclick="withdrawQuick('stars', 10000)">10 000</button>
       </div>
       <button class="topup-go" onclick="withdrawGo('stars')">💸 Вывести</button>
       <div class="topup-info" id="wdStarsInfo"></div>
