@@ -272,30 +272,39 @@
   </section>
 
   <!-- ═══ WHEEL ═══ -->
-  <section class="screen" id="screen-wheel">
-    <h3 class="section-title">🎡 Колесо Фортуны</h3>
-    <div class="wheel-info">
-      <div class="inv-stat">
-        <div class="inv-stat-val" id="wheelSpins">0</div>
-        <div class="inv-stat-lbl">Доступно прокрутов</div>
+<section class="screen" id="screen-wheel">
+  <h3 class="section-title">🎡 Колесо Фортуны</h3>
+
+  <div class="wheel-spins-card">
+    <div class="wheel-spins-val" id="wheelSpins">0</div>
+    <div class="wheel-spins-lbl">доступно прокрутов</div>
+  </div>
+
+  <div class="wheel-stage">
+    <div class="wheel-pointer-new">
+      <div class="wheel-pointer-arrow"></div>
+      <div class="wheel-pointer-glow"></div>
+    </div>
+
+    <div class="wheel-disc-new" id="wheelDisc">
+      <div class="wheel-center-new">
+        <div class="wheel-center-icon">🎡</div>
+        <div class="wheel-center-text">SPIN</div>
       </div>
     </div>
 
-    <div class="wheel-wrap">
-      <div class="wheel-pointer">▼</div>
-      <div class="wheel-disc" id="wheelDisc">
-        <div class="wheel-center">🎡</div>
-      </div>
-    </div>
+    <div class="wheel-result-overlay hidden" id="wheelResult"></div>
+  </div>
 
-    <div class="wheel-result hidden" id="wheelResult"></div>
+  <button class="wheel-spin-btn" id="wheelSpinBtn" onclick="spinWheel()">
+    <span class="wheel-spin-btn-icon">🎡</span>
+    <span>Крутить колесо</span>
+  </button>
 
-    <button class="btn-primary" id="wheelSpinBtn" onclick="spinWheel()">🎡 Крутить колесо</button>
-
-    <div class="topup-info" style="margin-top:12px;">
-      💡 Прокрут получаешь за активность и раз в сутки
-    </div>
-  </section>
+  <div class="topup-info" style="margin-top:12px;">
+    💡 Прокрут получаешь за активность и раз в сутки
+  </div>
+</section>
 
   <!-- ═══ CASHBACK ═══ -->
   <section class="screen" id="screen-cashback">
