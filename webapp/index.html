@@ -98,6 +98,11 @@
 
 <div id="app">
 
+<div class="ptr-indicator" id="ptrIndicator">
+    <div class="ptr-spinner"></div>
+    <span>Обновление...</span>
+</div>
+
 <!-- ═══ HEADER ═══ -->
 <header class="app-header">
   <div class="app-header-left">
@@ -440,6 +445,10 @@
       <button class="btn-primary" onclick="showScreen('cashback')" style="margin-top:10px; width:100%;">💰 Кэшбэк</button>
       <button class="btn-primary" onclick="showScreen('customize')" style="margin-top:10px; width:100%;">🎨 Кастомизация</button>
       <button class="btn-primary" onclick="showScreen('hall')" style="margin-top:10px; width:100%;">🏅 Зал славы</button>
+      <button class="theme-toggle" onclick="toggleTheme()">
+          <span>🎨 <span id="themeLabel">Светлая тема</span></span>
+          <span class="theme-toggle-switch" id="themeSwitch"></span>
+      </button>
     </div>
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
