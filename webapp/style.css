@@ -3690,3 +3690,203 @@ body.upgrade-running .bottom-nav {
     color: #fff;
     text-shadow: 0 0 30px #ffc107, 0 0 60px #ffc107;
 }
+/* ═══════════ БЛОК 2: ОЖИВЛЕНИЕ ГЛАВНОЙ ═══════════ */
+
+/* ─── Хиро-карусель ─── */
+.hero-carousel {
+    position: relative;
+    height: 170px;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 16px;
+    background: #0e1015;
+    border: 1px solid var(--border);
+}
+.hero-slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    opacity: 0;
+    transform: translateX(30px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    pointer-events: none;
+}
+.hero-slide.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+.hero-slide[data-slide="0"] {
+    background:
+      radial-gradient(ellipse at right, rgba(255, 155, 38, 0.35) 0%, transparent 60%),
+      linear-gradient(135deg, #1a1d24 0%, #0e1015 100%);
+}
+.hero-slide[data-slide="1"] {
+    background:
+      radial-gradient(ellipse at right, rgba(61, 214, 140, 0.30) 0%, transparent 60%),
+      linear-gradient(135deg, #1a1d24 0%, #0e1015 100%);
+}
+.hero-slide[data-slide="2"] {
+    background:
+      radial-gradient(ellipse at right, rgba(124, 92, 255, 0.30) 0%, transparent 60%),
+      linear-gradient(135deg, #1a1d24 0%, #0e1015 100%);
+}
+.hero-slide-content { position: relative; z-index: 2; max-width: 65%; }
+.hero-slide-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    background: rgba(255, 155, 38, 0.15);
+    color: var(--accent);
+    border-radius: 20px;
+    font-size: 10px; font-weight: 800;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+.hero-slide-title {
+    font-size: 24px; font-weight: 900;
+    color: #fff; margin-bottom: 4px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.hero-slide-sub {
+    font-size: 12px; color: var(--text-muted);
+    margin-bottom: 12px;
+}
+.hero-slide-btn {
+    padding: 9px 18px;
+    background: linear-gradient(135deg, var(--accent), #e07a00);
+    color: #000; font-weight: 800; font-size: 12px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px var(--accent-glow);
+    transition: transform 0.15s;
+}
+.hero-slide-btn:active { transform: scale(0.95); }
+.hero-slide-emoji {
+    font-size: 90px;
+    opacity: 0.35;
+    filter: drop-shadow(0 0 30px currentColor);
+    animation: heroFloat 3s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes heroFloat {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50%      { transform: translateY(-8px) rotate(4deg); }
+}
+.hero-dots {
+    position: absolute;
+    bottom: 10px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 6px;
+    z-index: 3;
+}
+.hero-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    transition: all 0.3s;
+}
+.hero-dot.active {
+    width: 20px; border-radius: 3px;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+}
+
+/* ─── Quick actions ─── */
+.quick-actions-bar {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-bottom: 16px;
+    padding: 2px 0;
+}
+.quick-actions-bar::-webkit-scrollbar { display: none; }
+.qa-pill {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 12px; font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: transform 0.15s, border-color 0.15s;
+}
+.qa-pill:active { transform: scale(0.94); border-color: var(--border-hover); }
+.qa-pill-icon { font-size: 15px; }
+.qa-pill-label { font-size: 12px; }
+.qa-pill-badge {
+    position: absolute;
+    top: -6px; right: -4px;
+    min-width: 18px; height: 18px;
+    padding: 0 5px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: #fff;
+    font-size: 10px; font-weight: 900;
+    border-radius: 9px;
+    display: grid; place-items: center;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+    animation: badgePulse 1.6s ease-in-out infinite;
+}
+.qa-pill-badge.hidden { display: none; }
+@keyframes badgePulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.15); }
+}
+
+/* ─── Live-лента с анимацией ─── */
+.feed-item {
+    animation: feedSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes feedSlideIn {
+    from { opacity: 0; transform: translateX(-30px) scale(0.9); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.feed-item .feed-icon { margin-right: 4px; }
+.feed-item .feed-name { color: var(--accent); font-weight: 800; }
+.feed-item .feed-win  { color: var(--green); font-weight: 800; font-family: var(--font-num); }
+.feed-item .feed-game { color: var(--text-muted); font-size: 11px; }
+
+/* ─── Превью кейсов 3D ─── */
+.case-card {
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.25s ease, box-shadow 0.25s;
+}
+.case-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
+    background: linear-gradient(135deg, rgba(255,255,255,0.10) 0%, transparent 50%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s;
+    z-index: 3;
+}
+.case-card:active {
+    transform: perspective(600px) rotateX(4deg) rotateY(-4deg) scale(0.96);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+}
+.case-card:active::before { opacity: 1; }
+.case-card .case-image {
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.08),
+        inset 0 -1px 0 rgba(0,0,0,0.4),
+        0 4px 12px rgba(0,0,0,0.35);
+}
+.case-card .case-emoji,
+.case-card .tg-icon.lg {
+    filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));
+    animation: caseEmojiFloat 3.4s ease-in-out infinite;
+}
+@keyframes caseEmojiFloat {
+    0%, 100% { transform: translate(-50%, -50%) translateY(0) rotate(-3deg); }
+    50%      { transform: translate(-50%, -50%) translateY(-6px) rotate(3deg); }
+}
