@@ -381,6 +381,16 @@ async def init_db():
                 discount INTEGER NOT NULL DEFAULT 50
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS notification_settings (
+                user_id INTEGER PRIMARY KEY,
+                bonus_alerts INTEGER DEFAULT 1,
+                cashback_alerts INTEGER DEFAULT 1,
+                tournament_alerts INTEGER DEFAULT 1,
+                daily_deal_alerts INTEGER DEFAULT 1,
+                last_notified TIMESTAMP
+            )
+        """)
         await db.commit()
 
 
