@@ -1038,29 +1038,7 @@ def crash_mult_from_elapsed(elapsed: float) -> float:
     return round(1.0 + (elapsed ** CRASH_EXP) * CRASH_MULT, 2)
 
 
-@app.post("/api/crash/start")
-async def api_crash_start(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    bet = int(data.get("bet", 0))
-    auto_cashout = float(data.get("auto_cashout", 0))
-
-    # ФИКС: возврат ставки если игра уже есть
-    existing = crash_games.pop(uid, None)
-    if existing and not existing.get("cashed"):
-        await add_balance(uid, existing["bet"])
-
-    if bet <= 0 or bet > 10000000000:
-        raise HTTPException(400, "invalid_bet")
-
-    balance = await get_balance(uid)
-    if balance < bet:
-        raise HTTPException(400, "not_enough_coins")
-
-    await add_balance(uid, -bet)
-
-        r = random.random()
+    r = random.random()
     if r < 0.05:
         crash_at = 1.00
     else:
@@ -1078,6 +1056,7 @@ async def api_crash_start(request: Request):
             penalty = (50 - winrate) / 50.0
             if random.random() < penalty:
                 crash_at = min(crash_at, 1.01 + random.random() * 0.3)
+
     crash_games[uid] = {
         "bet": bet,
         "crash_at": crash_at,
@@ -1091,7 +1070,6 @@ async def api_crash_start(request: Request):
         "bet": bet,
         "started_at": crash_games[uid]["started"],
     }
-
 
 @app.post("/api/crash/status")
 async def api_crash_status(request: Request):
