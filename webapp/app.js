@@ -86,6 +86,32 @@ window.showScreen = function(name) {
     }, 200);
 };
 
+async function loadDailyDeal() {
+    try {
+        const d = await api('/api/cases/daily-deal');
+        const banner = document.getElementById('dailyDealBanner');
+        if (!banner) return;
+        
+        banner.innerHTML = `
+            <div class="daily-deal-content" onclick="openCaseInfo('${d.case_id}')">
+                <div class="daily-deal-icon">${d.emoji}</div>
+                <div class="daily-deal-info">
+                    <div class="daily-deal-title">🎁 Скидка дня −${d.discount}%</div>
+                    <div class="daily-deal-case">${d.name}</div>
+                    <div class="daily-deal-price">
+                        <span class="old">${fmt(d.original_price)}</span>
+                        <span class="new">${fmt(d.discounted_price)} 🪙</span>
+                    </div>
+                </div>
+                <div class="daily-deal-arrow">→</div>
+            </div>
+        `;
+        banner.classList.remove('hidden');
+    } catch (e) {
+        console.error('daily deal error:', e);
+    }
+}
+
 /* ─── Джекпот-счётчик с анимацией ─── */
 let jackpotAnimState = {
     current: 0,
@@ -4872,6 +4898,7 @@ async function bootstrap() {
     try { loadLiveFeed(); } catch (e) { console.error('feed:', e); }
     try { updateJackpot(); } catch (e) { console.error('jackpot:', e); }
     try { loadHourlyStatus(); } catch (e) { console.error('hourly:', e); }
+    try { loadDailyDeal(); } catch (e) { console.error('deal:', e); }
 
     setInterval(loadLiveFeed, 10000);
     setInterval(renderHomeInventoryPreview, 30000);
