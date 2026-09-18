@@ -133,6 +133,135 @@ function setDropRarity(node, rarity) {
     if (box) box.setAttribute('data-rarity', rarity || 'common');
 }
 
+/* ═══════════ БЛОК 2: ОЖИВЛЕНИЕ ГЛАВНОЙ ═══════════ */
+
+/* ─── Хиро-карусель ─── */
+let heroSlideIdx = 0;
+let heroSlideTimer = null;
+
+function initHeroCarousel() {
+    const slides = document.querySelectorAll('.hero-slide');
+    const dots = document.querySelectorAll('.hero-dot');
+    if (!slides.length) return;
+
+    function go(idx) {
+        slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+        dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+        heroSlideIdx = idx;
+    }
+
+    function next() { go((heroSlideIdx + 1) % slides.length); }
+
+    dots.forEach((d, i) => {
+        d.addEventListener('click', () => {
+            go(i);
+            clearInterval(heroSlideTimer);
+            heroSlideTimer = setInterval(next, 6000);
+        });
+    });
+
+    // Свайпы
+    let touchStartX = 0;
+    const carousel = document.getElementById('heroCarousel');
+    carousel.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+    carousel.addEventListener('touchend', (e) => {
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(dx) > 40) {
+            if (dx < 0) go((heroSlideIdx + 1) % slides.length);
+            else go((heroSlideIdx - 1 + slides.length) % slides.length);
+            clearInterval(heroSlideTimer);
+            heroSlideTimer = setInterval(next, 6000);
+        }
+    });
+
+    go(0);
+    if (heroSlideTimer) clearInterval(heroSlideTimer);
+    heroSlideTimer = setInterval(next, 6000);
+}
+
+/* ─── Live-лента с иконками ─── */
+const GAME_FEED_ICONS = {
+    'slots': '🎰', 'slots2': '🎰', 'mines': '⛏',
+    'crash': '📈', 'dice': '🎲', 'rr': '🔫',
+    'plinko': '🎯', 'penalti': '⚽', 'coin': '🪙',
+    'duel': '⚔️', 'case': '📦', 'upgrader': '⚡',
+    'Кейсы': '📦', 'Слоты 5×3': '🎰', 'Mines': '⛏',
+    'Crash': '📈', 'Кости': '🎲', 'Penalti': '⚽',
+    'Монетка': '🪙', 'Plinko': '🎯',
+};
+
+function renderLiveFeed(feed) {
+    const el = document.getElementById('liveFeed');
+    if (!el) return;
+
+    if (!feed || !feed.length) {
+        el.innerHTML = '<div class="feed-item" style="opacity:0.4;">Пока нет крупных выигрышей</div>';
+        return;
+    }
+
+    el.innerHTML = feed.map(item => {
+        const name = item.username.startsWith('@') ? item.username : '@' + item.username;
+        const icon = GAME_FEED_ICONS[item.game] || '🎉';
+        return `<div class="feed-item">
+            <span class="feed-icon">${icon}</span>
+            <span class="feed-name">${name}</span>
+            <span> выиграл </span>
+            <span class="feed-win">${fmt(item.win)} 🪙</span>
+            <span class="feed-game"> · ${item.game}</span>
+        </div>`;
+    }).join('');
+}
+
+/* ─── Бейджи для quick actions ─── */
+async function updateQuickBadges() {
+    // Колесо
+    try {
+        const d = await api('/api/wheel/status');
+        const b = document.getElementById('qaWheelBadge');
+        if (b) {
+            if (d.spins > 0) {
+                b.textContent = d.spins;
+                b.classList.remove('hidden');
+            } else {
+                b.classList.add('hidden');
+            }
+        }
+    } catch (e) {}
+
+    // Кэшбэк
+    try {
+        const d = await api('/api/cashback/info');
+        const b = document.getElementById('qaCashbackBadge');
+        if (b) {
+            if (d.can_claim && d.reward > 0) {
+                b.textContent = '!';
+                b.classList.remove('hidden');
+            } else {
+                b.classList.add('hidden');
+            }
+        }
+    } catch (e) {}
+
+    // Квесты
+    try {
+        const d = await api('/api/quests/list');
+        const b = document.getElementById('qaQuestsBadge');
+        if (b && d.quests) {
+            const claimable = d.quests.filter(q =>
+                q.progress >= q.target && !q.claimed
+            ).length;
+            if (claimable > 0) {
+                b.textContent = claimable;
+                b.classList.remove('hidden');
+            } else {
+                b.classList.add('hidden');
+            }
+        }
+    } catch (e) {}
+}
+
 const BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000];
 const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
@@ -557,6 +686,7 @@ function renderGamesGrid() {
 async function loadLiveFeed() {
     try {
         const d = await api('/api/feed/live');
+        renderLiveFeed(d.feed);
         const el = document.getElementById('liveFeed');
         if (!el) return;
 
@@ -4352,6 +4482,8 @@ async function bootstrap() {
     try { loadFreeCaseStatus(); } catch (e) { console.error('free case:', e); }
     try { startHeroTimer(); } catch (e) { console.error('timer:', e); }
     try { initToolbarFilters(); } catch (e) { console.error('toolbar:', e); }
+    try { initHeroCarousel(); } catch (e) { console.error('carousel:', e); }
+    try { updateQuickBadges(); } catch (e) { console.error('badges:', e); }
     try { loadLiveFeed(); } catch (e) { console.error('feed:', e); }
     try { updateJackpot(); } catch (e) { console.error('jackpot:', e); }
     try { loadHourlyStatus(); } catch (e) { console.error('hourly:', e); }
@@ -4360,6 +4492,7 @@ async function bootstrap() {
     setInterval(renderHomeInventoryPreview, 30000);
     setInterval(updateJackpot, 5000);
     setInterval(loadHourlyStatus, 30000);
+    setInterval(updateQuickBadges, 30000);
 
     api('/api/penalti/reset').catch(() => {});
     api('/api/duel/cancel').catch(() => {});
