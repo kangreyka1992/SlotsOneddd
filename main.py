@@ -1192,7 +1192,7 @@ async def api_dice(request: Request):
     if balance < bet:
         raise HTTPException(400, "not_enough_coins")
 
-        await add_balance(uid, -bet)
+    await add_balance(uid, -bet)
 
     # ФИКС: при винрейте < 1% — всегда промах
     if await _is_force_lose(uid):
@@ -1224,22 +1224,6 @@ async def api_dice(request: Request):
             if roll == exact:
                 mult = 5.0
                 win = int(bet * mult)
-    elif choice in ("high", "range_4_6"):
-        if roll >= 4:
-            mult = 1.95
-            win = int(bet * mult)
-    elif choice == "range_4_6_plus":
-        if roll >= 4:
-            mult = 2.9
-            win = int(bet * mult)
-    elif choice in ("exact", "range_6_6"):
-        if roll == 6:
-            mult = 5.7
-            win = int(bet * mult)
-    elif choice == "exact_number":
-        if roll == exact:
-            mult = 5.0
-            win = int(bet * mult)
 
     if win > 0:
         await add_balance(uid, win)
