@@ -1719,17 +1719,18 @@ async def get_hall_of_fame(limit: int = 30):
 # ═══════════ КОЛЕСО ФОРТУНЫ ═══════════
 
 async def get_wheel_info(user_id: int):
-    """Возвращает инфо о колесе. Даёт ежедневный прокрут раз в 24 часа."""
+    """Возвращает инфо о колесе. Даёт ровно 1 прокрут раз в 24 часа."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             "INSERT OR IGNORE INTO wheel_spins (user_id, spins_available) "
-            "VALUES (?, 1)",
-            (user_id,),
+            "VALUES (?, 0)",
+            (user_id,)
         )
         await db.commit()
+
         async with db.execute(
             "SELECT spins_available, last_daily FROM wheel_spins WHERE user_id = ?",
-            (user_id,),
+            (user_id,)
         ) as cur:
             row = await cur.fetchone()
 
@@ -1738,6 +1739,7 @@ async def get_wheel_info(user_id: int):
 
         now = datetime.datetime.utcnow()
         should_grant = False
+
         if not last_daily:
             should_grant = True
         else:
@@ -1749,7 +1751,7 @@ async def get_wheel_info(user_id: int):
                 should_grant = True
 
         if should_grant:
-            spins += 1
+            spins = 1  # строго 1 прокрут, а не накопление
             await db.execute(
                 "UPDATE wheel_spins SET spins_available = ?, last_daily = ? WHERE user_id = ?",
                 (spins, now.isoformat(), user_id),
