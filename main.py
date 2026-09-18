@@ -216,12 +216,6 @@ async def _process_game_rewards(uid: int, bet: int, win: int, game: str,
     except Exception as e:
         print(f"xp error: {e}")
 
-    try:
-        if random.random() < 0.05:
-            await add_wheel_spin(uid, 1)
-    except Exception as e:
-        print(f"wheel error: {e}")
-
 
 async def periodic_cleanup():
     """Фоновый таск — чистит зависшие игры и очередь дуэлей."""
@@ -3398,16 +3392,23 @@ async def api_hall_list(request: Request):
 
 # ═══════════ КОЛЕСО ФОРТУНЫ ═══════════
 
-WHEEL_PRIZES = [
-    {"id": "coins_500",   "label": "500 🪙",    "type": "coins",  "value": 500,   "weight": 30},
-    {"id": "coins_1000",  "label": "1 000 🪙",  "type": "coins",  "value": 1000,  "weight": 25},
-    {"id": "coins_5000",  "label": "5 000 🪙",  "type": "coins",  "value": 5000,  "weight": 15},
-    {"id": "coins_25000", "label": "25 000 🪙", "type": "coins",  "value": 25000, "weight": 10},
-    {"id": "case_starter","label": "Кейс",      "type": "case",   "value": "starter", "weight": 10},
-    {"id": "case_gold",   "label": "Золотой кейс","type": "case", "value": "gold",    "weight": 5},
-    {"id": "coins_100000","label": "100 000 🪙","type": "coins",  "value": 100000,"weight": 4},
-    {"id": "jackpot",     "label": "🎰 ДЖЕКПОТ", "type": "jackpot","value": 0,     "weight": 1},
+WHEEL_PRIZES_SERVER = [
+    {"id": "coins_100",    "label": "100",     "type": "coins", "value": 100,    "color": "#4a9eff", "weight": 25},
+    {"id": "coins_500",    "label": "500",     "type": "coins", "value": 500,    "color": "#7c5cff", "weight": 20},
+    {"id": "coins_1000",   "label": "1000",    "type": "coins", "value": 1000,   "color": "#00d68f", "weight": 15},
+    {"id": "coins_5000",   "label": "5000",    "type": "coins", "value": 5000,   "color": "#ffc107", "weight": 12},
+    {"id": "case_starter", "label": "Кейс",    "type": "case",  "value": "starter", "color": "#ff6b6b", "weight": 10},
+    {"id": "coins_25000",  "label": "25K",     "type": "coins", "value": 25000,  "color": "#a855f7", "weight": 8},
+    {"id": "case_gold",    "label": "Gold Кейс","type": "case", "value": "gold",    "color": "#ff9b26", "weight": 7},
+    {"id": "coins_100000", "label": "100K",    "type": "coins", "value": 100000, "color": "#ef4444", "weight": 3},
 ]
+
+
+@app.post("/api/wheel/prizes")
+async def api_wheel_prizes(request: Request):
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+    return {"prizes": WHEEL_PRIZES_SERVER}
 
 
 @app.post("/api/wheel/status")
@@ -3427,24 +3428,26 @@ async def api_wheel_spin(request: Request):
 
     ok = await consume_wheel_spin(uid)
     if not ok:
-        raise HTTPException(400, "Нет доступных прокрутов")
+        raise HTTPException(400, "Прокрут доступен раз в 24 часа")
 
-    total_w = sum(p["weight"] for p in WHEEL_PRIZES)
+    prizes = WHEEL_PRIZES_SERVER
+    total_w = sum(p["weight"] for p in prizes)
     r = random.randint(1, total_w)
     cum = 0
-    chosen = WHEEL_PRIZES[0]
-    for p in WHEEL_PRIZES:
+    chosen_idx = 0
+    for i, p in enumerate(prizes):
         cum += p["weight"]
         if r <= cum:
-            chosen = p
+            chosen_idx = i
             break
 
+    chosen = prizes[chosen_idx]
     result_text = ""
     new_balance = await get_balance(uid)
 
     if chosen["type"] == "coins":
         new_balance = await add_balance(uid, chosen["value"])
-        result_text = f"+{chosen['value']} 🪙"
+        result_text = f"+{chosen['value']:,} 🪙".replace(",", ".")
     elif chosen["type"] == "case":
         case_id = chosen["value"]
         case = next((c for c in CASES if c[0] == case_id), None)
@@ -3454,16 +3457,17 @@ async def api_wheel_spin(request: Request):
             value = int(price_coins * value_mult)
             kind = "nft" if rarity_id in ("epic", "legendary", "mythic") else "gift"
             await add_user_item(uid, item_id, case_id, rarity_id, emoji, name, value, kind=kind)
-            result_text = f"Кейс: {emoji} {name} ({value} 🪙)"
+            result_text = f"Кейс: {emoji} {name} ({value:,} 🪙)".replace(",", ".")
         else:
             new_balance = await add_balance(uid, 1000)
-            result_text = "+1000 🪙 (кейс не найден)"
-    elif chosen["type"] == "jackpot":
-        amount = await win_jackpot(uid)
-        new_balance = await add_balance(uid, amount)
-        result_text = f"🎰 ДЖЕКПОТ +{amount} 🪙"
+            result_text = "+1000 🪙"
 
-    return {"prize": chosen, "result_text": result_text, "balance": new_balance}
+    return {
+        "prize": chosen,
+        "prize_index": chosen_idx,
+        "result_text": result_text,
+        "balance": new_balance,
+    }
 
 
 # ═══════════ УРОВЕНЬ ═══════════
