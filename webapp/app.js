@@ -11,90 +11,7 @@ const BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000];
 const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
 
-/* ═══ НАСТРОЙКИ УВЕДОМЛЕНИЙ ═══ */
-const NOTIF_KEYS = ['daily', 'hourly', 'battlepass', 'promo'];
 
-function loadNotifSettings() {
-    NOTIF_KEYS.forEach(k => {
-        const enabled = localStorage.getItem('notif_' + k) !== '0';
-        const sw = document.getElementById('notif' + capitalize(k) + 'Switch');
-        if (sw && sw.parentElement) {
-            sw.parentElement.classList.toggle('active', enabled);
-        }
-    });
-}
-
-function toggleNotif(key) {
-    const cur = localStorage.getItem('notif_' + key) !== '0';
-    const next = !cur;
-    localStorage.setItem('notif_' + key, next ? '1' : '0');
-
-    // Отправляем на сервер
-    api('/api/notif/settings', { key, enabled: next }).catch(() => {});
-
-    haptic();
-    toast(next ? '🔔 Включено' : '🔕 Выключено');
-
-    loadNotifSettings();
-}
-
-function capitalize(s) {
-    return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-/* ═══ Уведомления ═══ */
-const NOTIFY_DEFAULTS = {
-    daily: true,
-    hourly: true,
-    battlepass: true,
-    promo: true,
-};
-
-function loadNotifySettings() {
-    const saved = localStorage.getItem('slots_notify');
-
-    // Если пользователь ещё ничего не менял — берём все включённые по умолчанию
-    let state;
-    if (saved) {
-        try {
-            state = { ...NOTIFY_DEFAULTS, ...JSON.parse(saved) };
-        } catch (e) {
-            state = { ...NOTIFY_DEFAULTS };
-        }
-    } else {
-        state = { ...NOTIFY_DEFAULTS };
-        // Сразу сохраняем, чтобы при следующем заходе уже было
-        localStorage.setItem('slots_notify', JSON.stringify(state));
-    }
-
-    Object.keys(state).forEach(key => {
-        const btnId = 'notify' + key.charAt(0).toUpperCase() + key.slice(1);
-        const btn = document.getElementById(btnId);
-        if (btn) btn.classList.toggle('on', !!state[key]);
-    });
-}
-
-function toggleNotify(key) {
-    const btnId = 'notify' + key.charAt(0).toUpperCase() + key.slice(1);
-    const btn = document.getElementById(btnId);
-    if (!btn) return;
-
-    btn.classList.toggle('on');
-    const isOn = btn.classList.contains('on');
-
-    // Сохраняем в localStorage
-    let state;
-    try {
-        state = JSON.parse(localStorage.getItem('slots_notify') || '{}');
-    } catch (e) {
-        state = {};
-    }
-    state[key] = isOn;
-    localStorage.setItem('slots_notify', JSON.stringify(state));
-
-    haptic();
-    toast(isOn ? '🔔 Уведомление включено' : '🔕 Уведомление выключено');
-}
 
 /* ═══════════ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ═══════════ */
 let profile = { balance: 0, stats: {}, referral: {} };
@@ -1091,8 +1008,8 @@ async function loadProfile() {
             if (titleEl) {
                 titleEl.textContent = d.profile?.title || '';
                 titleEl.style.display = d.profile?.title ? 'block' : 'none';
-            // Настройки уведомлений
-            loadNotifSettings();
+
+
             }
         }
 
