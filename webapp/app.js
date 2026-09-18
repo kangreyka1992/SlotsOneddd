@@ -1076,6 +1076,7 @@ async function loadProfile() {
             if (titleEl) {
                 titleEl.textContent = d.profile?.title || '';
                 titleEl.style.display = d.profile?.title ? 'block' : 'none';
+    try { loadNotifSettings(); } catch (e) {}   
             }
         }
 
@@ -4919,3 +4920,35 @@ document.addEventListener('keydown', (e) => {
         return false;
     }
 }, true);
+async function loadNotifSettings() {
+    try {
+        const d = await api('/api/notifications/settings');
+        ['bonus_alerts', 'cashback_alerts', 'tournament_alerts', 'daily_deal_alerts'].forEach(key => {
+            const el = document.getElementById('notif-' + key);
+            const row = el?.closest('.notif-row');
+            if (el) el.classList.toggle('on', d[key]);
+            if (row) row.classList.toggle('on', d[key]);
+        });
+    } catch (e) {}
+}
+
+async function toggleNotif(key) {
+    const el = document.getElementById('notif-' + key);
+    const row = el?.closest('.notif-row');
+    const current = row?.classList.contains('on') || false;
+    const newVal = !current;
+
+    if (el) el.classList.toggle('on', newVal);
+    if (row) row.classList.toggle('on', newVal);
+
+    try {
+        await api('/api/notifications/update', { [key]: newVal });
+        toast(newVal ? '🔔 Включено' : '🔕 Выключено');
+        haptic();
+    } catch (e) {
+        // откат
+        if (el) el.classList.toggle('on', current);
+        if (row) row.classList.toggle('on', current);
+        toast(e.message, 'error');
+    }
+}
