@@ -1993,9 +1993,9 @@ select.input { text-align: left; letter-spacing: 0; }
     var(--bg-elevated);
 }
 .case-image .case-emoji {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
+    position: absolute;
+    top: 55%; left: 50%;
+    transform: translate(-50%, -50%);
   font-size: 48px;
   filter: drop-shadow(0 4px 12px rgba(0,0,0,0.6));
   z-index: 1;
