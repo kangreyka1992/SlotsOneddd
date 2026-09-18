@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from datetime import datetime
 
 from aiogram import Bot, Dispatcher, Router, F, types
 from aiogram.filters import Command
@@ -14,6 +15,8 @@ from database import (
     init_db, get_balance, add_balance, save_payment, payment_exists,
     ensure_user, get_referrer, set_referrer,
     add_referral_bonus, set_discount, clear_discount,
+    get_users_for_daily_notif, get_users_for_hourly_notif,
+    mark_notif_sent,
     unlock_achievement, log_visit,
     get_user_full_stats, can_withdraw,
     buy_premium_pass, get_battle_pass,
@@ -209,6 +212,68 @@ async def on_payment(message: types.Message):
         parse_mode="HTML",
     )
 
+# ═══════════ ФОНОВЫЕ УВЕДОМЛЕНИЯ ═══════════
+
+async def _notify_worker():
+    """Раз в 30 минут проверяет, кому нужно напомнить о бонусах."""
+    # Первый запуск через 60 секунд после старта — чтобы не спамить при рестарте
+    await asyncio.sleep(60)
+
+    while True:
+        try:
+            await _send_daily_reminders()
+            await _send_hourly_reminders()
+        except Exception as e:
+            print(f"⚠️ notif worker error: {e}", flush=True)
+
+        await asyncio.sleep(30 * 60)  # 30 минут
+
+
+async def _send_daily_reminders():
+    users = await get_users_for_daily_notif()
+    sent = 0
+    for uid in users:
+        try:
+            await bot.send_message(
+                uid,
+                "🎁 <b>Не забудь про ежедневный бонус!</b>\n\n"
+                "Забери награду — серия растёт, награда тоже.\n"
+                "Чем дольше серия, тем больше монет.",
+                parse_mode="HTML",
+            )
+            await mark_notif_sent(uid, "daily")
+            sent += 1
+        except Exception:
+            # Пользователь заблокировал бота — пропускаем
+            pass
+        await asyncio.sleep(0.05)  # антиспам
+    if sent:
+        print(f"📨 Daily reminders sent: {sent}", flush=True)
+
+
+async def _send_hourly_reminders():
+    users = await get_users_for_hourly_notif()
+    sent = 0
+    for uid in users:
+        try:
+            await bot.send_message(
+                uid,
+                "⏰ <b>Ежечасный бонус доступен!</b>\n\n"
+                "Забери сейчас — серия увеличивается каждый час.",
+                parse_mode="HTML",
+            )
+            await mark_notif_sent(uid, "hourly")
+            sent += 1
+        except Exception:
+            pass
+        await asyncio.sleep(0.05)
+    if sent:
+        print(f"📨 Hourly reminders sent: {sent}", flush=True)
+
+
+async def start_notif_worker():
+    asyncio.create_task(_notify_worker())
 
 async def start_bot():
+    await start_notif_worker()
     await dp.start_polling(bot)
