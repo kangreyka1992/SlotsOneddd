@@ -2958,8 +2958,8 @@ async def api_daily(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
 
-    if not await has_deposited(uid, min_stars=10):
-        raise HTTPException(400, "Ежедневный бонус доступен только после пополнения на 10+ ⭐")
+    if not await has_deposited(uid, min_stars=1000):
+        raise HTTPException(400, "Ежедневный бонус доступен только после пополнения на 1000 ⭐")
 
     last, streak = await get_daily_info(uid)
     now = datetime.datetime.utcnow()
