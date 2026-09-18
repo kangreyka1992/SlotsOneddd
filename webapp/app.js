@@ -7,6 +7,132 @@ tg.setBackgroundColor('#0a0e14');
 const initData = tg.initData || "";
 const BOT_USERNAME = "SlotsGameFast_bot";
 
+/* ═══════════ БЛОК 1: ПОЛИРОВКА ═══════════ */
+
+/* ─── Ripple ─── */
+function attachRipple(el) {
+    if (!el || el.dataset.rippleAttached) return;
+    el.dataset.rippleAttached = '1';
+    el.classList.add('ripple-host');
+    el.addEventListener('pointerdown', (e) => {
+        const rect = el.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        const x = e.clientX - rect.left - size / 2;
+        const y = e.clientY - rect.top  - size / 2;
+        const ripple = document.createElement('span');
+        ripple.className = 'ripple';
+        ripple.style.width = ripple.style.height = size + 'px';
+        ripple.style.left = x + 'px';
+        ripple.style.top  = y + 'px';
+        el.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 620);
+    });
+}
+
+function attachRippleToAll() {
+    document.querySelectorAll('button, .case-card, .game-card-cs, .nav-btn')
+        .forEach(attachRipple);
+}
+
+/* ─── Плавная смена экрана ─── */
+const _origShowScreen = window.showScreen;
+window.showScreen = function(name) {
+    if (gameLocked && name !== 'game' && name !== 'result') {
+        toast('⏳ Дождись окончания игры', 'error');
+        return;
+    }
+    const current = document.querySelector('.screen.active');
+    const next = document.getElementById('screen-' + name);
+    if (!next || current === next) return;
+
+    if (current) {
+        current.classList.add('leaving');
+        setTimeout(() => current.classList.remove('active', 'leaving'), 200);
+    }
+
+    document.querySelectorAll('.nav-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.nav === name);
+    });
+
+    setTimeout(() => {
+        next.classList.add('active');
+        const appEl = document.getElementById('app');
+        if (appEl) appEl.scrollTop = 0;
+        attachRippleToAll();
+
+        if (name !== 'admin' && adminStatsTimer) {
+            clearInterval(adminStatsTimer);
+            adminStatsTimer = null;
+        }
+
+        if (name === 'top') loadTop();
+        if (name === 'ach') loadAch();
+        if (name === 'withdraw') loadWithdrawStatus();
+        if (name === 'pay') renderPay();
+        if (name === 'profile') { loadProfile(); renderHistory(); }
+        if (name === 'admin') switchAdminTab('stats');
+        if (name === 'cases') { loadCases(); loadFreeCaseStatus(); }
+        if (name === 'topup') { renderTopupGifts(); topupRecalc('ton'); }
+        if (name === 'quests') loadQuests();
+        if (name === 'battlepass') loadBattlePass();
+        if (name === 'inventory') loadInventory();
+        if (name === 'upgrader') loadUpgrader();
+        if (name === 'wheel') loadWheel();
+        if (name === 'tournament') loadTournament();
+        if (name === 'referral') loadReferralStats();
+        if (name === 'cashback') loadCashback();
+        if (name === 'customize') loadCustomize();
+        if (name === 'hall') loadHall();
+    }, 200);
+};
+
+/* ─── Джекпот-счётчик с анимацией ─── */
+let jackpotAnimState = {
+    current: 0,
+    target: 0,
+    lastTick: 0,
+};
+
+function animateJackpot(newValue) {
+    const s = jackpotAnimState;
+    s.target = newValue;
+    const els = document.querySelectorAll('.jackpot-value');
+    els.forEach(el => {
+        el.classList.add('tick');
+        setTimeout(() => el.classList.remove('tick'), 400);
+    });
+
+    const start = s.current;
+    const end = newValue;
+    const dur = 800;
+    const t0 = performance.now();
+
+    function step(now) {
+        const t = Math.min((now - t0) / dur, 1);
+        const eased = 1 - Math.pow(1 - t, 3);
+        const val = Math.round(start + (end - start) * eased);
+        els.forEach(el => el.textContent = fmt(val));
+        if (t < 1) requestAnimationFrame(step);
+        else s.current = end;
+    }
+    requestAnimationFrame(step);
+    s.current = end;
+}
+
+/* ─── Skeleton для списков ─── */
+function showSkeleton(containerId, rows = 5) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    el.innerHTML = Array(rows).fill('<div class="skeleton-row"></div>').join('');
+}
+
+/* ─── Подсветка дропа по редкости ─── */
+function setDropRarity(node, rarity) {
+    if (!node) return;
+    const box = node.closest('.cr-reward-emoji');
+    if (box) box.setAttribute('data-rarity', rarity || 'common');
+}
+
 const BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000];
 const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
@@ -2400,10 +2526,19 @@ async function withdrawGo(method) {
 
 /* ═══ ТОП ═══ */
 async function loadTop() {
+    // Показываем skeleton пока грузятся данные
+    showSkeleton('topList', 8);
+
     try {
         const d = await api('/api/top');
         const el = document.getElementById('topList');
         if (!el) return;
+
+        if (!d.top || !d.top.length) {
+            el.innerHTML = '<div class="history-item"><span class="h-game">Пока нет игроков</span></div>';
+            return;
+        }
+
         el.innerHTML = '';
         d.top.forEach((u, i) => {
             const item = document.createElement('div');
@@ -2411,15 +2546,30 @@ async function loadTop() {
             if (i === 0) item.classList.add('gold');
             if (i === 1) item.classList.add('silver');
             if (i === 2) item.classList.add('bronze');
+
             const medal = ['🥇', '🥈', '🥉'][i] || `${i + 1}`;
+
             item.innerHTML = `
                 <div class="top-place">${medal}</div>
                 <div class="top-name">@${u.username}</div>
                 <div class="top-bal">${fmt(u.balance)} 🪙</div>
             `;
+
             el.appendChild(item);
         });
-    } catch (e) { toast(e.message, 'error'); }
+
+        // Ripple на новые элементы (если у тебя работает attachRipple)
+        if (typeof attachRippleToAll === 'function') {
+            attachRippleToAll();
+        }
+
+    } catch (e) {
+        const el = document.getElementById('topList');
+        if (el) {
+            el.innerHTML = '<div class="history-item"><span class="h-game">Ошибка загрузки</span></div>';
+        }
+        toast(e.message, 'error');
+    }
 }
 
 /* ═══ ДОСТИЖЕНИЯ ═══ */
@@ -2704,12 +2854,12 @@ async function openCase(c, count = 1) {
         
         if (r) {
             rewardEmoji.innerHTML = iconWrap(r.emoji, kindFromRarity(r.rarity), '', r.rarity);
+            setDropRarity(rewardEmoji, r.rarity);
             rewardName.textContent = r.name;
             rewardPrice.textContent = `${fmt(r.value)} 🪙`;
             rewardBox.classList.remove('hidden');
             sellPrice.textContent = fmt(r.value);
         }
-
         status.textContent = count === 1
             ? `${r.emoji} ${r.name} · ${fmt(r.value)} 🪙`
             : `🏆 ${r.name} · ${fmt(r.value)} 🪙`;
@@ -3689,11 +3839,9 @@ function toggleFastCase() {
 async function updateJackpot() {
     try {
         const d = await api('/api/jackpot/info');
-        const els = document.querySelectorAll('.jackpot-value');
-        els.forEach(el => el.textContent = fmt(d.amount));
+        animateJackpot(d.amount);
     } catch (e) {}
 }
-
 /* ═══ HOURLY BONUS ═══ */
 let hourlyTimer = null;
 
