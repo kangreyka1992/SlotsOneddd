@@ -6,7 +6,7 @@
 <title>🎰 Casino</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=406">
+<link rel="stylesheet" href="style.css?v=407">
 <style>
 /* SPLASH */
 .splash {
@@ -98,11 +98,6 @@
 
 <div id="app">
 
-<div class="ptr-indicator" id="ptrIndicator">
-    <div class="ptr-spinner"></div>
-    <span>Обновление...</span>
-</div>
-
 <!-- ═══ HEADER ═══ -->
 <header class="app-header">
   <div class="app-header-left">
@@ -153,41 +148,41 @@
       <span>🎲</span><span>⭐</span><span>🍒</span>
     </div>
 
-<div class="hero-carousel" id="heroCarousel">
-  <div class="hero-slide" data-slide="0">
-    <div class="hero-slide-content">
-      <div class="hero-slide-tag">🔥 АКЦИЯ НЕДЕЛИ</div>
-      <div class="hero-slide-title">Safari Skin Hunt</div>
-      <div class="hero-slide-sub">Особые кейсы · удвоенный шанс на мифик</div>
-      <button class="hero-slide-btn" onclick="showScreen('cases')">К кейсам →</button>
+    <div class="hero-carousel" id="heroCarousel">
+      <div class="hero-slide" data-slide="0">
+        <div class="hero-slide-content">
+          <div class="hero-slide-tag">🔥 АКЦИЯ НЕДЕЛИ</div>
+          <div class="hero-slide-title">Safari Skin Hunt</div>
+          <div class="hero-slide-sub">Особые кейсы · удвоенный шанс на мифик</div>
+          <button class="hero-slide-btn" onclick="showScreen('cases')">К кейсам →</button>
+        </div>
+        <div class="hero-slide-emoji">🦁</div>
+      </div>
+      <div class="hero-slide" data-slide="1">
+        <div class="hero-slide-content">
+          <div class="hero-slide-tag">💰 ДЖЕКПОТ РАСТЁТ</div>
+          <div class="hero-slide-title">Миллион ждёт</div>
+          <div class="hero-slide-sub">Крути слоты — собирай джекпот</div>
+          <button class="hero-slide-btn" onclick="openGame('slots2')">Играть →</button>
+        </div>
+        <div class="hero-slide-emoji">🎰</div>
+      </div>
+      <div class="hero-slide" data-slide="2">
+        <div class="hero-slide-content">
+          <div class="hero-slide-tag">🎁 БЕСПЛАТНО</div>
+          <div class="hero-slide-title">Ежедневный кейс</div>
+          <div class="hero-slide-sub">Заходи каждый день — серия растёт</div>
+          <button class="hero-slide-btn" onclick="openFreeCase()">Забрать →</button>
+        </div>
+        <div class="hero-slide-emoji">🎁</div>
+      </div>
+      <div class="hero-dots" id="heroDots">
+        <span class="hero-dot active" data-dot="0"></span>
+        <span class="hero-dot" data-dot="1"></span>
+        <span class="hero-dot" data-dot="2"></span>
+      </div>
+      <div class="hero-banner-timer" id="heroTimer">--:--:--</div>
     </div>
-    <div class="hero-slide-emoji">🦁</div>
-  </div>
-  <div class="hero-slide" data-slide="1">
-    <div class="hero-slide-content">
-      <div class="hero-slide-tag">💰 ДЖЕКПОТ РАСТЁТ</div>
-      <div class="hero-slide-title">Миллион ждёт</div>
-      <div class="hero-slide-sub">Крути слоты — собирай джекпот</div>
-      <button class="hero-slide-btn" onclick="openGame('slots2')">Играть →</button>
-    </div>
-    <div class="hero-slide-emoji">🎰</div>
-  </div>
-  <div class="hero-slide" data-slide="2">
-    <div class="hero-slide-content">
-      <div class="hero-slide-tag">🎁 БЕСПЛАТНО</div>
-      <div class="hero-slide-title">Ежедневный кейс</div>
-      <div class="hero-slide-sub">Заходи каждый день — серия растёт</div>
-      <button class="hero-slide-btn" onclick="openFreeCase()">Забрать →</button>
-    </div>
-    <div class="hero-slide-emoji">🎁</div>
-  </div>
-  <div class="hero-dots" id="heroDots">
-    <span class="hero-dot active" data-dot="0"></span>
-    <span class="hero-dot" data-dot="1"></span>
-    <span class="hero-dot" data-dot="2"></span>
-  </div>
-  <div class="hero-banner-timer" id="heroTimer">--:--:--</div>
-</div>
 
     <div class="toolbar">
       <div class="toolbar-tabs">
@@ -198,27 +193,28 @@
       </div>
       <button class="toolbar-search" onclick="toast('Поиск в разработке')">🔍</button>
     </div>
+
     <div class="quick-actions-bar">
-  <button class="qa-pill" onclick="showScreen('wheel')">
-    <span class="qa-pill-icon">🎡</span>
-    <span class="qa-pill-label">Колесо</span>
-    <span class="qa-pill-badge hidden" id="qaWheelBadge">0</span>
-  </button>
-  <button class="qa-pill" onclick="showScreen('quests')">
-    <span class="qa-pill-icon">📋</span>
-    <span class="qa-pill-label">Квесты</span>
-    <span class="qa-pill-badge hidden" id="qaQuestsBadge">0</span>
-  </button>
-  <button class="qa-pill" onclick="showScreen('battlepass')">
-    <span class="qa-pill-icon">🏆</span>
-    <span class="qa-pill-label">Battle Pass</span>
-  </button>
-  <button class="qa-pill" onclick="showScreen('cashback')">
-    <span class="qa-pill-icon">💰</span>
-    <span class="qa-pill-label">Кэшбэк</span>
-    <span class="qa-pill-badge hidden" id="qaCashbackBadge">0</span>
-  </button>
-</div>
+      <button class="qa-pill" onclick="showScreen('wheel')">
+        <span class="qa-pill-icon">🎡</span>
+        <span class="qa-pill-label">Колесо</span>
+        <span class="qa-pill-badge hidden" id="qaWheelBadge">0</span>
+      </button>
+      <button class="qa-pill" onclick="showScreen('quests')">
+        <span class="qa-pill-icon">📋</span>
+        <span class="qa-pill-label">Квесты</span>
+        <span class="qa-pill-badge hidden" id="qaQuestsBadge">0</span>
+      </button>
+      <button class="qa-pill" onclick="showScreen('battlepass')">
+        <span class="qa-pill-icon">🏆</span>
+        <span class="qa-pill-label">Battle Pass</span>
+      </button>
+      <button class="qa-pill" onclick="showScreen('cashback')">
+        <span class="qa-pill-icon">💰</span>
+        <span class="qa-pill-label">Кэшбэк</span>
+        <span class="qa-pill-badge hidden" id="qaCashbackBadge">0</span>
+      </button>
+    </div>
 
     <div class="free-case-banner" id="freeCaseBtn" onclick="openFreeCase()">
       <div class="free-case-banner-left">
@@ -230,7 +226,9 @@
       </div>
       <div class="free-case-banner-streak hidden" id="freeCaseStreak"></div>
     </div>
+
     <div class="daily-deal-banner hidden" id="dailyDealBanner"></div>
+
     <div class="section-title-row">
       <h3 class="section-title">🎰 Кейсы</h3>
       <button class="section-link" onclick="showScreen('cases')">Все кейсы →</button>
@@ -422,17 +420,19 @@
   <section class="screen" id="screen-profile">
     <div class="profile-card">
       <div class="profile-avatar-wrapper">
-      <div class="profile-avatar" id="profileAvatar">👤</div>
-      <div class="profile-premium-badge hidden" id="profilePremiumBadge">👑 PREMIUM</div>
-    </div>
-    <div class="profile-title" id="profileTitle" style="display:none;"></div>
-    <div class="profile-name" id="profileName">Игрок</div>
+        <div class="profile-avatar" id="profileAvatar">👤</div>
+        <div class="profile-premium-badge hidden" id="profilePremiumBadge">👑 PREMIUM</div>
+      </div>
+      <div class="profile-title" id="profileTitle" style="display:none;"></div>
+      <div class="profile-name" id="profileName">Игрок</div>
       <div class="profile-level">
         <div class="level-bar"><div class="level-fill" id="levelFill"></div></div>
         <div class="level-text" id="levelText">Уровень 1</div>
       </div>
       <div class="profile-balance" id="profileBalance">0</div>
       <div class="profile-balance-label">🪙 Баланс</div>
+
+      <div id="activityChart" style="width:100%; margin-top:12px;"></div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; margin-top:12px;">
         <button class="btn-primary" onclick="showScreen('topup')">⭐ Пополнить</button>
@@ -445,38 +445,43 @@
       <button class="btn-primary" onclick="showScreen('cashback')" style="margin-top:10px; width:100%;">💰 Кэшбэк</button>
       <button class="btn-primary" onclick="showScreen('customize')" style="margin-top:10px; width:100%;">🎨 Кастомизация</button>
       <button class="btn-primary" onclick="showScreen('hall')" style="margin-top:10px; width:100%;">🏅 Зал славы</button>
+
       <button class="theme-toggle" onclick="toggleTheme()">
-          <span>🎨 <span id="themeLabel">Светлая тема</span></span>
-          <span class="theme-toggle-switch" id="themeSwitch"></span>
+        <span>🎨 <span id="themeLabel">Светлая тема</span></span>
+        <span class="theme-toggle-switch" id="themeSwitch"></span>
       </button>
     </div>
+
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
       <div class="stat-card"><div class="stat-val" id="statWagered">0</div><div class="stat-lbl">Поставлено</div></div>
       <div class="stat-card"><div class="stat-val" id="statWon">0</div><div class="stat-lbl">Выиграно</div></div>
     </div>
+
     <h3 class="section-title">📜 История игр</h3>
     <div class="history-list" id="historyList"></div>
-  </section>
+
+    <!-- ═══ УВЕДОМЛЕНИЯ (в самом низу профиля) ═══ -->
     <div class="notif-settings" id="notifSettings">
-        <h4 class="admin-subtitle">🔔 Уведомления</h4>
-        <div class="notif-row" onclick="toggleNotif('bonus_alerts')">
-            <span>🎁 Бонусы и акции</span>
-            <span class="theme-toggle-switch" id="notif-bonus_alerts"></span>
-        </div>
-        <div class="notif-row" onclick="toggleNotif('cashback_alerts')">
-            <span>💰 Кэшбэк</span>
-            <span class="theme-toggle-switch" id="notif-cashback_alerts"></span>
-        </div>
-        <div class="notif-row" onclick="toggleNotif('tournament_alerts')">
-            <span>🏆 Турниры</span>
-            <span class="theme-toggle-switch" id="notif-tournament_alerts"></span>
-        </div>
-        <div class="notif-row" onclick="toggleNotif('daily_deal_alerts')">
-            <span>🎯 Скидка дня</span>
-            <span class="theme-toggle-switch" id="notif-daily_deal_alerts"></span>
-        </div>
+      <h4 class="admin-subtitle">🔔 Уведомления</h4>
+      <div class="notif-row" onclick="toggleNotif('bonus_alerts')">
+        <span>🎁 Бонусы и акции</span>
+        <span class="theme-toggle-switch" id="notif-bonus_alerts"></span>
+      </div>
+      <div class="notif-row" onclick="toggleNotif('cashback_alerts')">
+        <span>💰 Кэшбэк</span>
+        <span class="theme-toggle-switch" id="notif-cashback_alerts"></span>
+      </div>
+      <div class="notif-row" onclick="toggleNotif('tournament_alerts')">
+        <span>🏆 Турниры</span>
+        <span class="theme-toggle-switch" id="notif-tournament_alerts"></span>
+      </div>
+      <div class="notif-row" onclick="toggleNotif('daily_deal_alerts')">
+        <span>🎯 Скидка дня</span>
+        <span class="theme-toggle-switch" id="notif-daily_deal_alerts"></span>
+      </div>
     </div>
+  </section>
 
   <!-- ═══ TOP ═══ -->
   <section class="screen" id="screen-top">
@@ -577,24 +582,24 @@
   </section>
 
   <!-- ═══ BATTLE PASS ═══ -->
-<section class="screen" id="screen-battlepass">
-  <h3 class="section-title">🏆 Battle Pass</h3>
-  <div class="bp-info" id="bpInfo">
-    <div class="bp-season">Сезон <span id="bpSeason">1</span></div>
-    <div class="bp-level">Уровень <span id="bpLevel">1</span></div>
-    <div class="bp-xp-bar">
-      <div class="bp-xp-fill" id="bpXpFill"></div>
+  <section class="screen" id="screen-battlepass">
+    <h3 class="section-title">🏆 Battle Pass</h3>
+    <div class="bp-info" id="bpInfo">
+      <div class="bp-season">Сезон <span id="bpSeason">1</span></div>
+      <div class="bp-level">Уровень <span id="bpLevel">1</span></div>
+      <div class="bp-xp-bar">
+        <div class="bp-xp-fill" id="bpXpFill"></div>
+      </div>
+      <div class="bp-xp-text"><span id="bpXp">0</span> / <span id="bpXpMax">1000</span> XP</div>
     </div>
-    <div class="bp-xp-text"><span id="bpXp">0</span> / <span id="bpXpMax">1000</span> XP</div>
-  </div>
-  <button class="bp-premium-btn" id="bpPremiumBtn" onclick="buyPremiumPass()">
-    ⭐ Купить Premium Pass (250 ⭐)
-  </button>
+    <button class="bp-premium-btn" id="bpPremiumBtn" onclick="buyPremiumPass()">
+      ⭐ Купить Premium Pass (250 ⭐)
+    </button>
 
-  <div class="bp-track-wrap">
-    <div class="bp-track" id="bpTrack"></div>
-  </div>
-</section>
+    <div class="bp-track-wrap">
+      <div class="bp-track" id="bpTrack"></div>
+    </div>
+  </section>
 
   <!-- ═══ PAY (старый) ═══ -->
   <section class="screen" id="screen-pay">
@@ -1033,6 +1038,6 @@
   }, 3000);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=406"></script>
+<script src="app.js?v=407"></script>
 </body>
 </html>
