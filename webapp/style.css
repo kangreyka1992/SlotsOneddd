@@ -4987,3 +4987,24 @@ body.theme-light .theme-toggle-switch::after {
     background: var(--bg-card);
     border: 1px solid var(--border);
 }
+/* ═══ НАСТРОЙКИ УВЕДОМЛЕНИЙ ═══ */
+.notif-settings {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+.notif-settings .theme-toggle {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+}
+.notif-toggle .theme-toggle-switch {
+    background: rgba(255,255,255,0.1);
+}
+.notif-toggle.active .theme-toggle-switch {
+    background: var(--accent);
+}
+.notif-toggle.active .theme-toggle-switch::after {
+    transform: translateX(20px);
+}
