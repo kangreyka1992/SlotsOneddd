@@ -1875,3 +1875,28 @@ async def get_users_for_broadcast(alert_type: str):
         ) as cur:
             rows = await cur.fetchall()
             return [r[0] for r in rows]
+# ═══════════ СКИДКА ДНЯ ═══════════
+
+async def get_daily_case_deal():
+    """Возвращает сегодняшний кейс со скидкой или создаёт новый."""
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT case_id, discount FROM daily_case_deal WHERE date = ?",
+            (today,)
+        ) as cur:
+            row = await cur.fetchone()
+            if row:
+                return {"case_id": row[0], "discount": row[1]}
+
+            # Выбираем случайный кейс
+            cases = ["gold", "lucky", "diamond_small", "emerald", "sapphire", "ruby"]
+            chosen = random.choice(cases)
+            discount = random.choice([30, 40, 50])
+
+            await db.execute(
+                "INSERT INTO daily_case_deal (date, case_id, discount) VALUES (?, ?, ?)",
+                (today, chosen, discount)
+            )
+            await db.commit()
+            return {"case_id": chosen, "discount": discount}
