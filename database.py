@@ -1828,3 +1828,50 @@ async def add_user_xp(user_id: int, xp: int):
                 (new_xp, new_level, user_id),
             )
         await db.commit()
+async def get_notification_settings(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO notification_settings (user_id) VALUES (?)",
+            (user_id,)
+        )
+        await db.commit()
+        async with db.execute(
+            "SELECT bonus_alerts, cashback_alerts, tournament_alerts, "
+            "daily_deal_alerts FROM notification_settings WHERE user_id = ?",
+            (user_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            return {
+                "bonus_alerts": bool(row[0]) if row else True,
+                "cashback_alerts": bool(row[1]) if row else True,
+                "tournament_alerts": bool(row[2]) if row else True,
+                "daily_deal_alerts": bool(row[3]) if row else True,
+            }
+
+
+async def update_notification_settings(user_id: int, **kwargs):
+    async with aiosqlite.connect(DB_PATH) as db:
+        fields = []
+        values = []
+        for k, v in kwargs.items():
+            if k in ("bonus_alerts", "cashback_alerts", "tournament_alerts", "daily_deal_alerts"):
+                fields.append(f"{k} = ?")
+                values.append(1 if v else 0)
+        if not fields:
+            return
+        values.append(user_id)
+        await db.execute(
+            f"UPDATE notification_settings SET {', '.join(fields)} WHERE user_id = ?",
+            values
+        )
+        await db.commit()
+
+
+async def get_users_for_broadcast(alert_type: str):
+    """Возвращает список user_id, у которых включён нужный тип уведомлений."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            f"SELECT user_id FROM notification_settings WHERE {alert_type} = 1"
+        ) as cur:
+            rows = await cur.fetchall()
+            return [r[0] for r in rows]
