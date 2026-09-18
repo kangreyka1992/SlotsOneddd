@@ -3584,3 +3584,109 @@ body.upgrade-running .bottom-nav {
     font-size: 64px;
     border-radius: 20px;
 }
+/* ═══════════ БЛОК 1: ПОЛИРОВКА ═══════════ */
+
+/* ─── 1. Плавные переходы между экранами ─── */
+.screen {
+    transform: translateX(20px);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.screen.active {
+    transform: translateX(0);
+}
+.screen.leaving {
+    opacity: 0;
+    transform: translateX(-20px);
+    pointer-events: none;
+}
+
+/* ─── 2. Ripple на кнопках ─── */
+.ripple-host {
+    position: relative;
+    overflow: hidden;
+}
+.ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.35);
+    transform: scale(0);
+    animation: rippleAnim 0.6s ease-out;
+    pointer-events: none;
+    z-index: 1;
+}
+@keyframes rippleAnim {
+    to {
+        transform: scale(4);
+        opacity: 0;
+    }
+}
+
+/* ─── 3. Подсветка под иконкой дропа ─── */
+.cr-reward-emoji {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 160px;
+    height: 160px;
+    margin: 0 auto;
+}
+.cr-reward-emoji::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, currentColor 0%, transparent 65%);
+    opacity: 0.35;
+    filter: blur(12px);
+    animation: glowPulse 2.4s ease-in-out infinite;
+    z-index: 0;
+}
+@keyframes glowPulse {
+    0%, 100% { transform: scale(1); opacity: 0.35; }
+    50%      { transform: scale(1.15); opacity: 0.55; }
+}
+.cr-reward-emoji[data-rarity="common"]    { color: #8b95a5; }
+.cr-reward-emoji[data-rarity="uncommon"]  { color: #00d68f; }
+.cr-reward-emoji[data-rarity="rare"]      { color: #4a9eff; }
+.cr-reward-emoji[data-rarity="epic"]      { color: #7c5cff; }
+.cr-reward-emoji[data-rarity="legendary"] { color: #ffc107; }
+.cr-reward-emoji[data-rarity="mythic"]    { color: #ff4757; }
+
+.cr-reward-emoji .tg-icon {
+    position: relative;
+    z-index: 1;
+    width: 120px;
+    height: 120px;
+    font-size: 64px;
+    border-radius: 20px;
+}
+
+/* ─── 4. Skeleton-загрузка ─── */
+.skeleton-row {
+    height: 56px;
+    border-radius: 10px;
+    background: linear-gradient(
+        90deg,
+        rgba(255,255,255,0.04) 0%,
+        rgba(255,255,255,0.10) 50%,
+        rgba(255,255,255,0.04) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeletonShine 1.4s linear infinite;
+    margin-bottom: 8px;
+}
+@keyframes skeletonShine {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+}
+
+/* ─── 5. Джекпот-счётчик ─── */
+.jackpot-value {
+    position: relative;
+    transition: color 0.3s, text-shadow 0.3s;
+}
+.jackpot-value.tick {
+    color: #fff;
+    text-shadow: 0 0 30px #ffc107, 0 0 60px #ffc107;
+}
