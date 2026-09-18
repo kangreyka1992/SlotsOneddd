@@ -2605,10 +2605,6 @@ async def api_upgrader_play(request: Request):
     if extra_coins > 0:
         await add_balance(uid, -extra_coins)
 
-    # ФИКС: при винрейте < 1% — всегда луз
-    if await _is_force_lose(uid):
-        win = False
-    else:
     chance = total_value / target_price_coins
     chance = max(0.01, min(0.95, chance))
 
