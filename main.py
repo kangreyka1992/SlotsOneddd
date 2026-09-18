@@ -1090,38 +1090,8 @@ async def api_crash_start(request: Request):
     }
 
 
-    r = random.random()
-    if r < 0.05:
-        crash_at = 1.00
-    else:
-        crash_at = min(100.0, max(1.01, 0.95 / (1 - r)))
-
-    # ФИКС: при винрейте < 1% — краш мгновенный
-    if await _is_force_lose(uid):
-        crash_at = 1.00
-    else:
-        winrate, _ = await get_winrate(uid)
-        if winrate > 50:
-            bonus = (winrate - 50) / 50.0 * 2.0
-            crash_at = max(crash_at, min(1.01 + bonus, 3.0))
-        elif winrate < 50:
-            penalty = (50 - winrate) / 50.0
-            if random.random() < penalty:
-                crash_at = min(crash_at, 1.01 + random.random() * 0.3)
-
-    crash_games[uid] = {
-        "bet": bet,
-        "crash_at": crash_at,
-        "started": time.time(),
-        "auto_cashout": auto_cashout if auto_cashout > 1.0 else 0,
-        "cashed": False,
-    }
-
-    return {
-        "balance": await get_balance(uid),
-        "bet": bet,
-        "started_at": crash_games[uid]["started"],
-    }
+   
+   
 
 @app.post("/api/crash/status")
 async def api_crash_status(request: Request):
@@ -2649,7 +2619,7 @@ async def api_upgrader_play(request: Request):
         roll = random.random()
         win = roll < chance
 
-    # Скрытый штраф — игрок никогда не получает «честный» шанс
+    # Скрытый штраф
     HOUSE_EDGE = 0.35
     chance = chance * (1 - HOUSE_EDGE)
 
