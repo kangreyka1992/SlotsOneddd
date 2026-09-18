@@ -79,7 +79,7 @@ BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
 
 WITHDRAW_RATES = {
-    'stars': {'rate': 125,  'min': 1000,  'unit': '⭐'},
+    'stars': {'rate': 1250,  'min': 1000,  'unit': '⭐'},
     'sbp':   {'rate': 1000, 'min': 500, 'unit': '₽'},
     'usdc':  {'rate': 100,  'min': 5,   'unit': 'USDC'},
     'ton':   {'rate': 5000, 'min': 1,   'unit': 'TON'},
@@ -2786,22 +2786,25 @@ async def api_withdraw_stars(request: Request):
     if not allowed:
         raise HTTPException(400, f"Вывод доступен только после 3 дней активности. Заходили: {days} из 3.")
 
-    amount = float(data.get("amount", 0))
-    _validate_withdraw_amount('stars', amount)
+    # ФИКС: фиксированный вывод — 1000 ⭐
+    amount = 1000.0
 
     need = _calc_withdraw_need('stars', amount)
     balance = await get_balance(uid)
     if balance < need:
-        raise HTTPException(400, f"Нужно {need} 🪙")
+        raise HTTPException(400, f"Нужно {need} 🪙 (у тебя {balance})")
 
     await add_balance(uid, -need)
     wid = await create_withdrawal(uid, username, 'stars', amount, need)
 
     await _notify_admin_withdraw(wid, 'stars', amount, '⭐', need, uid)
 
-    return {"status": "pending", "id": wid,
-            "message": f"Заявка №{wid} создана (Stars)",
-            "balance": await get_balance(uid)}
+    return {
+        "status": "pending",
+        "id": wid,
+        "message": f"Заявка №{wid} создана: 1000 ⭐ за {need} 🪙",
+        "balance": await get_balance(uid),
+    }
 
 
 @app.post("/api/withdraw/sbp")
