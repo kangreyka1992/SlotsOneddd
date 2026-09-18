@@ -482,6 +482,44 @@ function initSwipeNavigation() {
     }, { passive: true });
 }
 
+/* ═══ НАСТРОЙКИ УВЕДОМЛЕНИЙ ═══ */
+let notifSettings = { daily: true, hourly: true, battlepass: true, promo: true };
+
+async function loadNotifSettings() {
+    try {
+        const d = await api('/api/notif/get');
+        notifSettings = d.settings;
+        renderNotifSettings();
+    } catch (e) {
+        console.error('notif load error:', e);
+    }
+}
+
+function renderNotifSettings() {
+    document.querySelectorAll('.notif-toggle').forEach(btn => {
+        const key = btn.dataset.notif;
+        const enabled = notifSettings[key];
+        btn.classList.toggle('active', enabled);
+    });
+}
+
+async function toggleNotif(key) {
+    const next = !notifSettings[key];
+    notifSettings[key] = next;
+    renderNotifSettings();
+    haptic();
+    toast(next ? '🔔 Включено' : '🔕 Выключено');
+
+    try {
+        await api('/api/notif/settings', { key, enabled: next });
+    } catch (e) {
+        // Откатываем при ошибке
+        notifSettings[key] = !next;
+        renderNotifSettings();
+        toast('Ошибка сохранения', 'error');
+    }
+}
+
 function initPullToRefresh() {
     const app = document.getElementById('app');
     const indicator = document.getElementById('ptrIndicator');
@@ -1005,6 +1043,8 @@ async function loadProfile() {
         }
 
         updatePremiumBadge(!!d.premium);
+        // Настройки уведомлений
+        loadNotifSettings();
 
         const sg = document.getElementById('statGames');
         const sw = document.getElementById('statWagered');
