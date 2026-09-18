@@ -2149,7 +2149,29 @@ async def api_cases_list(request: Request):
         ]
     }
 
-
+@app.post("/api/cases/daily-deal")
+async def api_daily_deal(request: Request):
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+    deal = await get_daily_case_deal()
+    
+    # Находим кейс в CASES
+    case = next((c for c in CASES if c[0] == deal["case_id"]), None)
+    if not case:
+        raise HTTPException(404, "Кейс не найден")
+    
+    original = case[3] * RATE
+    discounted = int(original * (100 - deal["discount"]) / 100)
+    
+    return {
+        "case_id": case[0],
+        "name": case[1],
+        "emoji": case[2],
+        "original_price": original,
+        "discounted_price": discounted,
+        "discount": deal["discount"],
+    }
+        
 @app.post("/api/cases/info")
 async def api_cases_info(request: Request):
     data = await request.json()
