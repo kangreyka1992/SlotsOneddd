@@ -4662,3 +4662,96 @@ body.theme-light .theme-toggle-switch::after {
     color: var(--text-muted);
     font-family: var(--font-num);
 }
+/* ═══ КОЛЕСО ФОРТУНЫ ═══ */
+.wheel-wrap {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  margin: 30px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wheel-pointer {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 32px;
+  color: var(--gold);
+  filter: drop-shadow(0 0 12px var(--gold));
+  z-index: 5;
+  animation: pointerPulse 1.5s ease-in-out infinite;
+}
+@keyframes pointerPulse {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50%      { transform: translateX(-50%) scale(1.15); }
+}
+
+.wheel-disc {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: conic-gradient(
+    #ff9b26 0deg 45deg,
+    #7c5cff 45deg 90deg,
+    #3dd68c 90deg 135deg,
+    #ff4757 135deg 180deg,
+    #4a9eff 180deg 225deg,
+    #ffc107 225deg 270deg,
+    #a855f7 270deg 315deg,
+    #00d68f 315deg 360deg
+  );
+  border: 6px solid #2a2f3a;
+  box-shadow:
+    0 0 40px rgba(255, 155, 38, 0.4),
+    inset 0 0 60px rgba(0,0,0,0.5);
+  position: relative;
+  transition: transform 4s cubic-bezier(0.17, 0.67, 0.16, 1);
+  display: grid;
+  place-items: center;
+}
+
+.wheel-disc::before {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255,255,255,0.15);
+}
+
+/* Иконки призов по кругу */
+.wheel-prize {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 22px;
+  transform-origin: 0 0;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+}
+
+.wheel-center {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1a1d24, #0a0e14);
+  border: 4px solid var(--gold);
+  display: grid;
+  place-items: center;
+  font-size: 36px;
+  z-index: 3;
+  box-shadow:
+    0 0 30px var(--gold),
+    inset 0 0 20px rgba(0,0,0,0.8);
+  position: relative;
+}
+
+.wheel-spinning {
+  animation: wheelSpinAnim 4s cubic-bezier(0.17, 0.67, 0.16, 1);
+}
+@keyframes wheelSpinAnim {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(var(--spin-deg, 1800deg)); }
+}
