@@ -4529,3 +4529,130 @@ body.theme-light .theme-toggle-switch::after {
 .notif-row.on .theme-toggle-switch::after {
     transform: translateX(18px);
 }
+/* ═══════════ КОЛЕСО ФОРТУНЫ ═══════════ */
+
+.wheel-status-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.wheel-status-item {
+    padding: 12px;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    text-align: center;
+}
+.wheel-status-val {
+    font-size: 20px;
+    font-weight: 900;
+    font-family: var(--font-num);
+    color: var(--accent);
+}
+.wheel-status-lbl {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wheel-stage {
+    position: relative;
+    width: 100%;
+    max-width: 340px;
+    aspect-ratio: 1;
+    margin: 0 auto 20px;
+}
+.wheel-pointer {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 26px;
+    color: var(--gold);
+    text-shadow: 0 0 20px var(--gold), 0 4px 8px rgba(0,0,0,0.6);
+    z-index: 10;
+    filter: drop-shadow(0 0 12px var(--gold));
+    animation: pointerPulse 1.6s ease-in-out infinite;
+}
+@keyframes pointerPulse {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50%      { transform: translateX(-50%) translateY(-3px); }
+}
+.wheel-rotor {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow:
+        0 0 0 6px var(--bg-elevated),
+        0 0 0 9px var(--accent),
+        0 0 50px rgba(255, 155, 38, 0.4);
+    transition: transform 5s cubic-bezier(0.15, 0.9, 0.15, 1);
+    will-change: transform;
+}
+.wheel-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.wheel-hub {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 22%;
+    height: 22%;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle, var(--bg-card) 0%, var(--bg-elevated) 100%);
+    border: 3px solid var(--accent);
+    border-radius: 50%;
+    font-size: 28px;
+    box-shadow: 0 0 24px var(--accent-glow), inset 0 0 20px rgba(0,0,0,0.5);
+    z-index: 5;
+}
+
+.wheel-spin-btn {
+    width: 100%;
+    margin-bottom: 20px;
+}
+.wheel-spin-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.wheel-prizes-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+.wheel-prize-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border-radius: 10px;
+    border-left: 3px solid var(--accent);
+}
+.wheel-prize-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 10px currentColor;
+}
+.wheel-prize-info { flex: 1; }
+.wheel-prize-label {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-main);
+    font-family: var(--font-num);
+}
+.wheel-prize-chance {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-num);
+}
