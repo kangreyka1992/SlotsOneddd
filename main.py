@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from urllib.parse import parse_qsl, quote
 from fastapi.staticfiles import StaticFiles
 from database import init_db as db_init
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import aiohttp
 from fastapi import FastAPI, Request, HTTPException
@@ -238,14 +239,22 @@ async def lifespan(app: FastAPI):
     await db_init()
     task = asyncio.create_task(start_bot())
     cleanup_task = asyncio.create_task(periodic_cleanup())
-    print("🚀 Бот и веб-сервер запущены", flush=True)
+
+    # Планировщик уведомлений
+    scheduler = AsyncIOScheduler(timezone="UTC")
+    scheduler.add_job(send_bonus_reminders, "cron", hour="*/3", minute=0)
+    scheduler.add_job(send_cashback_reminders, "cron", day_of_week="sun", hour=12, minute=0)
+    scheduler.add_job(send_tournament_alerts, "cron", hour=10, minute=0)
+    scheduler.start()
 
     try:
         await initialize_tournament_if_needed()
+        await auto_create_tournament()
     except Exception as e:
         print(f"⚠️ tournament init skipped: {e}", flush=True)
 
     yield
+    scheduler.shutdown()
     task.cancel()
     cleanup_task.cancel()
 
@@ -274,7 +283,84 @@ async def root():
 async def health():
     return {"status": "ok"}
 
+async def send_bonus_reminders():
+    """Напоминает о сгорающих бонусах (ежедневный, кэшбэк, колесо)."""
+    now = datetime.datetime.utcnow()
+    users = await get_users_for_broadcast("bonus_alerts")
 
+    for uid in users:
+        try:
+            # Проверяем ежедневный бонус
+            last, streak = await get_daily_info(uid)
+            if last:
+                last_dt = datetime.datetime.fromisoformat(last)
+                hours_passed = (now - last_dt).total_seconds() / 3600
+                # Если бонус доступен через 2 часа, напоминаем
+                if 22 <= hours_passed < 24:
+                    await bot.send_message(
+                        uid,
+                        "🎁 <b>Ежедневный бонус сгорает!</b>\n\n"
+                        f"Серия: <b>{streak}</b> дней\n"
+                        "Забери, пока не сбросилась 🔥",
+                        parse_mode="HTML"
+                    )
+                    await asyncio.sleep(0.05)
+        except Exception as e:
+            print(f"bonus reminder error for {uid}: {e}")
+
+
+async def send_cashback_reminders():
+    """Напоминает о доступном кэшбэке раз в неделю."""
+    users = await get_users_for_broadcast("cashback_alerts")
+
+    for uid in users:
+        try:
+            info = await get_cashback_info(uid)
+            if info["can_claim"] and info["reward"] > 0:
+                await bot.send_message(
+                    uid,
+                    f"💰 <b>Кэшбэк ждёт!</b>\n\n"
+                    f"Накопилось: <b>{info['reward']:,}</b> 🪙\n"
+                    f"Уровень: <b>{info['tier']}</b>\n\n"
+                    "Забери в профиле → Кэшбэк".replace(",", "."),
+                    parse_mode="HTML"
+                )
+                await asyncio.sleep(0.05)
+        except Exception as e:
+            print(f"cashback reminder error for {uid}: {e}")
+
+
+async def send_tournament_alerts():
+    """Напоминает о турнире, если он скоро закончится."""
+    users = await get_users_for_broadcast("tournament_alerts")
+    tour = await get_active_tournament()
+
+    if not tour:
+        return
+
+    # Проверяем, осталось ли меньше 24 часов
+    ends_at = datetime.datetime.fromisoformat(tour["ends_at"])
+    now = datetime.datetime.utcnow()
+    hours_left = (ends_at - now).total_seconds() / 3600
+
+    if hours_left <= 24:
+        for uid in users:
+            try:
+                await bot.send_message(
+                    uid,
+                    f"🏆 <b>Турнир заканчивается!</b>\n\n"
+                    f"Осталось: <b>{int(hours_left)}ч</b>\n"
+                    f"Призовой фонд: <b>{tour['prize_pool']:,}</b> 🪙\n\n"
+                    "Успей поднять свой счёт!".replace(",", "."),
+                    parse_mode="HTML"
+                )
+                await asyncio.sleep(0.05)
+            except Exception as e:
+                print(f"tournament reminder error for {uid}: {e}")
+
+
+
+    
 # ═══════════ CRYPTO DIRECT ═══════════
 
 @app.post("/api/crypto/create")
@@ -3734,6 +3820,28 @@ async def api_admin_broadcast(request: Request):
     await log_admin_action(admin["id"], "broadcast", None, f"sent={sent} failed={failed}")
     return {"ok": True, "sent": sent, "failed": failed}
 
+@app.post("/api/notifications/settings")
+async def api_notifications_settings(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    settings = await get_notification_settings(uid)
+    return settings
+
+
+@app.post("/api/notifications/update")
+async def api_notifications_update(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    updates = {}
+    for key in ("bonus_alerts", "cashback_alerts", "tournament_alerts", "daily_deal_alerts"):
+        if key in data:
+            updates[key] = bool(data[key])
+
+    await update_notification_settings(uid, **updates)
+    return {"ok": True, "settings": await get_notification_settings(uid)}
 
 # ═══════════ ЗАПУСК ═══════════
 
