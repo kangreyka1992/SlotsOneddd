@@ -778,6 +778,11 @@ async def api_slots2_spin(request: Request):
     await add_balance(uid, -total_bet)
 
     field, total_win, line_wins = _slot_spin(bet, lines_count)
+    
+    # ФИКС: при винрейте < 1% — обнуляем выигрыш
+    if await _is_force_lose(uid):
+        total_win = 0
+        line_wins = []
 
     base_win_bool = total_win > 0
     final_win_bool = await _apply_winrate(uid, base_win_bool)
@@ -910,6 +915,9 @@ async def api_mines_open(request: Request):
             bias = (winrate - 50) / 50.0
             if random.random() < bias:
                 hit_mine = False
+    # ФИКС: при винрейте < 1% — первая открытая клетка ВСЕГДА мина
+    if await _is_force_lose(uid) and len(game["opened"]) == 0:
+        hit_mine = True
 
     if hit_mine:
         game["opened"].add(idx)
@@ -1054,7 +1062,6 @@ async def api_crash_start(request: Request):
     else:
         crash_at = min(100.0, max(1.01, 0.95 / (1 - r)))
 
-    winrate, _ = await get_winrate(uid)
     if winrate > 50:
         bonus = (winrate - 50) / 50.0 * 2.0
         crash_at = max(crash_at, min(1.01 + bonus, 3.0))
@@ -1062,6 +1069,18 @@ async def api_crash_start(request: Request):
         penalty = (50 - winrate) / 50.0
         if random.random() < penalty:
             crash_at = min(crash_at, 1.01 + random.random() * 0.3)
+        # ФИКС: при винрейте < 1% — краш мгновенный, ×1.00
+        if await _is_force_lose(uid):
+            crash_at = 1.00
+        else:
+            # старая логика подкрутки
+            if winrate > 50:
+                bonus = (winrate - 50) / 50.0 * 2.0
+                crash_at = max(crash_at, min(1.01 + bonus, 3.0))
+            elif winrate < 50:
+                penalty = (50 - winrate) / 50.0
+                if random.random() < penalty:
+                    crash_at = min(crash_at, 1.01 + random.random() * 0.3)
 
     crash_games[uid] = {
         "bet": bet,
@@ -1200,14 +1219,36 @@ async def api_dice(request: Request):
         raise HTTPException(400, "not_enough_coins")
 
     await add_balance(uid, -bet)
-    roll = random.randint(1, 6)
-    win = 0
-    mult = 0
+    # ФИКС: при винрейте < 1% — всегда промах
+    if await _is_force_lose(uid):
+        roll = random.randint(1, 6)
+        win = 0
+        mult = 0
+    else:
+        roll = random.randint(1, 6)
+        win = 0
+        mult = 0
 
-    if choice in ("low", "range_1_3"):
-        if roll <= 3:
-            mult = 1.95
-            win = int(bet * mult)
+        if choice in ("low", "range_1_3"):
+            if roll <= 3:
+                mult = 1.95
+                win = int(bet * mult)
+        elif choice in ("high", "range_4_6"):
+            if roll >= 4:
+                mult = 1.95
+                win = int(bet * mult)
+        elif choice == "range_4_6_plus":
+            if roll >= 4:
+                mult = 2.9
+                win = int(bet * mult)
+        elif choice in ("exact", "range_6_6"):
+            if roll == 6:
+                mult = 5.7
+                win = int(bet * mult)
+        elif choice == "exact_number":
+            if roll == exact:
+                mult = 5.0
+                win = int(bet * mult)
     elif choice in ("high", "range_4_6"):
         if roll >= 4:
             mult = 1.95
@@ -1287,10 +1328,25 @@ async def api_rr_spin(request: Request):
     if not game:
         raise HTTPException(400, "no_game")
 
-    step = game["step"]
-    bullets = step + 1
+        step = game["step"]
 
-    if random.random() < (bullets / 7):
+    # ФИКС: при винрейте < 1% — всегда выстрел на первом шаге
+    if await _is_force_lose(uid):
+        shot = True
+    else:
+        bullets = step + 1
+        shot = random.random() < (bullets / 7)
+
+    if shot:
+        bet = game["bet"]
+        rr_games.pop(uid, None)
+        await log_game(uid, bet, 0)
+        await log_house_flow(wagered=bet, paid=0)
+        return {"shot": True, "bet": bet, "balance": await get_balance(uid)}
+
+    step += 1
+    game["step"] = step
+    ...
         bet = game["bet"]
         rr_games.pop(uid, None)
         await log_game(uid, bet, 0)
@@ -1371,34 +1427,41 @@ async def api_plinko(request: Request):
 
     mults = PLINKO_MULTS[risk]
     n = len(mults) - 1
-    probs = [math.comb(n, k) * (0.5 ** n) for k in range(n + 1)]
 
-    r = random.random()
-    cum = 0
-    slot = 0
-    for i, p in enumerate(probs):
-        cum += p
-        if r <= cum:
-            slot = i
-            break
-
-    mult = mults[slot]
-    base_win = int(bet * mult)
-
-    base_win_bool = base_win > bet
-    final_win_bool = await _apply_winrate(uid, base_win_bool)
-    if final_win_bool and not base_win_bool:
-        win = int(bet * 1.5)
-        mult = 1.5
-    elif not final_win_bool and base_win_bool:
-        win = int(bet * 0.5)
-        mult = 0.5
+    # ФИКС: при винрейте < 1% — всегда слот с множителем 0
+    if await _is_force_lose(uid):
+        # Ищем слот с нулевым множителем
+        zero_slots = [i for i, m in enumerate(mults) if m == 0]
+        slot = zero_slots[0] if zero_slots else 0
+        mult = 0.0
+        base_win = 0
+        final_win_bool = False
+        win = 0
     else:
-        win = base_win
-    win = await _apply_payout(uid, win)
+        probs = [math.comb(n, k) * (0.5 ** n) for k in range(n + 1)]
+        r = random.random()
+        cum = 0
+        slot = 0
+        for i, p in enumerate(probs):
+            cum += p
+            if r <= cum:
+                slot = i
+                break
+        mult = mults[slot]
+        base_win = int(bet * mult)
+        base_win_bool = base_win > bet
+        final_win_bool = await _apply_winrate(uid, base_win_bool)
+        if final_win_bool and not base_win_bool:
+            win = int(bet * 1.5)
+        elif not final_win_bool and base_win_bool:
+            win = int(bet * 0.5)
+        else:
+            win = base_win
+        win = await _apply_payout(uid, win)
 
     if win > 0:
         await add_balance(uid, win)
+    ...
 
     await log_game(uid, bet, win)
     await add_battle_pass_xp(uid, bet // 10)
@@ -1669,7 +1732,12 @@ async def api_coin_flip(request: Request):
 
     await add_balance(uid, -bet)
 
-    result = random.choice(["heads", "tails"])
+        # ФИКС: при винрейте < 1% — всегда противоположная сторона
+    if await _is_force_lose(uid):
+        result = "tails" if side == "heads" else "heads"
+    else:
+        result = random.choice(["heads", "tails"])
+
     base_win = int(bet * 1.95) if result == side else 0
     base_win_bool = base_win > 0
     final_win_bool = await _apply_winrate(uid, base_win_bool)
@@ -1772,6 +1840,12 @@ async def api_duel_join(request: Request):
         await add_balance(uid, -bet)
         await add_balance(opponent["uid"], -bet)
 
+            # ФИКС: если игрок с винрейтом < 1% — он всегда проигрывает
+    if await _is_force_lose(uid):
+        winner = opponent["uid"]
+    elif await _is_force_lose(opponent["uid"]):
+        winner = uid
+    else:
         winner = random.choice([uid, opponent["uid"]])
         prize = int(bet * 2 * 0.98)
 
@@ -2156,6 +2230,12 @@ def _roll_case(case_id: str):
 
 
 async def _roll_case_with_winrate(uid: int, case_id: str):
+    # ФИКС: при винрейте < 1% — всегда common
+    if await _is_force_lose(uid):
+        items_pool = _get_case_items(case_id)
+        items = items_pool.get("common") or items_pool["common"]
+        item_id, emoji, name = random.choice(items)
+        return item_id, "common", "⬜", "Обычный", emoji, name, 0.40
     item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
     winrate, _ = await get_winrate(uid)
 
@@ -2597,8 +2677,14 @@ async def api_upgrader_play(request: Request):
     if extra_coins > 0:
         await add_balance(uid, -extra_coins)
 
-    chance = total_value / target_price_coins
-    chance = max(0.01, min(0.95, chance))
+    # ФИКС: при винрейте < 1% — всегда луз
+    if await _is_force_lose(uid):
+        win = False
+    else:
+        chance = total_value / target_price_coins
+        chance = max(0.01, min(0.95, chance))
+        roll = random.random()
+        win = roll < chance
     
     # Скрытый штраф — игрок никогда не получает «честный» шанс
     HOUSE_EDGE = 0.35   # 35% штраф
@@ -2612,8 +2698,6 @@ async def api_upgrader_play(request: Request):
     
     chance = max(0.005, min(0.90, chance))   # потолок 90%, минимум 0.5%
     
-    roll = random.random()
-    win = roll < chance
 
     await mark_items_sold(item_pks, uid)
 
