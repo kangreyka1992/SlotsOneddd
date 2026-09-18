@@ -72,13 +72,6 @@ from database import (
     get_daily_case_deal,
 )
 
-CREATE TABLE IF NOT EXISTS notification_settings (
-    user_id INTEGER PRIMARY KEY,
-    daily INTEGER DEFAULT 1,
-    hourly INTEGER DEFAULT 1,
-    battlepass INTEGER DEFAULT 1,
-    promo INTEGER DEFAULT 1
-)
 
 WITHDRAW_RATE = 125
 MIN_WITHDRAW = 15
@@ -565,29 +558,6 @@ async def api_profile(request: Request):
 
 # ═══════════ УВЕДОМЛЕНИЯ ═══════════
 
-@app.post("/api/notif/get")
-async def api_notif_get(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    settings = await get_notif_settings(uid)
-    return {"settings": settings}
-
-
-@app.post("/api/notif/settings")
-async def api_notif_settings(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    key = data.get("key", "")
-    enabled = bool(data.get("enabled", True))
-
-    ok = await set_notif_setting(uid, key, enabled)
-    if not ok:
-        raise HTTPException(400, "invalid_key")
-
-    return {"ok": True, "settings": await get_notif_settings(uid)}
-    
 @app.post("/api/feed/live")
 async def api_feed_live(request: Request):
     data = await request.json()
