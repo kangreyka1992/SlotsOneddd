@@ -67,6 +67,36 @@ let currentWithdrawMethod = 'stars';
 /* TOPUP */
 const TOPUP_RATES = { ton: 500, stars: 10 };
 
+/* ═══ УВЕДОМЛЕНИЯ ═══ */
+const NOTIF_KEYS = ['daily', 'hourly', 'battlepass', 'promo'];
+const NOTIF_DEFAULTS = { daily: true, hourly: true, battlepass: true, promo: true };
+
+let notifSettings = { ...NOTIF_DEFAULTS };
+
+function loadNotifSettings() {
+    NOTIF_KEYS.forEach(key => {
+        const saved = localStorage.getItem('notif_' + key);
+        notifSettings[key] = saved === null ? true : saved === '1';
+    });
+    renderNotifSettings();
+}
+
+function renderNotifSettings() {
+    document.querySelectorAll('.notify-toggle').forEach(btn => {
+        const key = btn.dataset.notif;
+        if (!key) return;
+        btn.classList.toggle('on', !!notifSettings[key]);
+    });
+}
+
+function toggleNotif(key) {
+    notifSettings[key] = !notifSettings[key];
+    localStorage.setItem('notif_' + key, notifSettings[key] ? '1' : '0');
+    renderNotifSettings();
+    haptic();
+    toast(notifSettings[key] ? '🔔 Уведомление включено' : '🔕 Уведомление выключено');
+}
+
 /* ═══════════ БЛОК 1: ПОЛИРОВКА ═══════════ */
 
 function attachRipple(el) {
@@ -453,43 +483,7 @@ function initSwipeNavigation() {
     }, { passive: true });
 }
 
-/* ═══ НАСТРОЙКИ УВЕДОМЛЕНИЙ ═══ */
-let notifSettings = { daily: true, hourly: true, battlepass: true, promo: true };
 
-async function loadNotifSettings() {
-    try {
-        const d = await api('/api/notif/get');
-        notifSettings = d.settings;
-        renderNotifSettings();
-    } catch (e) {
-        console.error('notif load error:', e);
-    }
-}
-
-function renderNotifSettings() {
-    document.querySelectorAll('.notif-toggle').forEach(btn => {
-        const key = btn.dataset.notif;
-        const enabled = notifSettings[key];
-        btn.classList.toggle('active', enabled);
-    });
-}
-
-async function toggleNotif(key) {
-    const next = !notifSettings[key];
-    notifSettings[key] = next;
-    renderNotifSettings();
-    haptic();
-    toast(next ? '🔔 Включено' : '🔕 Выключено');
-
-    try {
-        await api('/api/notif/settings', { key, enabled: next });
-    } catch (e) {
-        // Откатываем при ошибке
-        notifSettings[key] = !next;
-        renderNotifSettings();
-        toast('Ошибка сохранения', 'error');
-    }
-}
 
 function initPullToRefresh() {
     const app = document.getElementById('app');
@@ -4799,39 +4793,6 @@ async function buyPremiumPass() {
     }
 }
 
-/* ═══════════ NOTIFICATIONS ═══════════ */
-
-async function loadNotifSettings() {
-    try {
-        const d = await api('/api/notifications/settings');
-        ['bonus_alerts', 'cashback_alerts', 'tournament_alerts', 'daily_deal_alerts'].forEach(key => {
-            const el = document.getElementById('notif-' + key);
-            const row = el?.closest('.notif-row');
-            if (el) el.classList.toggle('on', d[key]);
-            if (row) row.classList.toggle('on', d[key]);
-        });
-    } catch (e) {}
-}
-
-async function toggleNotif(key) {
-    const el = document.getElementById('notif-' + key);
-    const row = el?.closest('.notif-row');
-    const current = row?.classList.contains('on') || false;
-    const newVal = !current;
-
-    if (el) el.classList.toggle('on', newVal);
-    if (row) row.classList.toggle('on', newVal);
-
-    try {
-        await api('/api/notifications/update', { [key]: newVal });
-        toast(newVal ? '🔔 Включено' : '🔕 Выключено');
-        haptic();
-    } catch (e) {
-        if (el) el.classList.toggle('on', current);
-        if (row) row.classList.toggle('on', current);
-        toast(e.message, 'error');
-    }
-}
 
 /* ═══════════ BOOTSTRAP ═══════════ */
 
