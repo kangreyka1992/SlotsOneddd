@@ -4977,3 +4977,13 @@ body.theme-light .theme-toggle-switch::after {
     text-align: center;
     padding: 0 20px;
 }
+.notif-settings {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.notif-settings .theme-toggle {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+}
