@@ -466,29 +466,29 @@
       </button>
 
       <!-- Настройки уведомлений -->
-      <div class="admin-card">
-          <div class="admin-subtitle">🔔 Уведомления</div>
-      
-          <button class="notify-toggle" id="notifyDaily" onclick="toggleNotify('daily')">
-              <span>🎁 Ежедневный бонус</span>
-              <span class="notify-switch"></span>
-          </button>
-      
-          <button class="notify-toggle" id="notifyHourly" onclick="toggleNotify('hourly')">
-              <span>⏰ Ежечасовой бонус</span>
-              <span class="notify-switch"></span>
-          </button>
-      
-          <button class="notify-toggle" id="notifyBattlepass" onclick="toggleNotify('battlepass')">
-              <span>🏆 Battle Pass</span>
-              <span class="notify-switch"></span>
-          </button>
-      
-          <button class="notify-toggle" id="notifyPromo" onclick="toggleNotify('promo')">
-              <span>🎟 Акции и промокоды</span>
-              <span class="notify-switch"></span>
-          </button>
-      </div>
+<div class="admin-card">
+    <div class="admin-subtitle">🔔 Уведомления</div>
+
+    <button class="notify-toggle" data-notif="daily" onclick="toggleNotif('daily')">
+        <span>🎁 Ежедневный бонус</span>
+        <span class="notify-switch"></span>
+    </button>
+
+    <button class="notify-toggle" data-notif="hourly" onclick="toggleNotif('hourly')">
+        <span>⏰ Ежечасовой бонус</span>
+        <span class="notify-switch"></span>
+    </button>
+
+    <button class="notify-toggle" data-notif="battlepass" onclick="toggleNotif('battlepass')">
+        <span>🏆 Battle Pass</span>
+        <span class="notify-switch"></span>
+    </button>
+
+    <button class="notify-toggle" data-notif="promo" onclick="toggleNotif('promo')">
+        <span>🎟 Акции и промокоды</span>
+        <span class="notify-switch"></span>
+    </button>
+</div>
 
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
