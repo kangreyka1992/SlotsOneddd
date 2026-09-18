@@ -262,7 +262,6 @@ async def lifespan(app: FastAPI):
 
     try:
         await initialize_tournament_if_needed()
-        await auto_create_tournament()
     except Exception as e:
         print(f"⚠️ tournament init skipped: {e}", flush=True)
 
@@ -1037,6 +1036,59 @@ CRASH_MULT = 0.18
 def crash_mult_from_elapsed(elapsed: float) -> float:
     return round(1.0 + (elapsed ** CRASH_EXP) * CRASH_MULT, 2)
 
+@app.post("/api/crash/start")
+async def api_crash_start(request: Request):
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    bet = int(data.get("bet", 0))
+    auto_cashout = float(data.get("auto_cashout", 0))
+
+    existing = crash_games.pop(uid, None)
+    if existing and not existing.get("cashed"):
+        await add_balance(uid, existing["bet"])
+
+    if bet <= 0 or bet > 10000000000:
+        raise HTTPException(400, "invalid_bet")
+
+    balance = await get_balance(uid)
+    if balance < bet:
+        raise HTTPException(400, "not_enough_coins")
+
+    await add_balance(uid, -bet)
+
+    r = random.random()
+    if r < 0.05:
+        crash_at = 1.00
+    else:
+        crash_at = min(100.0, max(1.01, 0.95 / (1 - r)))
+
+    if await _is_force_lose(uid):
+        crash_at = 1.00
+    else:
+        winrate, _ = await get_winrate(uid)
+        if winrate > 50:
+            bonus = (winrate - 50) / 50.0 * 2.0
+            crash_at = max(crash_at, min(1.01 + bonus, 3.0))
+        elif winrate < 50:
+            penalty = (50 - winrate) / 50.0
+            if random.random() < penalty:
+                crash_at = min(crash_at, 1.01 + random.random() * 0.3)
+
+    crash_games[uid] = {
+        "bet": bet,
+        "crash_at": crash_at,
+        "started": time.time(),
+        "auto_cashout": auto_cashout if auto_cashout > 1.0 else 0,
+        "cashed": False,
+    }
+
+    return {
+        "balance": await get_balance(uid),
+        "bet": bet,
+        "started_at": crash_games[uid]["started"],
+    }
+
 
     r = random.random()
     if r < 0.05:
@@ -1194,7 +1246,6 @@ async def api_dice(request: Request):
 
     await add_balance(uid, -bet)
 
-    # ФИКС: при винрейте < 1% — всегда промах
     if await _is_force_lose(uid):
         roll = random.randint(1, 6)
         win = 0
@@ -1246,8 +1297,6 @@ async def api_dice(request: Request):
         await unlock_achievement(uid, "big_win")
 
     return {"roll": roll, "win": win, "mult": mult, "balance": nb}
-
-
 # ═══════════ РУССКАЯ РУЛЕТКА ═══════════
 
 rr_games: dict[int, dict] = {}
@@ -1410,7 +1459,6 @@ async def api_plinko(request: Request):
 
     if win > 0:
         await add_balance(uid, win)
-    ...
 
     await log_game(uid, bet, win)
     await add_battle_pass_xp(uid, bet // 10)
@@ -1681,7 +1729,7 @@ async def api_coin_flip(request: Request):
 
     await add_balance(uid, -bet)
 
-        # ФИКС: при винрейте < 1% — всегда противоположная сторона
+    # ФИКС: при винрейте < 1% — всегда противоположная сторона
     if await _is_force_lose(uid):
         result = "tails" if side == "heads" else "heads"
     else:
@@ -1786,7 +1834,7 @@ async def api_duel_join(request: Request):
             duel_queue.append({"uid": uid, "bet": bet, "joined": time.time()})
             return {"status": "waiting", "queue_size": len(duel_queue)}
 
-                await add_balance(uid, -bet)
+        await add_balance(uid, -bet)
         await add_balance(opponent["uid"], -bet)
 
         # ФИКС: если игрок с винрейтом < 1% — он всегда проигрывает
@@ -2591,7 +2639,7 @@ async def api_upgrader_play(request: Request):
     if await _is_force_lose(uid):
         win = False
     else:
-            chance = total_value / target_price_coins
+    chance = total_value / target_price_coins
     chance = max(0.01, min(0.95, chance))
 
     # ФИКС: при винрейте < 1% — всегда луз
@@ -2601,7 +2649,7 @@ async def api_upgrader_play(request: Request):
         roll = random.random()
         win = roll < chance
 
-    # Скрытый штраф
+    # Скрытый штраф — игрок никогда не получает «честный» шанс
     HOUSE_EDGE = 0.35
     chance = chance * (1 - HOUSE_EDGE)
 
@@ -2611,14 +2659,6 @@ async def api_upgrader_play(request: Request):
         chance *= 0.85
 
     chance = max(0.005, min(0.90, chance))
-    
-    # И дополнительный штраф для дорогих целей
-    if target_price_coins > 500_000:
-        chance *= 0.7
-    elif target_price_coins > 100_000:
-        chance *= 0.85
-    
-    chance = max(0.005, min(0.90, chance))   # потолок 90%, минимум 0.5%
     
 
     await mark_items_sold(item_pks, uid)
