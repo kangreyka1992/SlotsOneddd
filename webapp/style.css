@@ -3887,8 +3887,8 @@ body.upgrade-running .bottom-nav {
     animation: caseEmojiFloat 3.4s ease-in-out infinite;
 }
 @keyframes caseEmojiFloat {
-    0%, 100% { transform: translate(-50%, -50%) translateY(0) rotate(-3deg); }
-    50%      { transform: translate(-50%, -50%) translateY(-6px) rotate(3deg); }
+    0%, 100% { translate: 0 0; rotate: -3deg; }
+    50%      { translate: 0 -6px; rotate: 3deg; }
 }
 /* ═══════════ БЛОК 3: ОЖИВЛЕНИЕ ИГР ═══════════ */
 
