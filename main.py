@@ -2196,9 +2196,9 @@ def _build_track(case_id: str, price_coins: int, win_item: dict):
 
 
 CASES = [
-    ("starter",       "Стартовый",        "📦",  10, "Первый шаг в мир кейсов"),
-    ("bronze",        "Бронзовый",        "🥉",  20, "Для начинающих игроков"),
-    ("silver",        "Серебряный",       "🥈",  30, "Немного серьёзнее"),
+    ("starter",       "Стартовый",        "📦",  20, "Первый шаг в мир кейсов"),
+    ("bronze",        "Бронзовый",        "🥉",  30, "Для начинающих игроков"),
+    ("silver",        "Серебряный",       "🥈",  40, "Немного серьёзнее"),
     ("gold",          "Золотой",          "🥇",  50, "Классика жанра"),
     ("lucky",         "Счастливый",       "🍀",  75, "Клевер на удачу"),
     ("diamond_small", "Малый Алмаз",      "💎", 100, "Блеск и шик"),
@@ -2639,7 +2639,7 @@ async def api_upgrader_play(request: Request):
 # ═══════════ БЕСПЛАТНЫЙ КЕЙС ═══════════
 
 FREE_CASE_COOLDOWN = 24 * 60 * 60
-FREE_CASE_BASE_PRICE = 50 * RATE
+FREE_CASE_BASE_PRICE = 20 * RATE
 FREE_CASE_ALLOWED_RARITIES = ("common", "uncommon", "rare", "epic")
 
 
@@ -2972,7 +2972,7 @@ async def api_daily(request: Request):
         except (ValueError, TypeError):
             pass
 
-    reward = 200 + min(streak, 7) * 50
+    reward = 200 + min(streak, 7) * 25
     new_streak = streak + 1
     await claim_daily(uid, new_streak)
     nb = await add_balance(uid, reward)
@@ -3149,7 +3149,7 @@ async def api_hourly_status(request: Request):
 
     STREAK_MULTS = [1.0, 1.2, 1.5, 2.0, 3.0, 5.0]
     mult = STREAK_MULTS[min(streak, len(STREAK_MULTS) - 1)]
-    reward = int(200 * mult)
+    reward = int(100 * mult)
 
     return {
         "can_claim": can_claim, "seconds_left": seconds_left,
