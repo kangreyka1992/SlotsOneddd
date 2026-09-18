@@ -259,23 +259,39 @@
   </section>
 
   <!-- ═══ WHEEL ═══ -->
-  <section class="screen" id="screen-wheel">
-    <h3 class="section-title">🎡 Колесо Фортуны</h3>
-    <div class="wheel-info">
-      <div class="inv-stat">
-        <div class="inv-stat-val" id="wheelSpins">0</div>
-        <div class="inv-stat-lbl">Доступно прокрутов</div>
-      </div>
+<section class="screen" id="screen-wheel">
+  <h3 class="section-title">🎡 Колесо Фортуны</h3>
+
+  <div class="wheel-status-bar">
+    <div class="wheel-status-item">
+      <div class="wheel-status-val" id="wheelSpins">0</div>
+      <div class="wheel-status-lbl">Прокрутов</div>
     </div>
-    <div class="wheel-container">
-      <div class="wheel-visual" id="wheelVisual">🎡</div>
-      <div class="wheel-result hidden" id="wheelResult"></div>
+    <div class="wheel-status-item">
+      <div class="wheel-status-val" id="wheelTimer">--:--:--</div>
+      <div class="wheel-status-lbl">Следующий</div>
     </div>
-    <button class="btn-primary" id="wheelSpinBtn" onclick="spinWheel()">🎡 Крутить</button>
-    <div class="topup-info" style="margin-top:12px;">
-      💡 Прокрут получаешь за активность и раз в сутки
+  </div>
+
+  <div class="wheel-stage">
+    <div class="wheel-pointer">▼</div>
+    <div class="wheel-rotor" id="wheelRotor">
+      <svg viewBox="0 0 300 300" class="wheel-svg" id="wheelSvg"></svg>
+      <div class="wheel-hub">🎰</div>
     </div>
-  </section>
+  </div>
+
+  <button class="btn-primary wheel-spin-btn" id="wheelSpinBtn" onclick="spinWheel()">
+    🎡 Крутить колесо
+  </button>
+
+  <h4 class="admin-subtitle">🎁 Возможные призы</h4>
+  <div class="wheel-prizes-grid" id="wheelPrizesGrid"></div>
+
+  <div class="topup-info" style="margin-top:12px;">
+    💡 Бесплатный прокрут — раз в 24 часа
+  </div>
+</section>
 
   <!-- ═══ CASHBACK ═══ -->
   <section class="screen" id="screen-cashback">
