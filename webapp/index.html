@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>🎰 Casino</title>
+<title>🎰 SlotsGaming</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=412">
+<link rel="stylesheet" href="style.css?v=410">
 <style>
 /* SPLASH */
 .splash {
@@ -96,12 +96,6 @@
   <div class="splash-loader"></div>
 </div>
 
-<!-- PULL-TO-REFRESH -->
-<div class="ptr-indicator" id="ptrIndicator">
-  <div class="ptr-spinner"></div>
-  <span>Обновление...</span>
-</div>
-
 <div id="app">
 
 <!-- ═══ HEADER ═══ -->
@@ -154,7 +148,7 @@
       <span>🎲</span><span>⭐</span><span>🍒</span>
     </div>
 
-    <!-- ХИРО-КАРУСЕЛЬ -->
+    <!-- Хиро-карусель -->
     <div class="hero-carousel" id="heroCarousel">
       <div class="hero-slide" data-slide="0">
         <div class="hero-slide-content">
@@ -191,18 +185,7 @@
       <div class="hero-banner-timer" id="heroTimer">--:--:--</div>
     </div>
 
-    <!-- TOOLBAR -->
-    <div class="toolbar">
-      <div class="toolbar-tabs">
-        <button class="toolbar-tab active" data-filter="all">Все</button>
-        <button class="toolbar-tab" data-filter="cheap">Дешёвые</button>
-        <button class="toolbar-tab" data-filter="mid">Средние</button>
-        <button class="toolbar-tab" data-filter="top">Дорогие</button>
-      </div>
-      <button class="toolbar-search" onclick="toast('Поиск в разработке')">🔍</button>
-    </div>
-
-    <!-- QUICK ACTIONS -->
+    <!-- Быстрые действия -->
     <div class="quick-actions-bar">
       <button class="qa-pill" onclick="showScreen('wheel')">
         <span class="qa-pill-icon">🎡</span>
@@ -225,7 +208,7 @@
       </button>
     </div>
 
-    <!-- БЕСПЛАТНЫЙ КЕЙС -->
+    <!-- Бесплатный кейс -->
     <div class="free-case-banner" id="freeCaseBtn" onclick="openFreeCase()">
       <div class="free-case-banner-left">
         <div class="free-case-banner-icon">🎁</div>
@@ -237,31 +220,26 @@
       <div class="free-case-banner-streak hidden" id="freeCaseStreak"></div>
     </div>
 
-    <!-- КЕЙСЫ -->
+    <!-- Кейсы -->
     <div class="section-title-row">
       <h3 class="section-title">🎰 Кейсы</h3>
       <button class="section-link" onclick="showScreen('cases')">Все кейсы →</button>
     </div>
     <div class="cases-grid" id="homeCasesGrid"></div>
 
-    <!-- ИГРЫ -->
+    <!-- Игры -->
     <div class="section-title-row">
       <h3 class="section-title">🔥 Игры</h3>
     </div>
     <div class="games-grid" id="gamesGrid"></div>
 
-    <!-- BATTLE PASS -->
+    <!-- Battle Pass -->
     <div class="section-title-row">
       <h3 class="section-title">🏆 Battle Pass</h3>
       <button class="section-link" onclick="showScreen('battlepass')">Открыть →</button>
     </div>
 
-    <!-- АДМИН -->
-    <button class="admin-access-btn hidden" id="adminBtn" onclick="showScreen('admin')">
-      ⚙️ Админ-панель
-    </button>
-
-    <!-- ИНВЕНТАРЬ -->
+    <!-- Инвентарь превью -->
     <div class="section-title-row">
       <h3 class="section-title">🎒 Мой инвентарь</h3>
       <button class="section-link" onclick="showScreen('inventory')">Открыть →</button>
@@ -269,42 +247,47 @@
     <div class="inventory-preview" id="homeInventoryPreview">
       <div class="inv-preview-empty">Пока пусто</div>
     </div>
+
+    <!-- Админка -->
+    <button class="admin-access-btn hidden" id="adminBtn" onclick="showScreen('admin')">
+      ⚙️ Админ-панель
+    </button>
   </section>
 
   <!-- ═══ WHEEL ═══ -->
-<section class="screen" id="screen-wheel">
-  <h3 class="section-title">🎡 Колесо Фортуны</h3>
+  <section class="screen" id="screen-wheel">
+    <h3 class="section-title">🎡 Колесо Фортуны</h3>
 
-  <div class="wheel-spins-card">
-    <div class="wheel-spins-val" id="wheelSpins">0</div>
-    <div class="wheel-spins-lbl">доступно прокрутов</div>
-  </div>
-
-  <div class="wheel-stage">
-    <div class="wheel-pointer-new">
-      <div class="wheel-pointer-arrow"></div>
-      <div class="wheel-pointer-glow"></div>
+    <div class="wheel-spins-card">
+      <div class="wheel-spins-val" id="wheelSpins">0</div>
+      <div class="wheel-spins-lbl">доступно прокрутов</div>
     </div>
 
-    <div class="wheel-disc-new" id="wheelDisc">
-      <div class="wheel-center-new">
-        <div class="wheel-center-icon">🎡</div>
-        <div class="wheel-center-text">SPIN</div>
+    <div class="wheel-stage">
+      <div class="wheel-pointer-new">
+        <div class="wheel-pointer-arrow"></div>
+        <div class="wheel-pointer-glow"></div>
       </div>
+
+      <div class="wheel-disc-new" id="wheelDisc">
+        <div class="wheel-center-new">
+          <div class="wheel-center-icon">🎡</div>
+          <div class="wheel-center-text">SPIN</div>
+        </div>
+      </div>
+
+      <div class="wheel-result-overlay hidden" id="wheelResult"></div>
     </div>
 
-    <div class="wheel-result-overlay hidden" id="wheelResult"></div>
-  </div>
+    <button class="wheel-spin-btn" id="wheelSpinBtn" onclick="spinWheel()">
+      <span class="wheel-spin-btn-icon">🎡</span>
+      <span>Крутить колесо</span>
+    </button>
 
-  <button class="wheel-spin-btn" id="wheelSpinBtn" onclick="spinWheel()">
-    <span class="wheel-spin-btn-icon">🎡</span>
-    <span>Крутить колесо</span>
-  </button>
-
-  <div class="topup-info" style="margin-top:12px;">
-    💡 Прокрут получаешь за активность и раз в сутки
-  </div>
-</section>
+    <div class="topup-info" style="margin-top:12px;">
+      💡 Прокрут получаешь за активность и раз в сутки
+    </div>
+  </section>
 
   <!-- ═══ CASHBACK ═══ -->
   <section class="screen" id="screen-cashback">
@@ -461,6 +444,7 @@
       <div class="profile-balance" id="profileBalance">0</div>
       <div class="profile-balance-label">🪙 Баланс</div>
 
+      <!-- Мини-график активности -->
       <div id="activityChart" style="width:100%; margin-top:12px;"></div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; margin-top:12px;">
@@ -475,34 +459,38 @@
       <button class="btn-primary" onclick="showScreen('customize')" style="margin-top:10px; width:100%;">🎨 Кастомизация</button>
       <button class="btn-primary" onclick="showScreen('hall')" style="margin-top:10px; width:100%;">🏅 Зал славы</button>
 
+      <!-- Переключатель темы -->
       <button class="theme-toggle" onclick="toggleTheme()">
         <span>🎨 <span id="themeLabel">Светлая тема</span></span>
         <span class="theme-toggle-switch" id="themeSwitch"></span>
       </button>
+
+      <!-- Настройки уведомлений -->
       <div class="notif-settings">
-    <h4 class="admin-subtitle" style="margin-top:20px;">🔔 Уведомления</h4>
+        <h4 class="admin-subtitle" style="margin-top:20px;">🔔 Уведомления</h4>
 
-    <button class="theme-toggle" onclick="toggleNotif('daily')">
-        <span>🎁 Ежедневный бонус</span>
-        <span class="theme-toggle-switch" id="notifDailySwitch"></span>
-    </button>
+        <button class="theme-toggle notif-toggle" data-notif="daily" onclick="toggleNotif('daily')">
+          <span>🎁 Ежедневный бонус</span>
+          <span class="theme-toggle-switch"></span>
+        </button>
 
-    <button class="theme-toggle" onclick="toggleNotif('hourly')">
-        <span>⏰ Ежечасный бонус</span>
-        <span class="theme-toggle-switch" id="notifHourlySwitch"></span>
-    </button>
+        <button class="theme-toggle notif-toggle" data-notif="hourly" onclick="toggleNotif('hourly')">
+          <span>⏰ Ежечасный бонус</span>
+          <span class="theme-toggle-switch"></span>
+        </button>
 
-    <button class="theme-toggle" onclick="toggleNotif('battlepass')">
-        <span>🏆 Battle Pass</span>
-        <span class="theme-toggle-switch" id="notifBpSwitch"></span>
-    </button>
+        <button class="theme-toggle notif-toggle" data-notif="battlepass" onclick="toggleNotif('battlepass')">
+          <span>🏆 Battle Pass</span>
+          <span class="theme-toggle-switch"></span>
+        </button>
 
-    <button class="theme-toggle" onclick="toggleNotif('promo')">
-        <span>🎟 Акции и промокоды</span>
-        <span class="theme-toggle-switch" id="notifPromoSwitch"></span>
-    </button>
-</div>
+        <button class="theme-toggle notif-toggle" data-notif="promo" onclick="toggleNotif('promo')">
+          <span>🎟 Акции и промокоды</span>
+          <span class="theme-toggle-switch"></span>
+        </button>
+      </div>
     </div>
+
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
       <div class="stat-card"><div class="stat-val" id="statWagered">0</div><div class="stat-lbl">Поставлено</div></div>
@@ -628,12 +616,6 @@
     <div class="bp-track-wrap">
       <div class="bp-track" id="bpTrack"></div>
     </div>
-  </section>
-
-  <!-- ═══ PAY (старый) ═══ -->
-  <section class="screen" id="screen-pay">
-    <h3 class="section-title">⭐ Пополнение</h3>
-    <div class="pay-grid" id="payGrid"></div>
   </section>
 
   <!-- ═══ TOPUP ═══ -->
@@ -995,6 +977,12 @@
 
 </main>
 
+<!-- ═══ PULL-TO-REFRESH ═══ -->
+<div class="ptr-indicator" id="ptrIndicator">
+  <div class="ptr-spinner"></div>
+  <span>Обновление...</span>
+</div>
+
 <!-- ═══ BOTTOM NAV ═══ -->
 <nav class="bottom-nav">
   <button class="nav-btn active" data-nav="home" onclick="showScreen('home')">
@@ -1014,7 +1002,7 @@
   </button>
 </nav>
 
-  <div class="toast" id="toast"></div>
+<div class="toast" id="toast"></div>
 </div>
 
 <!-- ═══ CASE INFO OVERLAY ═══ -->
@@ -1066,6 +1054,6 @@
   }, 3000);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=412"></script>
+<script src="app.js?v=410"></script>
 </body>
 </html>
