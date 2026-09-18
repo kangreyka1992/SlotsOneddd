@@ -82,7 +82,16 @@ WITHDRAW_RATES = {
     'usdc':  {'rate': 100,  'min': 5,   'unit': 'USDC'},
     'ton':   {'rate': 5000, 'min': 1,   'unit': 'TON'},
 }
-
+WHEEL_PRIZES = [
+    {"emoji": "🪙", "text": "500",   "rarity": "common",    "color": "#8b95a5"},
+    {"emoji": "💎", "text": "1K",    "rarity": "uncommon",  "color": "#00d68f"},
+    {"emoji": "🎁", "text": "КЕЙС",  "rarity": "rare",      "color": "#4a9eff"},
+    {"emoji": "⭐", "text": "5K",    "rarity": "epic",      "color": "#7c5cff"},
+    {"emoji": "👑", "text": "25K",   "rarity": "legendary", "color": "#ffc107"},
+    {"emoji": "💰", "text": "100K",  "rarity": "mythic",    "color": "#ff4757"},
+    {"emoji": "🎰", "text": "ДЖЕК",  "rarity": "legendary", "color": "#a855f7"},
+    {"emoji": "🏆", "text": "10K",   "rarity": "epic",      "color": "#ff9b26"},
+]
 
 # ═══════════ ПОДКРУТКА ШАНСОВ ═══════════
 
@@ -3417,7 +3426,7 @@ async def api_wheel_status(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
     info = await get_wheel_info(uid)
-    return {"spins": info["spins"], "prizes": WHEEL_PRIZES}
+    return {"spins": info["spins"]}
 
 
 @app.post("/api/wheel/spin")
