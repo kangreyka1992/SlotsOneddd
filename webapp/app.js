@@ -4409,28 +4409,192 @@ async function claimHourly() {
     }
 }
 
-/* ═══ WHEEL ═══ */
+/* ═══════════ КОЛЕСО ФОРТУНЫ (НОВОЕ) ═══════════ */
+
+let wheelPrizes = [];
+let wheelSpinning = false;
+let wheelTimerInt = null;
+
+function polarToCartesian(cx, cy, r, angleDeg) {
+    const rad = (angleDeg - 90) * Math.PI / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function buildWheelSVG(prizes) {
+    const svg = document.getElementById('wheelSvg');
+    if (!svg) return;
+    const N = prizes.length;
+    const anglePer = 360 / N;
+    const cx = 150, cy = 150, r = 150;
+
+    let html = '';
+
+    prizes.forEach((p, i) => {
+        const startAngle = i * anglePer;
+        const endAngle = (i + 1) * anglePer;
+
+        const p1 = polarToCartesian(cx, cy, r, startAngle);
+        const p2 = polarToCartesian(cx, cy, r, endAngle);
+
+        const largeArc = anglePer > 180 ? 1 : 0;
+
+        const path = [
+            `M ${cx} ${cy}`,
+            `L ${p1.x} ${p1.y}`,
+            `A ${r} ${r} 0 ${largeArc} 1 ${p2.x} ${p2.y}`,
+            'Z'
+        ].join(' ');
+
+        html += `<path d="${path}" fill="${p.color}" stroke="#0a0e14" stroke-width="1.5" opacity="0.92"></path>`;
+
+        // Текст
+        const midAngle = startAngle + anglePer / 2;
+        const textPos = polarToCartesian(cx, cy, r * 0.68, midAngle);
+        const rotate = midAngle - 90;
+
+        html += `<text
+            x="${textPos.x}"
+            y="${textPos.y}"
+            fill="#fff"
+            font-size="14"
+            font-weight="900"
+            font-family="Orbitron, monospace"
+            text-anchor="middle"
+            dominant-baseline="middle"
+            transform="rotate(${rotate} ${textPos.x} ${textPos.y})"
+            style="text-shadow: 0 2px 4px rgba(0,0,0,0.6);"
+        >${p.label}</text>`;
+    });
+
+    svg.innerHTML = html;
+}
+
 async function loadWheel() {
     try {
-        const d = await api('/api/wheel/status');
+        const status = await api('/api/wheel/status');
+        const prizesData = await api('/api/wheel/prizes');
+
+        wheelPrizes = prizesData.prizes || [];
+        buildWheelSVG(wheelPrizes);
+        renderWheelPrizesList();
+
         const spinsEl = document.getElementById('wheelSpins');
-        if (spinsEl) spinsEl.textContent = d.spins;
+        if (spinsEl) spinsEl.textContent = status.spins;
 
         const btn = document.getElementById('wheelSpinBtn');
-        if (btn) btn.disabled = d.spins <= 0;
-    } catch (e) {}
+        if (btn) btn.disabled = status.spins <= 0 || wheelSpinning;
+
+        // Таймер до следующего прокрута
+        if (status.spins <= 0 && status.last_daily) {
+            startWheelTimer(status.last_daily);
+        } else {
+            stopWheelTimer();
+            const t = document.getElementById('wheelTimer');
+            if (t) t.textContent = 'готов';
+        }
+    } catch (e) {
+        console.error('wheel load error:', e);
+    }
+}
+
+function renderWheelPrizesList() {
+    const el = document.getElementById('wheelPrizesGrid');
+    if (!el) return;
+    const totalW = wheelPrizes.reduce((s, p) => s + p.weight, 0);
+    el.innerHTML = wheelPrizes.map(p => {
+        const chance = (p.weight / totalW * 100).toFixed(1);
+        return `
+            <div class="wheel-prize-item" style="border-left-color:${p.color}">
+                <div class="wheel-prize-dot" style="background:${p.color}; color:${p.color}"></div>
+                <div class="wheel-prize-info">
+                    <div class="wheel-prize-label">${p.label}</div>
+                    <div class="wheel-prize-chance">${chance}%</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function startWheelTimer(lastDailyIso) {
+    stopWheelTimer();
+    const last = new Date(lastDailyIso + 'Z').getTime();
+    const nextAvailable = last + 86400 * 1000;
+
+    function tick() {
+        const now = Date.now();
+        const left = Math.max(0, nextAvailable - now);
+        const el = document.getElementById('wheelTimer');
+        if (!el) return;
+        if (left <= 0) {
+            el.textContent = 'готов';
+            stopWheelTimer();
+            loadWheel();
+            return;
+        }
+        const h = Math.floor(left / 3600000);
+        const m = Math.floor((left % 3600000) / 60000);
+        const s = Math.floor((left % 60000) / 1000);
+        el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+    tick();
+    wheelTimerInt = setInterval(tick, 1000);
+}
+
+function stopWheelTimer() {
+    if (wheelTimerInt) {
+        clearInterval(wheelTimerInt);
+        wheelTimerInt = null;
+    }
 }
 
 async function spinWheel() {
+    if (wheelSpinning) return;
+
     haptic('medium');
-    const wheel = document.getElementById('wheelVisual');
-    if (wheel) wheel.classList.add('spinning');
+    wheelSpinning = true;
+
+    const btn = document.getElementById('wheelSpinBtn');
+    if (btn) btn.disabled = true;
+
+    const rotor = document.getElementById('wheelRotor');
+    if (rotor) rotor.style.transition = 'none';
 
     try {
         const d = await api('/api/wheel/spin');
-        await new Promise(r => setTimeout(r, 2000));
 
-        if (wheel) wheel.classList.remove('spinning');
+        const N = wheelPrizes.length;
+        const anglePer = 360 / N;
+        const prizeIdx = d.prize_index;
+
+        // Центр сегмента prizeIdx находится на этом угле
+        const centerAngle = prizeIdx * anglePer + anglePer / 2;
+
+        // Стрелка сверху = 0°. Чтобы приз оказался под стрелкой,
+        // нужно повернуть на 360 - centerAngle.
+        const baseSpins = 6 + Math.floor(Math.random() * 3);
+        const targetAngle = 360 * baseSpins + (360 - centerAngle);
+
+        if (rotor) {
+            rotor.style.transition = 'transform 5s cubic-bezier(0.15, 0.9, 0.15, 1)';
+            rotor.style.transform = `rotate(${targetAngle}deg)`;
+        }
+
+        // Звук вращения
+        let tickCount = 0;
+        const maxTicks = 40;
+        const tickInt = setInterval(() => {
+            playTone(700 + Math.random() * 400, 0.02, 'square', 0.02);
+            tickCount++;
+            if (tickCount > maxTicks) clearInterval(tickInt);
+        }, 100);
+
+        await new Promise(r => setTimeout(r, 5200));
+        clearInterval(tickInt);
+
+        // Показываем результат
+        SFX.jackpot();
+        confettiJackpot();
+        haptic('success');
 
         const resultEl = document.getElementById('wheelResult');
         if (resultEl) {
@@ -4442,17 +4606,17 @@ async function spinWheel() {
         }
 
         updateBalance(d.balance);
-        SFX.jackpot();
-        confettiJackpot();
-        haptic('success');
 
         setTimeout(() => {
             if (resultEl) resultEl.classList.add('hidden');
+            wheelSpinning = false;
             loadWheel();
         }, 3000);
+
     } catch (e) {
-        if (wheel) wheel.classList.remove('spinning');
         toast(e.message, 'error');
+        wheelSpinning = false;
+        if (btn) btn.disabled = false;
     }
 }
 
