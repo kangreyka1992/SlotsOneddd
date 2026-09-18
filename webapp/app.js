@@ -340,6 +340,144 @@ function renderActivityChart(stats) {
     `;
 }
 
+/* ═══════════ БЛОК 5: UX ═══════════ */
+
+/* ─── Свайпы между экранами ─── */
+const SWIPE_ORDER = ['home', 'cases', 'upgrader', 'wheel', 'profile'];
+
+function initSwipeNavigation() {
+    const app = document.getElementById('app');
+    if (!app) return;
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchMoved = false;
+
+    app.addEventListener('touchstart', (e) => {
+        if (gameLocked) return;
+        if (caseRouletteBusy) return;
+        // Игнорируем свайпы внутри скроллящихся элементов
+        if (e.target.closest('.carousel, .bp-track, .upg-inv-list, .cr-track')) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchMoved = false;
+    }, { passive: true });
+
+    app.addEventListener('touchmove', (e) => {
+        if (!touchStartX) return;
+        const dx = Math.abs(e.touches[0].clientX - touchStartX);
+        const dy = Math.abs(e.touches[0].clientY - touchStartY);
+        if (dx > 10 && dx > dy) touchMoved = true;
+    }, { passive: true });
+
+    app.addEventListener('touchend', (e) => {
+        if (!touchMoved) { touchStartX = 0; return; }
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        touchStartX = 0;
+        if (Math.abs(dx) < 80) return;
+
+        const current = document.querySelector('.screen.active');
+        if (!current) return;
+        const currentName = current.id.replace('screen-', '');
+        const idx = SWIPE_ORDER.indexOf(currentName);
+        if (idx === -1) return;
+
+        if (dx < 0 && idx < SWIPE_ORDER.length - 1) {
+            showScreen(SWIPE_ORDER[idx + 1]);
+            haptic();
+        } else if (dx > 0 && idx > 0) {
+            showScreen(SWIPE_ORDER[idx - 1]);
+            haptic();
+        }
+    }, { passive: true });
+}
+
+/* ─── Pull-to-refresh ─── */
+function initPullToRefresh() {
+    const app = document.getElementById('app');
+    const indicator = document.getElementById('ptrIndicator');
+    if (!app || !indicator) return;
+
+    let startY = 0;
+    let pulling = false;
+    let triggered = false;
+    const THRESHOLD = 80;
+
+    app.addEventListener('touchstart', (e) => {
+        if (app.scrollTop > 0) return;
+        if (gameLocked) return;
+        startY = e.touches[0].clientY;
+        pulling = true;
+        triggered = false;
+    }, { passive: true });
+
+    app.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        const dy = e.touches[0].clientY - startY;
+        if (dy > 0 && app.scrollTop === 0) {
+            indicator.classList.add('active');
+            if (dy > THRESHOLD) {
+                indicator.querySelector('span').textContent = 'Отпусти для обновления';
+                triggered = true;
+            } else {
+                indicator.querySelector('span').textContent = 'Обновление...';
+            }
+        }
+    }, { passive: true });
+
+    app.addEventListener('touchend', async () => {
+        if (!pulling) return;
+        pulling = false;
+        if (triggered) {
+            indicator.querySelector('span').textContent = 'Обновление...';
+            try {
+                await loadProfile();
+                await loadCases();
+                await loadLiveFeed();
+                await updateJackpot();
+                updateQuickBadges();
+                toast('✅ Обновлено', 'success');
+                haptic('success');
+            } catch (e) {
+                toast('Ошибка обновления', 'error');
+            }
+        }
+        setTimeout(() => indicator.classList.remove('active'), 300);
+        triggered = false;
+    }, { passive: true });
+}
+
+/* ─── Светлая тема ─── */
+function loadTheme() {
+    const theme = localStorage.getItem('slots_theme') || 'dark';
+    applyTheme(theme);
+}
+
+function applyTheme(theme) {
+    if (theme === 'light') {
+        document.body.classList.add('theme-light');
+        const label = document.getElementById('themeLabel');
+        if (label) label.textContent = 'Тёмная тема';
+        try { tg.setHeaderColor('#f5f6fa'); } catch (e) {}
+        try { tg.setBackgroundColor('#f5f6fa'); } catch (e) {}
+    } else {
+        document.body.classList.remove('theme-light');
+        const label = document.getElementById('themeLabel');
+        if (label) label.textContent = 'Светлая тема';
+        try { tg.setHeaderColor('#0a0e14'); } catch (e) {}
+        try { tg.setBackgroundColor('#0a0e14'); } catch (e) {}
+    }
+}
+
+function toggleTheme() {
+    const current = localStorage.getItem('slots_theme') || 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('slots_theme', next);
+    applyTheme(next);
+    haptic();
+    toast(next === 'light' ? '☀️ Светлая тема' : '🌙 Тёмная тема');
+}
+
 const BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000];
 const PAY_PACKS = [10, 30, 50, 100, 250, 500];
 const WITHDRAW_PACKS = [15, 50, 100, 250, 500, 1000];
@@ -4727,6 +4865,9 @@ async function bootstrap() {
     try { startHeroTimer(); } catch (e) { console.error('timer:', e); }
     try { initToolbarFilters(); } catch (e) { console.error('toolbar:', e); }
     try { initHeroCarousel(); } catch (e) { console.error('carousel:', e); }
+    try { initSwipeNavigation(); } catch (e) { console.error('swipe:', e); }
+    try { initPullToRefresh(); } catch (e) { console.error('ptr:', e); }
+    try { loadTheme(); } catch (e) { console.error('theme:', e); }
     try { updateQuickBadges(); } catch (e) { console.error('badges:', e); }
     try { loadLiveFeed(); } catch (e) { console.error('feed:', e); }
     try { updateJackpot(); } catch (e) { console.error('jackpot:', e); }
