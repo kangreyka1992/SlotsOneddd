@@ -148,15 +148,41 @@
       <span>🎲</span><span>⭐</span><span>🍒</span>
     </div>
 
-    <div class="hero-banner">
-      <div class="hero-banner-content">
-        <div class="hero-banner-tag">🔥 АКЦИЯ НЕДЕЛИ</div>
-        <div class="hero-banner-title">Safari Skin Hunt</div>
-        <div class="hero-banner-sub">Особые кейсы · удвоенный шанс на мифик</div>
-        <button class="hero-banner-btn" onclick="showScreen('cases')">К кейсам →</button>
-      </div>
-      <div class="hero-banner-timer" id="heroTimer">--:--:--</div>
+<div class="hero-carousel" id="heroCarousel">
+  <div class="hero-slide" data-slide="0">
+    <div class="hero-slide-content">
+      <div class="hero-slide-tag">🔥 АКЦИЯ НЕДЕЛИ</div>
+      <div class="hero-slide-title">Safari Skin Hunt</div>
+      <div class="hero-slide-sub">Особые кейсы · удвоенный шанс на мифик</div>
+      <button class="hero-slide-btn" onclick="showScreen('cases')">К кейсам →</button>
     </div>
+    <div class="hero-slide-emoji">🦁</div>
+  </div>
+  <div class="hero-slide" data-slide="1">
+    <div class="hero-slide-content">
+      <div class="hero-slide-tag">💰 ДЖЕКПОТ РАСТЁТ</div>
+      <div class="hero-slide-title">Миллион ждёт</div>
+      <div class="hero-slide-sub">Крути слоты — собирай джекпот</div>
+      <button class="hero-slide-btn" onclick="openGame('slots2')">Играть →</button>
+    </div>
+    <div class="hero-slide-emoji">🎰</div>
+  </div>
+  <div class="hero-slide" data-slide="2">
+    <div class="hero-slide-content">
+      <div class="hero-slide-tag">🎁 БЕСПЛАТНО</div>
+      <div class="hero-slide-title">Ежедневный кейс</div>
+      <div class="hero-slide-sub">Заходи каждый день — серия растёт</div>
+      <button class="hero-slide-btn" onclick="openFreeCase()">Забрать →</button>
+    </div>
+    <div class="hero-slide-emoji">🎁</div>
+  </div>
+  <div class="hero-dots" id="heroDots">
+    <span class="hero-dot active" data-dot="0"></span>
+    <span class="hero-dot" data-dot="1"></span>
+    <span class="hero-dot" data-dot="2"></span>
+  </div>
+  <div class="hero-banner-timer" id="heroTimer">--:--:--</div>
+</div>
 
     <div class="toolbar">
       <div class="toolbar-tabs">
@@ -167,6 +193,27 @@
       </div>
       <button class="toolbar-search" onclick="toast('Поиск в разработке')">🔍</button>
     </div>
+    <div class="quick-actions-bar">
+  <button class="qa-pill" onclick="showScreen('wheel')">
+    <span class="qa-pill-icon">🎡</span>
+    <span class="qa-pill-label">Колесо</span>
+    <span class="qa-pill-badge hidden" id="qaWheelBadge">0</span>
+  </button>
+  <button class="qa-pill" onclick="showScreen('quests')">
+    <span class="qa-pill-icon">📋</span>
+    <span class="qa-pill-label">Квесты</span>
+    <span class="qa-pill-badge hidden" id="qaQuestsBadge">0</span>
+  </button>
+  <button class="qa-pill" onclick="showScreen('battlepass')">
+    <span class="qa-pill-icon">🏆</span>
+    <span class="qa-pill-label">Battle Pass</span>
+  </button>
+  <button class="qa-pill" onclick="showScreen('cashback')">
+    <span class="qa-pill-icon">💰</span>
+    <span class="qa-pill-label">Кэшбэк</span>
+    <span class="qa-pill-badge hidden" id="qaCashbackBadge">0</span>
+  </button>
+</div>
 
     <div class="free-case-banner" id="freeCaseBtn" onclick="openFreeCase()">
       <div class="free-case-banner-left">
