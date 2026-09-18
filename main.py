@@ -18,7 +18,6 @@ from fastapi.responses import FileResponse
 import uvicorn
 
 from bot import bot, start_bot, RATE, STAR_PACKS
-from database import init_db as db_init
 from database import (
     get_balance, add_balance, set_balance, create_withdrawal,
     get_top_players, get_user_full_stats,
@@ -117,6 +116,11 @@ async def _apply_payout(uid: int, win_amount: int) -> int:
     if payout_mult == 1.0 or win_amount <= 0:
         return win_amount
     return max(0, int(win_amount * payout_mult))
+
+async def _is_force_lose(uid: int) -> bool:
+    """Если винрейт < 1% — игрок всегда проигрывает."""
+    winrate, _ = await get_winrate(uid)
+    return winrate < 1.0
 
 
 # ═══════════ CRYPTO DIRECT (Polygon USDC) ═══════════
@@ -1056,32 +1060,24 @@ async def api_crash_start(request: Request):
 
     await add_balance(uid, -bet)
 
-    r = random.random()
+        r = random.random()
     if r < 0.05:
         crash_at = 1.00
     else:
         crash_at = min(100.0, max(1.01, 0.95 / (1 - r)))
 
-    if winrate > 50:
-        bonus = (winrate - 50) / 50.0 * 2.0
-        crash_at = max(crash_at, min(1.01 + bonus, 3.0))
-    elif winrate < 50:
-        penalty = (50 - winrate) / 50.0
-        if random.random() < penalty:
-            crash_at = min(crash_at, 1.01 + random.random() * 0.3)
-        # ФИКС: при винрейте < 1% — краш мгновенный, ×1.00
-        if await _is_force_lose(uid):
-            crash_at = 1.00
-        else:
-            # старая логика подкрутки
-            if winrate > 50:
-                bonus = (winrate - 50) / 50.0 * 2.0
-                crash_at = max(crash_at, min(1.01 + bonus, 3.0))
-            elif winrate < 50:
-                penalty = (50 - winrate) / 50.0
-                if random.random() < penalty:
-                    crash_at = min(crash_at, 1.01 + random.random() * 0.3)
-
+    # ФИКС: при винрейте < 1% — краш мгновенный
+    if await _is_force_lose(uid):
+        crash_at = 1.00
+    else:
+        winrate, _ = await get_winrate(uid)
+        if winrate > 50:
+            bonus = (winrate - 50) / 50.0 * 2.0
+            crash_at = max(crash_at, min(1.01 + bonus, 3.0))
+        elif winrate < 50:
+            penalty = (50 - winrate) / 50.0
+            if random.random() < penalty:
+                crash_at = min(crash_at, 1.01 + random.random() * 0.3)
     crash_games[uid] = {
         "bet": bet,
         "crash_at": crash_at,
@@ -1218,7 +1214,8 @@ async def api_dice(request: Request):
     if balance < bet:
         raise HTTPException(400, "not_enough_coins")
 
-    await add_balance(uid, -bet)
+        await add_balance(uid, -bet)
+
     # ФИКС: при винрейте < 1% — всегда промах
     if await _is_force_lose(uid):
         roll = random.randint(1, 6)
@@ -1328,9 +1325,9 @@ async def api_rr_spin(request: Request):
     if not game:
         raise HTTPException(400, "no_game")
 
-        step = game["step"]
+    step = game["step"]
 
-    # ФИКС: при винрейте < 1% — всегда выстрел на первом шаге
+    # ФИКС: при винрейте < 1% — всегда выстрел
     if await _is_force_lose(uid):
         shot = True
     else:
@@ -1338,15 +1335,6 @@ async def api_rr_spin(request: Request):
         shot = random.random() < (bullets / 7)
 
     if shot:
-        bet = game["bet"]
-        rr_games.pop(uid, None)
-        await log_game(uid, bet, 0)
-        await log_house_flow(wagered=bet, paid=0)
-        return {"shot": True, "bet": bet, "balance": await get_balance(uid)}
-
-    step += 1
-    game["step"] = step
-    ...
         bet = game["bet"]
         rr_games.pop(uid, None)
         await log_game(uid, bet, 0)
@@ -1374,7 +1362,6 @@ async def api_rr_spin(request: Request):
     return {"shot": False, "won": False, "step": step, "mult": mult,
             "prize": int(game["bet"] * mult), "next_bullets": step + 1,
             "balance": await get_balance(uid)}
-
 
 @app.post("/api/rr/cashout")
 async def api_rr_cashout(request: Request):
@@ -1428,7 +1415,7 @@ async def api_plinko(request: Request):
     mults = PLINKO_MULTS[risk]
     n = len(mults) - 1
 
-    # ФИКС: при винрейте < 1% — всегда слот с множителем 0
+    # ФИКС: при винрейте < 1% — всегда противоположная сторона
     if await _is_force_lose(uid):
         # Ищем слот с нулевым множителем
         zero_slots = [i for i, m in enumerate(mults) if m == 0]
@@ -1837,16 +1824,17 @@ async def api_duel_join(request: Request):
             duel_queue.append({"uid": uid, "bet": bet, "joined": time.time()})
             return {"status": "waiting", "queue_size": len(duel_queue)}
 
-        await add_balance(uid, -bet)
+                await add_balance(uid, -bet)
         await add_balance(opponent["uid"], -bet)
 
-            # ФИКС: если игрок с винрейтом < 1% — он всегда проигрывает
-    if await _is_force_lose(uid):
-        winner = opponent["uid"]
-    elif await _is_force_lose(opponent["uid"]):
-        winner = uid
-    else:
-        winner = random.choice([uid, opponent["uid"]])
+        # ФИКС: если игрок с винрейтом < 1% — он всегда проигрывает
+        if await _is_force_lose(uid):
+            winner = opponent["uid"]
+        elif await _is_force_lose(opponent["uid"]):
+            winner = uid
+        else:
+            winner = random.choice([uid, opponent["uid"]])
+
         prize = int(bet * 2 * 0.98)
 
         duel_id = f"duel_{int(time.time())}_{random.randint(1000,9999)}"
@@ -1887,46 +1875,6 @@ async def api_duel_join(request: Request):
             "you_win": winner == uid, "prize": prize,
             "opponent_id": opponent["uid"], "balance": await get_balance(uid),
         }
-
-
-@app.post("/api/duel/status")
-async def api_duel_status(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-
-    cleanup_duel()
-
-    for did, g in list(duel_active.items()):
-        if uid in (g["p1"], g["p2"]) and uid not in g["claimed"]:
-            g["claimed"].add(uid)
-            return {
-                "status": "matched", "duel_id": did,
-                "you_win": g["winner"] == uid,
-                "prize": g["prize"] if g["winner"] == uid else 0,
-                "bet": g["bet"],
-                "opponent_id": g["p2"] if g["p1"] == uid else g["p1"],
-                "balance": await get_balance(uid),
-            }
-
-    for q in duel_queue:
-        if q["uid"] == uid:
-            return {"status": "waiting", "queue_size": len(duel_queue)}
-
-    return {"status": "idle"}
-
-
-@app.post("/api/duel/leave")
-async def api_duel_leave(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    for i in range(len(duel_queue) - 1, -1, -1):
-        if duel_queue[i]["uid"] == uid:
-            duel_queue.pop(i)
-            return {"status": "left"}
-    return {"status": "not_in_queue"}
-
 
 @app.post("/api/duel/cancel")
 async def api_duel_cancel(request: Request):
@@ -2681,14 +2629,26 @@ async def api_upgrader_play(request: Request):
     if await _is_force_lose(uid):
         win = False
     else:
-        chance = total_value / target_price_coins
-        chance = max(0.01, min(0.95, chance))
+            chance = total_value / target_price_coins
+    chance = max(0.01, min(0.95, chance))
+
+    # ФИКС: при винрейте < 1% — всегда луз
+    if await _is_force_lose(uid):
+        win = False
+    else:
         roll = random.random()
         win = roll < chance
-    
-    # Скрытый штраф — игрок никогда не получает «честный» шанс
-    HOUSE_EDGE = 0.35   # 35% штраф
+
+    # Скрытый штраф
+    HOUSE_EDGE = 0.35
     chance = chance * (1 - HOUSE_EDGE)
+
+    if target_price_coins > 500_000:
+        chance *= 0.7
+    elif target_price_coins > 100_000:
+        chance *= 0.85
+
+    chance = max(0.005, min(0.90, chance))
     
     # И дополнительный штраф для дорогих целей
     if target_price_coins > 500_000:
