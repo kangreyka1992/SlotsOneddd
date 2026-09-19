@@ -71,7 +71,6 @@ from database import (
 )
 
 
-WITHDRAW_RATE = 125
 MIN_WITHDRAW = 15
 BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
@@ -535,9 +534,11 @@ async def api_profile(request: Request):
     invited, bonuses = await get_referral_stats(uid)
     discount = await get_discount(uid)
     profile_custom = await get_profile(uid)
+    bp = await get_battle_pass(uid)
 
     return {
         "balance": balance,
+        "premium": bp["premium"],
         "rate": RATE,
         "withdraw_rate": WITHDRAW_RATE,
         "min_withdraw": MIN_WITHDRAW,
@@ -633,7 +634,10 @@ async def api_slots(request: Request):
         base_win = bet * 2
 
     base_win_bool = base_win > 0
-    final_win_bool = await _apply_winrate(uid, base_win_bool)
+    if await _is_force_lose(uid):
+        final_win_bool = False
+    else:
+        final_win_bool = await _apply_winrate(uid, base_win_bool)
 
     if final_win_bool and not base_win_bool:
         win = int(bet * random.choice([1.5, 2.0, 2.5, 3.0]))
@@ -643,11 +647,6 @@ async def api_slots(request: Request):
         jackpot = False
     else:
         win = base_win
-
-    win = await _apply_payout(uid, win)
-
-    if win > 0:
-        await add_balance(uid, win)
 
     await log_game(uid, bet, win)
     await add_battle_pass_xp(uid, bet // 10)
@@ -1104,6 +1103,7 @@ async def api_crash_status(request: Request):
     if game["auto_cashout"] and mult >= game["auto_cashout"] and not game["cashed"]:
         game["cashed"] = True
         prize = int(game["bet"] * game["auto_cashout"])
+        prize = await _apply_payout(uid, prize)
         bet = game["bet"]
         await add_balance(uid, prize)
         await log_game(uid, bet, prize)
@@ -1323,6 +1323,7 @@ async def api_rr_spin(request: Request):
 
     if step >= 6:
         prize = int(game["bet"] * RR_MULTS[5])
+        prize = await _apply_payout(uid, prize)
         bet = game["bet"]
         rr_games.pop(uid, None)
         await add_balance(uid, prize)
@@ -1351,6 +1352,7 @@ async def api_rr_cashout(request: Request):
 
     mult = RR_MULTS[game["step"] - 1]
     prize = int(game["bet"] * mult)
+    prize = await _apply_payout(uid, prize)
     bet = game["bet"]
     rr_games.pop(uid, None)
     await add_balance(uid, prize)
@@ -2604,14 +2606,6 @@ async def api_upgrader_play(request: Request):
     chance = total_value / target_price_coins
     chance = max(0.01, min(0.95, chance))
 
-    # ФИКС: при винрейте < 1% — всегда луз
-    if await _is_force_lose(uid):
-        win = False
-    else:
-        roll = random.random()
-        win = roll < chance
-
-    # Скрытый штраф
     HOUSE_EDGE = 0.35
     chance = chance * (1 - HOUSE_EDGE)
 
@@ -2621,6 +2615,11 @@ async def api_upgrader_play(request: Request):
         chance *= 0.85
 
     chance = max(0.005, min(0.90, chance))
+
+    if await _is_force_lose(uid):
+        win = False
+    else:
+        win = random.random() < chance
     
 
     await mark_items_sold(item_pks, uid)
