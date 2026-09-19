@@ -49,6 +49,8 @@ async def cmd_start(message: types.Message):
     await log_visit(message.from_user.id)
 
     args = message.text.split()
+
+    # Обработка реферальной ссылки
     if len(args) > 1 and args[1].startswith("ref_"):
         try:
             ref_id = int(args[1].split("_")[1])
@@ -66,7 +68,10 @@ async def cmd_start(message: types.Message):
                         )
                     except Exception:
                         pass
-    # PvP приглашение
+        except (ValueError, IndexError):
+            pass
+
+    # Обработка PvP-приглашения (ОТДЕЛЬНЫЙ блок, СНАРУЖИ первого)
     if len(args) > 1 and args[1].startswith("pvp_"):
         try:
             pvp_table_id = int(args[1].split("_")[1])
