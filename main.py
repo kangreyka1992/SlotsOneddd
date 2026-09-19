@@ -6,6 +6,7 @@ import math
 import random
 import time
 import datetime
+from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 from urllib.parse import parse_qsl, quote
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +24,9 @@ from database import (
     get_top_players, get_user_full_stats,
     log_live_win,
     get_live_feed,
+    get_public_stats,
+    get_online_count,
+    touch_session,
     get_daily_quests,
     update_quest_progress,
     claim_quest_reward,
@@ -349,6 +353,25 @@ async def send_tournament_alerts():
                 print(f"tournament reminder error for {uid}: {e}")
 
 
+# ═══════════ ПУБЛИЧНАЯ СТАТИСТИКА ═══════════
+@app.get("/stats")
+async def public_stats_page():
+    """Публичная страница со статистикой проекта."""
+    return FileResponse("webapp/stats.html")
+
+
+@app.get("/api/public/stats")
+async def api_public_stats():
+    """Публичный API — статистика проекта (без авторизации)."""
+    from database import get_public_stats, get_online_count
+    s = await get_public_stats()
+    online = await get_online_count(5)
+    return {
+        **s,
+        "online_now": online,
+    }
+
+
 # ═══════════ CRYPTO DIRECT ═══════════
 
 @app.post("/api/crypto/create")
@@ -507,6 +530,7 @@ async def api_profile(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
+    await touch_session(uid)
     await ensure_user(uid, user.get("username"))
     await log_visit(uid)
 
