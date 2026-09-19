@@ -2850,34 +2850,7 @@ function withdrawRecalc(method) {
     if (goBtn) goBtn.disabled = !(need <= balance) || !withdrawAllowed;
 }
 
-    // Для остальных — как было
-    const inputId = method === 'usdc' ? 'wdUsdcAmount' : 'wdTonAmount';
-    const infoId  = method === 'usdc' ? 'wdUsdcInfo'   : 'wdTonInfo';
-    const input = document.getElementById(inputId);
-    const info  = document.getElementById(infoId);
-    if (!input || !info) return;
 
-    const amount = Number(input.value) || 0;
-    const need = Math.ceil(amount * cfg.rate);
-    const balance = profile.balance || 0;
-
-    if (amount <= 0) {
-        info.innerHTML = `Введите сумму · Мин: <b>${cfg.min} ${cfg.unit}</b> · Курс: 1 ${cfg.unit} = <b>${fmt(cfg.rate)}</b> 🪙`;
-        return;
-    }
-
-    const ok = amount >= cfg.min && need <= balance;
-    const statusColor = ok ? '#4ade80' : '#ef4444';
-    info.innerHTML = `
-        Спишется: <b>${fmt(need)}</b> 🪙<br>
-        Баланс: <b>${fmt(balance)}</b> 🪙<br>
-        <span style="color:${statusColor}">
-            ${amount < cfg.min ? `❌ Минимум ${cfg.min} ${cfg.unit}` :
-              need > balance ? `❌ Недостаточно монет (нужно ${fmt(need)})` :
-              `✅ Готово к выводу`}
-        </span>
-    `;
-}
 async function withdrawGo(method) {
     if (!withdrawAllowed) {
         toast('⏳ Вывод недоступен — нужно 3 дня активности', 'error');
