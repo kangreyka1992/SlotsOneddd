@@ -6,7 +6,7 @@
 <title>🎰 SlotsGaming</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎰</text></svg>">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="style.css?v=416">
+<link rel="stylesheet" href="style.css?v=417">
 <style>
 /* SPLASH */
 .splash {
@@ -466,37 +466,38 @@
       </button>
 
       <!-- Настройки уведомлений -->
-<div class="admin-card">
-    <div class="admin-subtitle">🔔 Уведомления</div>
+      <div class="admin-card">
+          <div class="admin-subtitle">🔔 Уведомления</div>
 
-    <button class="notify-toggle" data-notif="daily" onclick="toggleNotif('daily')">
-        <span>🎁 Ежедневный бонус</span>
-        <span class="notify-switch"></span>
-    </button>
+          <button class="notify-toggle" data-notif="daily" onclick="toggleNotif('daily')">
+              <span>🎁 Ежедневный бонус</span>
+              <span class="notify-switch"></span>
+          </button>
 
-    <button class="notify-toggle" data-notif="hourly" onclick="toggleNotif('hourly')">
-        <span>⏰ Ежечасовой бонус</span>
-        <span class="notify-switch"></span>
-    </button>
+          <button class="notify-toggle" data-notif="hourly" onclick="toggleNotif('hourly')">
+              <span>⏰ Ежечасовой бонус</span>
+              <span class="notify-switch"></span>
+          </button>
 
-    <button class="notify-toggle" data-notif="battlepass" onclick="toggleNotif('battlepass')">
-        <span>🏆 Battle Pass</span>
-        <span class="notify-switch"></span>
-    </button>
+          <button class="notify-toggle" data-notif="battlepass" onclick="toggleNotif('battlepass')">
+              <span>🏆 Battle Pass</span>
+              <span class="notify-switch"></span>
+          </button>
 
-    <button class="notify-toggle" data-notif="promo" onclick="toggleNotif('promo')">
-        <span>🎟 Акции и промокоды</span>
-        <span class="notify-switch"></span>
-    </button>
-</div>
+          <button class="notify-toggle" data-notif="promo" onclick="toggleNotif('promo')">
+              <span>🎟 Акции и промокоды</span>
+              <span class="notify-switch"></span>
+          </button>
+      </div>
 
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
-      <div class="stat-card"><div class="stat-val" id="statWagered">0</div><div class="stat-lbl">Поставлено</div></div>
-      <div class="stat-card"><div class="stat-val" id="statWon">0</div><div class="stat-lbl">Выиграно</div></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val" id="statGames">0</div><div class="stat-lbl">Игр</div></div>
+        <div class="stat-card"><div class="stat-val" id="statWagered">0</div><div class="stat-lbl">Поставлено</div></div>
+        <div class="stat-card"><div class="stat-val" id="statWon">0</div><div class="stat-lbl">Выиграно</div></div>
+      </div>
+      <h3 class="section-title">📜 История игр</h3>
+      <div class="history-list" id="historyList"></div>
     </div>
-    <h3 class="section-title">📜 История игр</h3>
-    <div class="history-list" id="historyList"></div>
   </section>
 
   <!-- ═══ TOP ═══ -->
@@ -520,10 +521,10 @@
     </div>
     <div id="withdrawWarnContainer"></div>
 
-
+    <!-- Звёзды -->
     <div class="topup-method active" id="wd-method-stars">
       <div class="topup-label">Единый тариф вывода</div>
-    
+
       <div class="wd-fixed-tariff">
         <div class="wd-fixed-row">
           <span class="wd-fixed-icon">⭐</span>
@@ -537,15 +538,16 @@
           <span class="wd-fixed-label">монет</span>
         </div>
       </div>
-    
+
       <button class="topup-go" onclick="withdrawGo('stars')" id="wdStarsGoBtn">
         💸 Вывести 1000 ⭐
       </button>
-    
+
       <div class="topup-info" id="wdStarsInfo"></div>
     </div>
 
-    
+    <!-- USDC -->
+    <div class="topup-method" id="wd-method-usdc">
       <div class="topup-label">Сумма в USDC (мин. 5 USDC)</div>
       <div class="topup-input-wrap">
         <input type="number" class="topup-input" id="wdUsdcAmount" placeholder="0" min="5" step="1" oninput="withdrawRecalc('usdc')">
@@ -564,7 +566,8 @@
       <div class="topup-info" id="wdUsdcInfo"></div>
     </div>
 
-
+    <!-- TON -->
+    <div class="topup-method" id="wd-method-ton">
       <div class="topup-label">Сумма в TON (мин. 1 TON)</div>
       <div class="topup-input-wrap">
         <input type="number" class="topup-input" id="wdTonAmount" placeholder="0" min="1" step="0.1" oninput="withdrawRecalc('ton')">
@@ -582,6 +585,7 @@
       <button class="topup-go" onclick="withdrawGo('ton')">💸 Вывести</button>
       <div class="topup-info" id="wdTonInfo"></div>
     </div>
+
   </section>
 
   <!-- ═══ QUESTS ═══ -->
@@ -1047,6 +1051,6 @@
   }, 3000);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-<script src="app.js?v=416"></script>
+<script src="app.js?v=417"></script>
 </body>
 </html>
