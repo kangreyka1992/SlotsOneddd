@@ -593,6 +593,110 @@
 
   </section>
 
+  <!-- ═══ PVP ARENA ═══ -->
+  <section class="screen" id="screen-pvp">
+    <div class="pvp-header">
+      <button class="icon-btn" onclick="showScreen('home')">←</button>
+      <h3 class="section-title" style="margin:0;">⚔️ PvP Арена</h3>
+      <button class="icon-btn" onclick="showPvpCreate()">➕</button>
+    </div>
+
+    <!-- Мой активный стол (если есть) -->
+    <div id="pvpMyTable"></div>
+
+    <!-- Список открытых столов -->
+    <div class="section-title-row" style="margin-top:20px;">
+      <h3 class="section-title">🎯 Открытые столы</h3>
+      <button class="section-link" onclick="loadPvpTables()">🔄</button>
+    </div>
+    <div id="pvpTablesList" class="pvp-tables-list"></div>
+
+    <!-- Топ PvP -->
+    <div class="section-title-row" style="margin-top:20px;">
+      <h3 class="section-title">🏆 Топ PvP</h3>
+    </div>
+    <div id="pvpLeaderboard" class="pvp-top-list"></div>
+
+    <!-- Моя статистика -->
+    <div class="section-title-row" style="margin-top:20px;">
+      <h3 class="section-title">📊 Моя статистика</h3>
+    </div>
+    <div id="pvpMyStats" class="pvp-stats-card"></div>
+  </section>
+
+  <!-- ═══ PVP TABLE (сам стол) ═══ -->
+  <section class="screen" id="screen-pvp-table">
+    <div class="pvp-header">
+      <button class="icon-btn" onclick="closePvpTable()">←</button>
+      <div class="game-title" id="pvpTableTitle">Стол #0</div>
+      <div class="game-balance">💰 <span id="pvpTableBank">0</span> 🪙</div>
+    </div>
+
+    <!-- Инфо о столе -->
+    <div class="pvp-table-info" id="pvpTableInfo"></div>
+
+    <!-- Участники -->
+    <div class="pvp-players" id="pvpPlayers"></div>
+
+    <!-- Игровая зона -->
+    <div class="pvp-play-zone" id="pvpPlayZone">
+      <button class="pvp-play-btn" onclick="pvpPlay()" id="pvpPlayBtn">
+        🎮 ИГРАТЬ РАУНД
+      </button>
+      <div class="pvp-round-status" id="pvpRoundStatus">Ожидание игроков...</div>
+    </div>
+
+    <!-- Результаты раунда -->
+    <div class="pvp-round-results hidden" id="pvpRoundResults"></div>
+
+    <!-- Кнопка выхода -->
+    <button class="btn-secondary" onclick="pvpLeave()" id="pvpLeaveBtn" style="margin-top:16px; width:100%;">
+      🚪 Покинуть стол
+    </button>
+
+    <!-- Чат -->
+    <div class="section-title-row" style="margin-top:20px;">
+      <h3 class="section-title">💬 Чат</h3>
+    </div>
+    <div class="pvp-chat" id="pvpChat"></div>
+    <div class="pvp-chat-input">
+      <input type="text" id="pvpChatInput" placeholder="Сообщение..." maxlength="200"
+             onkeydown="if(event.key==='Enter')pvpChatSend()">
+      <button onclick="pvpChatSend()">➤</button>
+    </div>
+  </section>
+
+  <!-- ═══ PVP CREATE MODAL ═══ -->
+  <div class="pvp-modal hidden" id="pvpCreateModal">
+    <div class="pvp-modal-content">
+      <div class="pvp-modal-header">
+        <div class="pvp-modal-title">➕ Создать стол</div>
+        <button class="ci-close" onclick="closePvpCreate()">✕</button>
+      </div>
+
+      <!-- Игра -->
+      <div class="pvp-form-label">🎮 Игра:</div>
+      <div class="pvp-games-grid" id="pvpGamesGrid"></div>
+
+      <!-- Ставка -->
+      <div class="pvp-form-label">💰 Ставка:</div>
+      <div class="pvp-bets-grid" id="pvpBetsGrid"></div>
+
+      <!-- Формат -->
+      <div class="pvp-form-label">👥 Формат:</div>
+      <div class="pvp-formats-grid" id="pvpFormatsGrid"></div>
+
+      <!-- Пароль -->
+      <div class="pvp-form-label">🔒 Пароль (опционально):</div>
+      <input class="input" id="pvpPassword" placeholder="Оставь пусто для публичного" maxlength="20">
+
+      <!-- Кнопка создать -->
+      <button class="btn-primary" onclick="pvpCreateConfirm()" style="margin-top:16px; width:100%;">
+        ⚔️ СОЗДАТЬ СТОЛ
+      </button>
+    </div>
+  </div>
+  
   <!-- ═══ QUESTS ═══ -->
   <section class="screen" id="screen-quests">
     <h3 class="section-title">📋 Ежедневные задания</h3>
