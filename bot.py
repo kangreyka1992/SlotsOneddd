@@ -16,7 +16,6 @@ from database import (
     ensure_user, get_referrer, set_referrer,
     add_referral_bonus, set_discount, clear_discount,
     get_users_for_broadcast,
-    mark_notif_sent,
     unlock_achievement, log_visit,
     get_user_full_stats, can_withdraw,
     buy_premium_pass, get_battle_pass,
