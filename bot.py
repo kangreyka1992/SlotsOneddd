@@ -19,6 +19,10 @@ from database import (
     unlock_achievement, log_visit,
     get_user_full_stats, can_withdraw,
     buy_premium_pass, get_battle_pass,
+    pvp_get_table,
+    pvp_get_participants,
+    pvp_join_table,
+    pvp_get_active_table_for_user,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -62,6 +66,12 @@ async def cmd_start(message: types.Message):
                         )
                     except Exception:
                         pass
+    # PvP приглашение
+    if len(args) > 1 and args[1].startswith("pvp_"):
+        try:
+            pvp_table_id = int(args[1].split("_")[1])
+            await handle_pvp_invite(message, pvp_table_id)
+            return
         except (ValueError, IndexError):
             pass
 
@@ -128,7 +138,128 @@ async def cmd_webapp(message: types.Message):
         parse_mode="HTML",
         reply_markup=kb,
     )
+@router.message(Command("pvp"))
+async def cmd_pvp(message: types.Message):
+    """Главное меню PvP: создать стол или присоединиться."""
+    await ensure_user(message.from_user.id, message.from_user.username)
 
+    args = message.text.split(maxsplit=1)
+    # Если есть аргумент — приглашение на стол
+    if len(args) > 1 and args[1].startswith("join_"):
+        try:
+            table_id = int(args[1].split("_")[1])
+            await handle_pvp_invite(message, table_id)
+            return
+        except (ValueError, IndexError):
+            pass
+
+    text = (
+        "⚔️ <b>PvP Арена SlotsGaming</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🎮 <b>Как играть</b>\n"
+        "1. Создай стол или присоединись к чужому\n"
+        "2. Дождись соперников\n"
+        "3. Играйте раунд — кто больше очков, тот победил\n"
+        "4. Победитель забирает банк\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💰 <b>Форматы</b>\n"
+        "• 1×1 Дуэль (2 игрока)\n"
+        "• Турнир на 4 (4 игрока)\n"
+        "• Турнир на 8 (8 игроков)\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🎯 <b>Игры</b>\n"
+        "🎰 Слоты · 📈 Crash · ⛏ Mines · 🎲 Кости\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💸 Комиссия казино: <b>2%</b> с банка\n"
+    )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="⚔️  ОТКРЫТЬ PVP-АРЕНУ  ⚔️",
+            web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"),
+        )],
+    ])
+
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+async def handle_pvp_invite(message: types.Message, table_id: int):
+    """Обработка перехода по ссылке-приглашению."""
+    uid = message.from_user.id
+
+    table = await pvp_get_table(table_id)
+    if not table:
+        await message.answer(
+            "❌ <b>Стол не найден</b>\n\nВозможно, он уже закрыт.",
+            parse_mode="HTML",
+        )
+        return
+
+    if table["status"] != "waiting":
+        await message.answer(
+            "⚠️ <b>Стол уже начался или закрыт</b>\n\n"
+            "Попробуй найти другой стол.",
+            parse_mode="HTML",
+        )
+        return
+
+    # Проверяем, есть ли пароль
+    if table["password"]:
+        await message.answer(
+            f"🔒 <b>Стол #{table_id} защищён паролем</b>\n\n"
+            f"🎮 Игра: <b>{table['game']}</b>\n"
+            f"💰 Ставка: <b>{table['bet']}</b> 🪙\n\n"
+            f"Открой Mini App и введи пароль:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="⚔️  ОТКРЫТЬ PVP  ⚔️",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"),
+                )],
+            ]),
+        )
+        return
+
+    # Присоединяем
+    result = await pvp_join_table(table_id, uid, None)
+
+    if not result["ok"]:
+        await message.answer(
+            f"❌ <b>Не удалось присоединиться</b>\n\n{result['error']}",
+            parse_mode="HTML",
+        )
+        return
+
+    if result["status"] == "waiting":
+        participants = await pvp_get_participants(table_id)
+        await message.answer(
+            f"✅ <b>Ты в столе #{table_id}!</b>\n\n"
+            f"🎮 Игра: <b>{table['game']}</b>\n"
+            f"💰 Ставка: <b>{table['bet']}</b> 🪙\n"
+            f"👥 Игроков: <b>{len(participants)}/{table['max_players']}</b>\n\n"
+            f"Ждём остальных...",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="⚔️  ОТКРЫТЬ СТОЛ  ⚔️",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"),
+                )],
+            ]),
+        )
+    else:
+        await message.answer(
+            f"🚀 <b>Игра начинается!</b>\n\n"
+            f"🎮 Игра: <b>{table['game']}</b>\n"
+            f"💰 Ставка: <b>{table['bet']}</b> 🪙\n\n"
+            f"Открывай Mini App и играй!",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="⚔️  ИГРАТЬ  ⚔️",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"),
+                )],
+            ]),
+        )
 
 @router.pre_checkout_query()
 async def pre_checkout(q: PreCheckoutQuery):
