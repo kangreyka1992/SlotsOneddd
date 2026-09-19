@@ -356,6 +356,28 @@ async def init_db():
                 state TEXT
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS daily_tournaments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game TEXT NOT NULL,
+                prize_pool INTEGER NOT NULL DEFAULT 0,
+                base_pool INTEGER NOT NULL DEFAULT 100000,
+                started_at TIMESTAMP,
+                ends_at TIMESTAMP,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS daily_tournament_scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tournament_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                score INTEGER DEFAULT 0,
+                UNIQUE(tournament_id, user_id)
+            )
+        """)
         await db.commit()
 
 
@@ -2011,3 +2033,285 @@ async def get_user_state(user_id: int):
         ) as cur:
             row = await cur.fetchone()
             return row[0] if row else None
+
+# ═══════════ ЕЖЕДНЕВНЫЙ ТУРНИР ═══════════
+
+DAILY_TOURNAMENT_GAMES = ["crash", "mines", "slots2", "dice", "rr", "plinko", "coin"]
+DAILY_TOURNAMENT_BASE_POOL = 100_000
+DAILY_TOURNAMENT_PERCENT_FROM_BETS = 0.10  # 10% от ставок в фонд
+
+
+def _current_tournament_game() -> str:
+    """
+    Игра турнира зависит от дня недели.
+    Пн=crash, Вт=mines, Ср=slots2, Чт=dice, Пт=rr, Сб=plinko, Вс=coin.
+    """
+    weekday = datetime.datetime.utcnow().weekday()  # 0=Пн, 6=Вс
+    return DAILY_TOURNAMENT_GAMES[weekday % len(DAILY_TOURNAMENT_GAMES)]
+
+
+async def get_active_daily_tournament():
+    """Возвращает активный турнир (status='active')."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, game, prize_pool, base_pool, started_at, ends_at, status "
+            "FROM daily_tournaments WHERE status = 'active' "
+            "ORDER BY id DESC LIMIT 1"
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "game": row[1],
+                "prize_pool": row[2],
+                "base_pool": row[3],
+                "started_at": row[4],
+                "ends_at": row[5],
+                "status": row[6],
+            }
+
+
+async def get_pending_daily_tournament():
+    """Возвращает турнир, который ещё не стартовал (status='pending')."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, game, prize_pool, base_pool, started_at, ends_at, status "
+            "FROM daily_tournaments WHERE status = 'pending' "
+            "ORDER BY id ASC LIMIT 1"
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "game": row[1],
+                "prize_pool": row[2],
+                "base_pool": row[3],
+                "started_at": row[4],
+                "ends_at": row[5],
+                "status": row[6],
+            }
+
+
+async def get_latest_daily_tournament():
+    """Последний турнир (активный или завершённый) — для отображения на UI."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, game, prize_pool, base_pool, started_at, ends_at, status "
+            "FROM daily_tournaments "
+            "WHERE status IN ('active', 'pending', 'finished') "
+            "ORDER BY id DESC LIMIT 1"
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "game": row[1],
+                "prize_pool": row[2],
+                "base_pool": row[3],
+                "started_at": row[4],
+                "ends_at": row[5],
+                "status": row[6],
+            }
+
+
+async def create_daily_tournament(game: str, base_pool: int, duration_min: int = 30) -> int:
+    """Создаёт турнир в статусе 'active' на duration_min минут."""
+    now = datetime.datetime.utcnow()
+    ends = now + datetime.timedelta(minutes=duration_min)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "INSERT INTO daily_tournaments "
+            "(game, prize_pool, base_pool, started_at, ends_at, status) "
+            "VALUES (?, ?, ?, ?, ?, 'active')",
+            (game, base_pool, base_pool, now.isoformat(), ends.isoformat()),
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def add_daily_tournament_score(tournament_id: int, user_id: int, score: int):
+    """Добавляет очки игроку в турнире. Также 10% от очков идёт в призовой фонд."""
+    if score <= 0:
+        return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Очки
+        await db.execute(
+            "INSERT INTO daily_tournament_scores (tournament_id, user_id, score) "
+            "VALUES (?, ?, ?) "
+            "ON CONFLICT(tournament_id, user_id) DO UPDATE SET score = score + ?",
+            (tournament_id, user_id, score, score),
+        )
+        # Фонд
+        pool_add = int(score * DAILY_TOURNAMENT_PERCENT_FROM_BETS)
+        if pool_add > 0:
+            await db.execute(
+                "UPDATE daily_tournaments SET prize_pool = prize_pool + ? WHERE id = ?",
+                (pool_add, tournament_id),
+            )
+        await db.commit()
+
+
+async def get_daily_tournament_leaderboard(tournament_id: int, limit: int = 20):
+    """Возвращает топ игроков турнира: [(user_id, username, score), ...]."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT ts.user_id, u.username, ts.score "
+            "FROM daily_tournament_scores ts "
+            "LEFT JOIN users u ON u.user_id = ts.user_id "
+            "WHERE ts.tournament_id = ? "
+            "ORDER BY ts.score DESC LIMIT ?",
+            (tournament_id, limit),
+        ) as cur:
+            return await cur.fetchall()
+
+
+async def get_daily_tournament_participants_count(tournament_id: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM daily_tournament_scores WHERE tournament_id = ?",
+            (tournament_id,),
+        ) as cur:
+            return (await cur.fetchone())[0] or 0
+
+
+async def close_daily_tournament(tournament_id: int) -> dict:
+    """
+    Закрывает турнир, выплачивает призы топ-3.
+    Возвращает результат: {status, prize_pool, winners: [{user_id, username, prize, place}]}.
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Получаем данные турнира
+        async with db.execute(
+            "SELECT prize_pool FROM daily_tournaments WHERE id = ?",
+            (tournament_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return {"status": "not_found", "prize_pool": 0, "winners": []}
+
+            prize_pool = row[0] or 0
+
+        # Топ-3
+        async with db.execute(
+            "SELECT ts.user_id, u.username, ts.score "
+            "FROM daily_tournament_scores ts "
+            "LEFT JOIN users u ON u.user_id = ts.user_id "
+            "WHERE ts.tournament_id = ? "
+            "ORDER BY ts.score DESC LIMIT 3",
+            (tournament_id,),
+        ) as cur:
+            top = await cur.fetchall()
+
+    # Если нет участников — отменяем
+    if not top:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute(
+                "UPDATE daily_tournaments SET status = 'cancelled' WHERE id = ?",
+                (tournament_id,),
+            )
+            await db.commit()
+        return {"status": "cancelled", "prize_pool": prize_pool, "winners": []}
+
+    # Распределение призов 50/30/20 (топ-3), если меньше — то по факту
+    shares = [0.50, 0.30, 0.20]
+    winners = []
+
+    for i, (uid, uname, score) in enumerate(top):
+        prize = int(prize_pool * shares[i]) if i < len(shares) else 0
+        if prize > 0:
+            await add_balance(uid, prize, None)
+        winners.append({
+            "user_id": uid,
+            "username": uname or f"user_{uid}",
+            "score": score,
+            "prize": prize,
+            "place": i + 1,
+        })
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE daily_tournaments SET status = 'finished' WHERE id = ?",
+            (tournament_id,),
+        )
+        await db.commit()
+
+    return {"status": "finished", "prize_pool": prize_pool, "winners": winners}
+
+
+async def get_daily_tournament_history(limit: int = 10):
+    """Возвращает последние завершённые турниры с топ-3."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, game, prize_pool, started_at, ends_at, status "
+            "FROM daily_tournaments "
+            "WHERE status IN ('finished', 'cancelled') "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ) as cur:
+            tournaments = await cur.fetchall()
+
+        result = []
+        for t in tournaments:
+            tid = t[0]
+            async with db.execute(
+                "SELECT ts.user_id, u.username, ts.score "
+                "FROM daily_tournament_scores ts "
+                "LEFT JOIN users u ON u.user_id = ts.user_id "
+                "WHERE ts.tournament_id = ? "
+                "ORDER BY ts.score DESC LIMIT 3",
+                (tid,),
+            ) as cur:
+                top = await cur.fetchall()
+
+            result.append({
+                "id": tid,
+                "game": t[1],
+                "prize_pool": t[2],
+                "started_at": t[3],
+                "ends_at": t[4],
+                "status": t[5],
+                "top": [
+                    {"user_id": r[0], "username": r[1] or f"user_{r[0]}", "score": r[2]}
+                    for r in top
+                ],
+            })
+
+        return result
+
+
+async def get_user_daily_tournament_score(tournament_id: int, user_id: int) -> int:
+    """Очки конкретного игрока в турнире."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT score FROM daily_tournament_scores "
+            "WHERE tournament_id = ? AND user_id = ?",
+            (tournament_id, user_id),
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else 0
+
+
+async def reset_stale_tournaments():
+    """
+    Закрывает все 'active' турниры, у которых ends_at в прошлом.
+    Нужно для случая, если сервер был выключен.
+    """
+    now = datetime.datetime.utcnow().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id FROM daily_tournaments "
+            "WHERE status = 'active' AND ends_at < ?",
+            (now,),
+        ) as cur:
+            stale = [r[0] for r in await cur.fetchall()]
+
+    for tid in stale:
+        try:
+            await close_daily_tournament(tid)
+        except Exception as e:
+            print(f"⚠️ reset stale tournament {tid} error: {e}", flush=True)
