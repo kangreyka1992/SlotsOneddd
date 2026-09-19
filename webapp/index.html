@@ -520,20 +520,6 @@
     </div>
     <div id="withdrawWarnContainer"></div>
 
-    <div class="topup-tabs" id="withdrawTabs">
-      <button class="topup-tab active" data-method="stars" onclick="switchWithdrawTab('stars')">
-        <span class="topup-tab-icon">⭐</span>
-        <span class="topup-tab-name">Stars</span>
-      </button>
-      <button class="topup-tab" data-method="usdc" onclick="switchWithdrawTab('usdc')">
-        <span class="topup-tab-icon">💎</span>
-        <span class="topup-tab-name">USDC</span>
-      </button>
-      <button class="topup-tab" data-method="ton" onclick="switchWithdrawTab('ton')">
-        <span class="topup-tab-icon">🪙</span>
-        <span class="topup-tab-name">TON</span>
-      </button>
-    </div>
 
     <div class="topup-method active" id="wd-method-stars">
       <div class="topup-label">Единый тариф вывода</div>
@@ -547,7 +533,7 @@
         <div class="wd-fixed-arrow">↓</div>
         <div class="wd-fixed-row">
           <span class="wd-fixed-icon">🪙</span>
-          <span class="wd-fixed-value" id="wdStarsNeed">150 000</span>
+          <span class="wd-fixed-value" id="wdStarsNeed">0</span>
           <span class="wd-fixed-label">монет</span>
         </div>
       </div>
@@ -559,7 +545,7 @@
       <div class="topup-info" id="wdStarsInfo"></div>
     </div>
 
-    <div class="topup-method" id="wd-method-usdc">
+    
       <div class="topup-label">Сумма в USDC (мин. 5 USDC)</div>
       <div class="topup-input-wrap">
         <input type="number" class="topup-input" id="wdUsdcAmount" placeholder="0" min="5" step="1" oninput="withdrawRecalc('usdc')">
@@ -578,7 +564,7 @@
       <div class="topup-info" id="wdUsdcInfo"></div>
     </div>
 
-    <div class="topup-method" id="wd-method-ton">
+
       <div class="topup-label">Сумма в TON (мин. 1 TON)</div>
       <div class="topup-input-wrap">
         <input type="number" class="topup-input" id="wdTonAmount" placeholder="0" min="1" step="0.1" oninput="withdrawRecalc('ton')">
