@@ -699,6 +699,18 @@
         <div class="admin-stat-card"><div class="admin-stat-val" id="admCoins">0</div><div class="admin-stat-lbl">Монет</div></div>
         <div class="admin-stat-card"><div class="admin-stat-val" id="admWd">0</div><div class="admin-stat-lbl">Выводов</div></div>
         <div class="admin-stat-card"><div class="admin-stat-val" id="admStars">0</div><div class="admin-stat-lbl">⭐ Выведено</div></div>
+        <h4 class="admin-subtitle">📥 Экспорт отчётов</h4>
+      <div class="admin-card">
+        <button class="btn-primary" onclick="exportReport('users')">
+          👥 Все юзеры + балансы
+        </button>
+        <button class="btn-primary" onclick="exportReport('transactions')" style="margin-top:8px;">
+          📊 Транзакции за 7 дней
+        </button>
+        <button class="btn-primary" onclick="exportReport('rtp')" style="margin-top:8px;">
+          📈 RTP по играм
+        </button>
+      </div>
       </div>
       <h4 class="admin-subtitle">📈 Оборот (RTP)</h4>
       <div class="admin-stats-grid">
