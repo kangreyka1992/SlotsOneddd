@@ -19,8 +19,7 @@ import aiohttp
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 import uvicorn
-
-from bot import bot, start_bot, RATE, STAR_PACKS
+from aiogram.types import LabeledPrice, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from database import (
     get_balance, add_balance, set_balance, create_withdrawal,
     get_top_players, get_user_full_stats,
@@ -1044,7 +1043,6 @@ async def api_mines_open(request: Request):
         bet = game["bet"]
         await add_balance(uid, win)
         await log_game(uid, bet, win)
-        # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
         await _add_tournament_score_if_active(uid, "mines", bet)
         await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=win)
@@ -1231,7 +1229,7 @@ async def api_crash_status(request: Request):
         crash_games.pop(uid, None)
         await log_game(uid, bet, 0)
         # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-        await _add_tournament_score_if_active(uid, "mines", bet)
+        await _add_tournament_score_if_active(uid, "crash", bet)
         await log_house_flow(wagered=bet, paid=0)
         await _process_game_rewards(uid, bet, 0, "crash", user.get("username"))
         await update_quest_progress(uid, "bets_count", 1)
@@ -1350,7 +1348,7 @@ async def api_dice(request: Request):
         await add_balance(uid, win)
     await log_game(uid, bet, win)
     # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-    await _add_tournament_score_if_active(uid, "crash", bet)
+    await _add_tournament_score_if_active(uid, "dice", bet)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     await _process_game_rewards(uid, bet, win, "dice", user.get("username"))
@@ -2732,8 +2730,6 @@ async def api_bp_buy_premium(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
 
-    from aiogram.types import LabeledPrice, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-
     link = await bot.create_invoice_link(
         title="Premium Battle Pass",
         description="Удвоенные награды за каждый уровень",
@@ -2762,7 +2758,6 @@ async def api_invoice(request: Request):
     d = await get_discount(uid)
     final = max(1, stars - (stars * d // 100)) if d > 0 else stars
 
-    from aiogram.types import LabeledPrice
 
     link = await bot.create_invoice_link(
         title="Пополнение баланса",
