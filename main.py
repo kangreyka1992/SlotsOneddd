@@ -3153,43 +3153,19 @@ async def api_pvp_create(request: Request):
     if password and len(password) > 20:
         raise HTTPException(400, "Пароль слишком длинный")
 
-    # Проверяем, что игрок не в другом столе
-    existing = await pvp_get_active_table_for_user(uid)
-    if existing:
-        raise HTTPException(400, f"Вы уже в столе #{existing['id']}")
 
-    # Проверяем баланс
-    balance = await get_balance(uid)
-    if balance < bet:
-        raise HTTPException(400, f"Нужно {bet} 🪙")
-
-    # Списываем ставку
-    await add_balance(uid, -bet)
-
-    # Создаём стол
-    table_id = await pvp_create_table(
-        creator_id=uid,
-        game=game,
-        bet=bet,
-        format=format_,
-        password=password,
-    )
-
-    # Обновляем prize_pool (уже включён создатель)
-    # (в pvp_create_table он не списывал — нужно сделать здесь)
-
-    # Создатель уже добавлен в participants, но без списания
-    # Списываем ещё раз — нет, добавим логику в pvp_join_table
-    # Проще: тут уже списали, а creator добавился в participants без списания
-    # Нужно явно добавить в prize_pool
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "UPDATE pvp_tables SET prize_pool = ? WHERE id = ?",
-            (bet, table_id),
+    try:
+        table_id = await pvp_create_table(
+            creator_id=uid,
+            game=game,
+            bet=bet,
+            format=format_,
+            password=password,
         )
-        await db.commit()
-    # Уведомляем создателя
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
     try:
         bot_username = "SlotsGameFast_bot"
         invite_link = f"https://t.me/{bot_username}?start=pvp_{table_id}"
@@ -3210,7 +3186,6 @@ async def api_pvp_create(request: Request):
         "table_id": table_id,
         "message": f"Стол #{table_id} создан. Ждём игроков...",
     }
-
 
 @app.post("/api/pvp/join")
 async def api_pvp_join(request: Request):
