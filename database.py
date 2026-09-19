@@ -2400,24 +2400,60 @@ async def pvp_create_table(
     format: str = "1v1",
     password: str = None,
 ) -> int:
-    """Создать PvP-стол. Возвращает table_id."""
+    """
+    Создать PvP-стол. Возвращает table_id.
+    
+    ⚠️ ВАЖНО: функция САМА списывает ставку с баланса создателя
+    и добавляет её в prize_pool. НЕ списывайте баланс повторно в эндпоинте!
+    """
     fmt = PVP_FORMATS.get(format)
     if not fmt:
         raise ValueError("Неизвестный формат")
 
     async with aiosqlite.connect(DB_PATH) as db:
+        # 1. Проверяем баланс создателя
+        async with db.execute(
+            "SELECT balance FROM users WHERE user_id = ?",
+            (creator_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            balance = row[0] if row else 0
+
+        if balance < bet:
+            raise ValueError(f"Нужно {bet} 🪙 (у тебя {balance})")
+
+        # 2. Проверяем, что создатель ещё не в другом столе
+        async with db.execute(
+            "SELECT t.id FROM pvp_tables t "
+            "JOIN pvp_participants p ON p.table_id = t.id "
+            "WHERE p.user_id = ? AND t.status IN ('waiting', 'active')",
+            (creator_id,),
+        ) as cur:
+            existing = await cur.fetchone()
+            if existing:
+                raise ValueError(f"Вы уже в столе #{existing[0]}")
+
+        # 3. Списываем ставку
+        await db.execute(
+            "UPDATE users SET balance = balance - ? WHERE user_id = ?",
+            (bet, creator_id),
+        )
+
+        # 4. Создаём стол с сразу заполненным prize_pool
         cursor = await db.execute(
-            "INSERT INTO pvp_tables (creator_id, game, bet, format, max_players, password, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, 'waiting')",
-            (creator_id, game, bet, format, fmt["max_players"], password),
+            "INSERT INTO pvp_tables "
+            "(creator_id, game, bet, format, max_players, password, status, prize_pool) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'waiting', ?)",
+            (creator_id, game, bet, format, fmt["max_players"], password, bet),
         )
         table_id = cursor.lastrowid
 
-        # Создатель автоматически присоединяется
+        # 5. Добавляем создателя как участника
         await db.execute(
             "INSERT INTO pvp_participants (table_id, user_id) VALUES (?, ?)",
             (table_id, creator_id),
         )
+
         await db.commit()
         return table_id
 
