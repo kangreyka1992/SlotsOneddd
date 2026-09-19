@@ -15,7 +15,7 @@ from database import (
     init_db, get_balance, add_balance, save_payment, payment_exists,
     ensure_user, get_referrer, set_referrer,
     add_referral_bonus, set_discount, clear_discount,
-    get_users_for_daily_notif, get_users_for_hourly_notif,
+    get_users_for_broadcast,
     mark_notif_sent,
     unlock_achievement, log_visit,
     get_user_full_stats, can_withdraw,
@@ -25,7 +25,7 @@ from database import (
 logging.basicConfig(level=logging.INFO)
 
 BOT_TOKEN = "8602932446:AAG_aVvoLz6CjhwfTP8sL9JKAoRK0tcGk_Q"
-WEBAPP_URL = "https://bot-1789335277-8932-slotbots.bothost.t'usdcech"
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://bot-1789335277-8932-slotbots.bothost.t'usdcech")
 
 RATE = 100
 STAR_PACKS = {s: s * RATE for s in [10, 15, 25, 30, 50, 100, 250, 500]}
@@ -148,7 +148,6 @@ async def on_payment(message: types.Message):
     payload = p.invoice_payload
     uid = message.from_user.id
 
-    # === Premium Battle Pass ===
     if payload.startswith("battlepass_"):
         bp = await get_battle_pass(uid)
         if bp["premium"]:
@@ -166,7 +165,6 @@ async def on_payment(message: types.Message):
         )
         return
 
-    # === Защита от двойного начисления ===
     if await payment_exists(p.telegram_payment_charge_id):
         await message.answer(
             "ℹ️ Этот платёж уже был обработан. Баланс не изменился.",
@@ -174,7 +172,6 @@ async def on_payment(message: types.Message):
         )
         return
 
-    # === Обычное пополнение ===
     parts = payload.split("_")
     coins = int(parts[2]) if len(parts) >= 3 else RATE
     disc = int(parts[3]) if len(parts) >= 4 else 0
@@ -211,68 +208,41 @@ async def on_payment(message: types.Message):
         parse_mode="HTML",
     )
 
+
 # ═══════════ ФОНОВЫЕ УВЕДОМЛЕНИЯ ═══════════
 
 async def _notify_worker():
-    """Раз в 30 минут проверяет, кому нужно напомнить о бонусах."""
-    # Первый запуск через 60 секунд после старта — чтобы не спамить при рестарте
     await asyncio.sleep(60)
 
     while True:
         try:
-            await _send_daily_reminders()
-            await _send_hourly_reminders()
+            await _send_bonus_reminders()
         except Exception as e:
             print(f"⚠️ notif worker error: {e}", flush=True)
 
-        await asyncio.sleep(30 * 60)  # 30 минут
+        await asyncio.sleep(30 * 60)
 
 
-async def _send_daily_reminders():
-    users = await get_users_for_daily_notif()
+async def _send_bonus_reminders():
+    from database import get_notification_settings
+    users = await get_users_for_broadcast("bonus_alerts")
     sent = 0
     for uid in users:
         try:
             await bot.send_message(
                 uid,
-                "🎁 <b>Не забудь про ежедневный бонус!</b>\n\n"
-                "Забери награду — серия растёт, награда тоже.\n"
-                "Чем дольше серия, тем больше монет.",
+                "🎁 <b>Не забудь про бонусы!</b>\n\n"
+                "Загляни в приложение — тебя ждут ежедневный бонус, кэшбэк и колесо.",
                 parse_mode="HTML",
             )
-            await mark_notif_sent(uid, "daily")
-            sent += 1
-        except Exception:
-            # Пользователь заблокировал бота — пропускаем
-            pass
-        await asyncio.sleep(0.05)  # антиспам
-    if sent:
-        print(f"📨 Daily reminders sent: {sent}", flush=True)
-
-
-async def _send_hourly_reminders():
-    users = await get_users_for_hourly_notif()
-    sent = 0
-    for uid in users:
-        try:
-            await bot.send_message(
-                uid,
-                "⏰ <b>Ежечасный бонус доступен!</b>\n\n"
-                "Забери сейчас — серия увеличивается каждый час.",
-                parse_mode="HTML",
-            )
-            await mark_notif_sent(uid, "hourly")
             sent += 1
         except Exception:
             pass
         await asyncio.sleep(0.05)
     if sent:
-        print(f"📨 Hourly reminders sent: {sent}", flush=True)
+        print(f"📨 Reminders sent: {sent}", flush=True)
 
-
-async def start_notif_worker():
-    asyncio.create_task(_notify_worker())
 
 async def start_bot():
-    await start_notif_worker()
+    asyncio.create_task(_notify_worker())
     await dp.start_polling(bot)
