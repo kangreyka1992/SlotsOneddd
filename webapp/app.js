@@ -1105,7 +1105,6 @@ async function openGame(game) {
         initPlinko();
     }
     if (game === 'penalti') {
-        api('/api/penalti/reset').catch(() => {});
         document.getElementById('penaltiBets').classList.remove('hidden');
         document.getElementById('penaltiDisplay').classList.add('hidden');
         initPenalti();
@@ -5301,8 +5300,7 @@ async function bootstrap() {
     setInterval(loadHourlyStatus, 30000);
     setInterval(updateQuickBadges, 30000);
 
-    api('/api/penalti/reset').catch(() => {});
-    api('/api/duel/cancel').catch(() => {});
+
 }
 
 bootstrap();
