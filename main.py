@@ -58,6 +58,27 @@ from database import (
     BATTLE_PASS_REWARDS,
     XP_PER_LEVEL,
     MAX_LEVEL,
+    pvp_create_table,
+    pvp_get_table,
+    pvp_list_open_tables,
+    pvp_get_participants,
+    pvp_join_table,
+    pvp_leave_table,
+    pvp_start_table,
+    pvp_submit_round_score,
+    pvp_get_round_scores,
+    pvp_eliminate_player,
+    pvp_finish_table,
+    pvp_get_active_table_for_user,
+    pvp_get_stats,
+    pvp_leaderboard,
+    pvp_chat_send,
+    pvp_chat_get,
+    pvp_cleanup_stale_tables,
+    PVP_GAMES,
+    PVP_FORMATS,
+    PVP_COMMISSION_PERCENT,
+    PVP_TABLE_TIMEOUT,
     get_stats, get_last_withdrawals, update_withdrawal,
     get_user_by_username, get_all_user_ids,
     create_promo, delete_promo, list_promos,
@@ -248,11 +269,15 @@ async def _add_tournament_score_if_active(uid: int, game: str, amount: int):
         print(f"tournament score error: {e}", flush=True)
 
 async def periodic_cleanup():
-    """Фоновый таск — чистит зависшие игры."""
+    """Фоновый таск — чистит зависшие игры и PvP-столы."""
     while True:
         await asyncio.sleep(60)
-        # Всё, что нужно чистить — уже не в памяти
-        # (penalti и duel удалены)
+
+        # Очистка зависших PvP-столов (waiting > 5 минут)
+        try:
+            await pvp_cleanup_stale_tables()
+        except Exception as e:
+            print(f"⚠️ pvp_cleanup error: {e}", flush=True)
 
 
 @asynccontextmanager
@@ -3043,6 +3068,451 @@ async def api_tournament_active(request: Request):
         ],
         "my_rank": my_rank, "my_score": my_score,
     }
+
+# ═══════════ PVP РЕЖИМ ═══════════
+
+@app.post("/api/pvp/config")
+async def api_pvp_config(request: Request):
+    """Возвращает конфиг PvP (доступные игры, форматы, комиссия)."""
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+
+    return {
+        "games": [
+            {"id": "slots2", "name": "Слоты 5×3", "icon": "🎰"},
+            {"id": "crash",  "name": "Crash",     "icon": "📈"},
+            {"id": "mines",  "name": "Mines",     "icon": "⛏"},
+            {"id": "dice",   "name": "Кости",     "icon": "🎲"},
+        ],
+        "formats": [
+            {"id": "1v1",   "label": "1×1 Дуэль",   "max_players": 2},
+            {"id": "tour4", "label": "Турнир на 4", "max_players": 4},
+            {"id": "tour8", "label": "Турнир на 8", "max_players": 8},
+        ],
+        "bets": [10, 50, 100, 500, 1000, 5000],
+        "commission_percent": PVP_COMMISSION_PERCENT * 100,
+    }
+
+
+@app.post("/api/pvp/list")
+async def api_pvp_list(request: Request):
+    """Список открытых столов."""
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+
+    tables = await pvp_list_open_tables(30)
+
+    # Убираем пароли из публичного ответа
+    for t in tables:
+        t.pop("password", None)
+
+    return {"tables": tables}
+
+
+@app.post("/api/pvp/my-table")
+async def api_pvp_my_table(request: Request):
+    """Активный стол игрока (если есть)."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    table = await pvp_get_active_table_for_user(uid)
+    if not table:
+        return {"active": False}
+
+    participants = await pvp_get_participants(table["id"])
+
+    return {
+        "active": True,
+        "table": table,
+        "participants": participants,
+    }
+
+
+@app.post("/api/pvp/create")
+async def api_pvp_create(request: Request):
+    """Создать PvP-стол."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    game = data.get("game", "")
+    bet = int(data.get("bet", 0))
+    format_ = data.get("format", "1v1")
+    password = (data.get("password") or "").strip() or None
+
+    # Валидация
+    if game not in PVP_GAMES:
+        raise HTTPException(400, "Неверная игра")
+    if bet not in (10, 50, 100, 500, 1000, 5000):
+        raise HTTPException(400, "Неверная ставка")
+    if format_ not in PVP_FORMATS:
+        raise HTTPException(400, "Неверный формат")
+    if password and len(password) > 20:
+        raise HTTPException(400, "Пароль слишком длинный")
+
+    # Проверяем, что игрок не в другом столе
+    existing = await pvp_get_active_table_for_user(uid)
+    if existing:
+        raise HTTPException(400, f"Вы уже в столе #{existing['id']}")
+
+    # Проверяем баланс
+    balance = await get_balance(uid)
+    if balance < bet:
+        raise HTTPException(400, f"Нужно {bet} 🪙")
+
+    # Списываем ставку
+    await add_balance(uid, -bet)
+
+    # Создаём стол
+    table_id = await pvp_create_table(
+        creator_id=uid,
+        game=game,
+        bet=bet,
+        format=format_,
+        password=password,
+    )
+
+    # Обновляем prize_pool (уже включён создатель)
+    # (в pvp_create_table он не списывал — нужно сделать здесь)
+
+    # Создатель уже добавлен в participants, но без списания
+    # Списываем ещё раз — нет, добавим логику в pvp_join_table
+    # Проще: тут уже списали, а creator добавился в participants без списания
+    # Нужно явно добавить в prize_pool
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE pvp_tables SET prize_pool = ? WHERE id = ?",
+            (bet, table_id),
+        )
+        await db.commit()
+
+    return {
+        "ok": True,
+        "table_id": table_id,
+        "message": f"Стол #{table_id} создан. Ждём игроков...",
+    }
+
+
+@app.post("/api/pvp/join")
+async def api_pvp_join(request: Request):
+    """Присоединиться к столу."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    table_id = int(data.get("table_id", 0))
+    password = (data.get("password") or "").strip() or None
+
+    if not table_id:
+        raise HTTPException(400, "Неверный table_id")
+
+    result = await pvp_join_table(table_id, uid, password)
+
+    if not result["ok"]:
+        raise HTTPException(400, result["error"])
+
+    return {
+        "ok": True,
+        "status": result["status"],
+        "message": "Вы в столе!" if result["status"] == "waiting" else "Игра начинается!",
+    }
+
+
+@app.post("/api/pvp/leave")
+async def api_pvp_leave(request: Request):
+    """Покинуть стол."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    table_id = int(data.get("table_id", 0))
+    if not table_id:
+        raise HTTPException(400, "Неверный table_id")
+
+    result = await pvp_leave_table(table_id, uid)
+    if not result["ok"]:
+        raise HTTPException(400, result["error"])
+
+    return {"ok": True, "message": "Вы покинули стол"}
+
+
+@app.post("/api/pvp/status")
+async def api_pvp_status(request: Request):
+    """Полный статус стола: участники, раунды, время."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    table_id = int(data.get("table_id", 0))
+    if not table_id:
+        raise HTTPException(400, "Неверный table_id")
+
+    table = await pvp_get_table(table_id)
+    if not table:
+        raise HTTPException(404, "Стол не найден")
+
+    participants = await pvp_get_participants(table_id)
+
+    # Проверяем, что игрок в этом столе
+    player_in_table = any(p["user_id"] == uid for p in participants)
+    if not player_in_table:
+        raise HTTPException(403, "Вы не в этом столе")
+
+    return {
+        "table": table,
+        "participants": participants,
+        "is_creator": table["creator_id"] == uid,
+    }
+
+
+@app.post("/api/pvp/play")
+async def api_pvp_play(request: Request):
+    """
+    Игрок делает свой ход в PvP раунде.
+    Возвращает результат для отображения.
+    """
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    table_id = int(data.get("table_id", 0))
+    round_num = int(data.get("round", 1))
+    bet = int(data.get("bet", 0))
+    game = data.get("game", "")
+
+    if not table_id:
+        raise HTTPException(400, "Неверный table_id")
+
+    table = await pvp_get_table(table_id)
+    if not table:
+        raise HTTPException(404, "Стол не найден")
+    if table["status"] != "active":
+        raise HTTPException(400, "Стол не активен")
+
+    participants = await pvp_get_participants(table_id)
+    player_in_table = any(p["user_id"] == uid for p in participants)
+    if not player_in_table:
+        raise HTTPException(403, "Вы не в этом столе")
+
+    # Проверяем, что игрок не выбыл
+    me = next((p for p in participants if p["user_id"] == uid), None)
+    if me and me["eliminated"]:
+        raise HTTPException(400, "Вы выбыли из турнира")
+
+    # Проверяем, что игрок ещё не играл в этом раунде
+    round_scores = await pvp_get_round_scores(table_id, round_num)
+    if any(r["user_id"] == uid for r in round_scores):
+        raise HTTPException(400, "Вы уже сыграли этот раунд")
+
+    # Симулируем результат (PvP-специфичная логика)
+    # Игрок "играет" — рандом от 0 до 1000 очков, но зависит от игры
+    game_type = table["game"]
+
+    if game_type == "slots2":
+        # Слоты: 0-100 очков (множитель x1-x10)
+        score = random.randint(0, 100)
+    elif game_type == "crash":
+        # Краш: 0-1000, чем выше множитель — тем больше
+        score = random.randint(0, 1000)
+    elif game_type == "mines":
+        # Мины: 0-500
+        score = random.randint(0, 500)
+    elif game_type == "dice":
+        # Кости: 0-300
+        score = random.randint(0, 300)
+    else:
+        score = random.randint(0, 500)
+
+    # Применяем подкрутку
+    winrate, payout_mult = await get_winrate(uid)
+    if winrate > 50:
+        bonus = int((winrate - 50) / 50.0 * 200)
+        score = min(2000, score + bonus)
+    elif winrate < 50:
+        penalty = int((50 - winrate) / 50.0 * 200)
+        score = max(0, score - penalty)
+
+    score = int(score * payout_mult)
+
+    # Сохраняем
+    await pvp_submit_round_score(table_id, uid, round_num, score)
+
+    return {
+        "ok": True,
+        "round": round_num,
+        "score": score,
+    }
+
+
+@app.post("/api/pvp/round-results")
+async def api_pvp_round_results(request: Request):
+    """Результаты текущего раунда."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    table_id = int(data.get("table_id", 0))
+    round_num = int(data.get("round", 1))
+
+    if not table_id:
+        raise HTTPException(400, "Неверный table_id")
+
+    results = await pvp_get_round_scores(table_id, round_num)
+    participants = await pvp_get_participants(table_id)
+
+    # Кто ещё не сыграл
+    played_ids = {r["user_id"] for r in results}
+    active_ids = {p["user_id"] for p in participants if not p["eliminated"]}
+    waiting_ids = active_ids - played_ids
+
+    return {
+        "results": results,
+        "waiting_count": len(waiting_ids),
+        "all_played": len(waiting_ids) == 0,
+        "round": round_num,
+    }
+
+@app.post("/api/pvp/check-winner")
+async def api_pvp_check_winner(request: Request):
+    """
+    Проверяет, закончился ли турнир.
+    Если в активных остался 1 игрок — завершает, выплачивает приз.
+    """
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    table_id = int(data.get("table_id", 0))
+    if not table_id:
+        raise HTTPException(400, "Неверный table_id")
+
+    table = await pvp_get_table(table_id)
+    if not table:
+        raise HTTPException(404, "Стол не найден")
+
+    if table["status"] == "finished":
+        return {
+            "finished": True,
+            "winner_id": table["winner_id"],
+            "prize_pool": table["prize_pool"],
+        }
+
+    participants = await pvp_get_participants(table_id)
+    active = [p for p in participants if not p["eliminated"]]
+
+    # Если в 1v1 — играем один раунд, потом проверяем
+    # Если в турнире — после каждого раунда выбывает слабейший
+    if len(active) <= 1:
+        winner_id = active[0]["user_id"] if active else None
+
+        if not winner_id:
+            # Никого не осталось — отменяем
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute(
+                    "UPDATE pvp_tables SET status = 'cancelled' WHERE id = ?",
+                    (table_id,),
+                )
+                await db.commit()
+            return {"finished": True, "cancelled": True}
+
+        # Завершаем стол
+        result = await pvp_finish_table(table_id, winner_id)
+
+        # Уведомляем победителя
+        try:
+            prize = result.get("prize", 0)
+            await bot.send_message(
+                winner_id,
+                f"🏆 <b>Вы победили в PvP-турнире!</b>\n\n"
+                f"🎮 Игра: <b>{table['game']}</b>\n"
+                f"💰 Приз: <b>+{prize:,}</b> 🪙\n"
+                f"<i>(комиссия казино {int(PVP_COMMISSION_PERCENT * 100)}%)</i>".replace(",", "."),
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            print(f"⚠️ pvp winner notify error: {e}", flush=True)
+
+        return {
+            "finished": True,
+            "winner_id": winner_id,
+            "prize": result.get("prize", 0),
+            "prize_pool": result.get("prize_pool", 0),
+            "commission": result.get("commission", 0),
+        }
+
+    return {
+        "finished": False,
+        "active_count": len(active),
+    }
+
+@app.post("/api/pvp/chat/send")
+async def api_pvp_chat_send(request: Request):
+    """Отправить сообщение в чат стола."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+    username = user.get("username") or user.get("first_name") or "Игрок"
+
+    table_id = int(data.get("table_id", 0))
+    text = (data.get("text") or "").strip()
+
+    if not table_id or not text:
+        raise HTTPException(400, "Пустое сообщение")
+    if len(text) > 200:
+        raise HTTPException(400, "Сообщение до 200 символов")
+
+    # Проверяем, что игрок в столе
+    participants = await pvp_get_participants(table_id)
+    if not any(p["user_id"] == uid for p in participants):
+        raise HTTPException(403, "Вы не в этом столе")
+
+    ok = await pvp_chat_send(table_id, uid, username, text)
+    if not ok:
+        raise HTTPException(400, "Не удалось отправить")
+
+    return {"ok": True}
+
+
+@app.post("/api/pvp/chat/get")
+async def api_pvp_chat_get(request: Request):
+    """Получить последние сообщения чата."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    table_id = int(data.get("table_id", 0))
+    if not table_id:
+        raise HTTPException(400, "Неверный table_id")
+
+    participants = await pvp_get_participants(table_id)
+    if not any(p["user_id"] == uid for p in participants):
+        raise HTTPException(403, "Вы не в этом столе")
+
+    messages = await pvp_chat_get(table_id, 50)
+    return {"messages": messages}
+
+
+@app.post("/api/pvp/stats")
+async def api_pvp_stats(request: Request):
+    """Статистика PvP игрока."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    stats = await pvp_get_stats(uid)
+    return stats
+
+
+@app.post("/api/pvp/leaderboard")
+async def api_pvp_leaderboard(request: Request):
+    """Топ PvP игроков."""
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+
+    top = await pvp_leaderboard(20)
+    return {"leaderboard": top}
 
 # ═══════════ ЕЖЕДНЕВНЫЙ ТУРНИР ═══════════
 
