@@ -13,6 +13,7 @@ from urllib.parse import parse_qsl, quote
 from fastapi.staticfiles import StaticFiles
 from database import init_db as db_init, DB_PATH
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from bot import bot, start_bot, RATE, STAR_PACKS, WEBAPP_URL
 
 import aiohttp
 from fastapi import FastAPI, Request, HTTPException
@@ -35,6 +36,20 @@ from database import (
     get_referral_stats, get_discount,
     log_game, unlock_achievement,
     get_promo, promo_already_used, use_promo,
+    get_active_daily_tournament,
+    get_pending_daily_tournament,
+    get_latest_daily_tournament,
+    create_daily_tournament,
+    add_daily_tournament_score,
+    get_daily_tournament_leaderboard,
+    get_daily_tournament_participants_count,
+    close_daily_tournament,
+    get_daily_tournament_history,
+    get_user_daily_tournament_score,
+    reset_stale_tournaments,
+    _current_tournament_game,
+    DAILY_TOURNAMENT_GAMES,
+    DAILY_TOURNAMENT_BASE_POOL,
     get_daily_info, claim_daily,
     ensure_user,
     get_battle_pass,
@@ -243,12 +258,22 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(send_bonus_reminders, "cron", hour="*/3", minute=0)
     scheduler.add_job(send_cashback_reminders, "cron", day_of_week="sun", hour=12, minute=0)
     scheduler.add_job(send_tournament_alerts, "cron", hour=10, minute=0)
+
+    # ⬇️ Ежедневный турнир
+    # 17:00 UTC = 20:00 МСК — старт
+    scheduler.add_job(start_daily_tournament_job, "cron", hour=17, minute=0)
+    # 17:25 UTC = 20:25 МСК — за 5 минут до конца
+    scheduler.add_job(alert_tournament_end_soon_job, "cron", hour=17, minute=25)
+    # 17:30 UTC = 20:30 МСК — закрытие
+    scheduler.add_job(close_daily_tournament_job, "cron", hour=17, minute=30)
+
     scheduler.start()
 
+    # При старте — почистить зависшие турниры
     try:
-        await initialize_tournament_if_needed()
+        await reset_stale_tournaments()
     except Exception as e:
-        print(f"⚠️ tournament init skipped: {e}", flush=True)
+        print(f"⚠️ reset_stale_tournaments error: {e}", flush=True)
 
     yield
     scheduler.shutdown()
@@ -371,6 +396,139 @@ async def api_public_stats():
         **s,
         "online_now": online,
     }
+
+
+# ═══════════ ФОНОВЫЕ ЗАДАЧИ ТУРНИРА ═══════════
+
+async def start_daily_tournament_job():
+    """
+    Запускается каждый день в 20:00 МСК (17:00 UTC).
+    Закрывает старые турниры, создаёт новый на сегодня.
+    """
+    print("🏆 Запуск ежедневного турнира...", flush=True)
+
+    # Закрыть все зависшие турниры (если сервер был выключен)
+    try:
+        await reset_stale_tournaments()
+    except Exception as e:
+        print(f"⚠️ reset_stale_tournaments error: {e}")
+
+    # Не создавать дубликат, если уже есть активный
+    existing = await get_active_daily_tournament()
+    if existing:
+        print(f"⚠️ Турнир уже активен: #{existing['id']}", flush=True)
+        return
+
+    # Игра сегодня
+    game = _current_tournament_game()
+
+    # Создаём турнир на 30 минут
+    tid = await create_daily_tournament(
+        game=game,
+        base_pool=DAILY_TOURNAMENT_BASE_POOL,
+        duration_min=30,
+    )
+
+    print(f"✅ Турнир #{tid} создан: игра={game}, фонд={DAILY_TOURNAMENT_BASE_POOL}", flush=True)
+
+    # Рассылка всем
+    try:
+        users = await get_all_user_ids()
+        text = (
+            f"🏆 <b>Ежедневный турнир начался!</b>\n\n"
+            f"🎮 Игра: <b>{game}</b>\n"
+            f"💰 Призовой фонд: <b>{DAILY_TOURNAMENT_BASE_POOL:,}</b> 🪙\n"
+            f"⏱ Длительность: <b>30 минут</b>\n\n"
+            f"Заходи в приложение и играй — очки считаются с каждой ставки!\n"
+            f"<i>Топ-3 получат 50%, 30% и 20% от фонда.</i>".replace(",", ".")
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="🏆  ИГРАТЬ В ТУРНИРЕ  🏆",
+                web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"),
+            )],
+        ])
+        sent = 0
+        for uid in users:
+            try:
+                await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
+                sent += 1
+            except Exception:
+                pass
+            await asyncio.sleep(0.05)
+        print(f"📢 Уведомлений о старте отправлено: {sent}", flush=True)
+    except Exception as e:
+        print(f"⚠️ tournament broadcast error: {e}", flush=True)
+
+
+async def close_daily_tournament_job():
+    """
+    Запускается каждый день в 20:30 МСК (17:30 UTC).
+    Закрывает активный турнир и выплачивает призы.
+    """
+    print("🏁 Закрытие ежедневного турнира...", flush=True)
+
+    tour = await get_active_daily_tournament()
+    if not tour:
+        print("⚠️ Нет активного турнира для закрытия", flush=True)
+        return
+
+    try:
+        result = await close_daily_tournament(tour["id"])
+    except Exception as e:
+        print(f"⚠️ close_daily_tournament error: {e}", flush=True)
+        return
+
+    print(f"✅ Турнир #{tour['id']} закрыт: {result['status']}, фонд={result['prize_pool']}", flush=True)
+
+    # Уведомления победителям
+    if result["status"] == "finished" and result["winners"]:
+        for w in result["winners"]:
+            try:
+                text = (
+                    f"🏆 <b>Ты в топ-{w['place']} турнира!</b>\n\n"
+                    f"🎮 Игра: <b>{tour['game']}</b>\n"
+                    f"⭐ Очки: <b>{w['score']:,}</b>\n"
+                    f"💰 Приз: <b>+{w['prize']:,}</b> 🪙\n\n"
+                    f"Приз уже на балансе!".replace(",", ".")
+                )
+                await bot.send_message(w["user_id"], text, parse_mode="HTML")
+            except Exception as e:
+                print(f"⚠️ winner notify error for {w['user_id']}: {e}", flush=True)
+
+    # Уведомление об окончании всем (опционально)
+    if result["status"] == "cancelled":
+        print("ℹ️ Турнир отменён (0 участников)", flush=True)
+
+
+async def alert_tournament_end_soon_job():
+    """Запускается в 20:25 МСК — за 5 минут до конца."""
+    tour = await get_active_daily_tournament()
+    if not tour:
+        return
+
+    users = await get_all_user_ids()
+    text = (
+        f"⏰ <b>5 минут до конца турнира!</b>\n\n"
+        f"🎮 Игра: <b>{tour['game']}</b>\n"
+        f"💰 Призовой фонд: <b>{tour['prize_pool']:,}</b> 🪙\n\n"
+        f"Успей поднять свои очки!".replace(",", ".")
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="🏆  ПОДНЯТЬ ОЧКИ  🏆",
+            web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"),
+        )],
+    ])
+    sent = 0
+    for uid in users:
+        try:
+            await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
+            sent += 1
+        except Exception:
+            pass
+        await asyncio.sleep(0.05)
+    print(f"📢 Уведомлений за 5 мин до конца: {sent}", flush=True)
 
 
 # ═══════════ CRYPTO DIRECT ═══════════
@@ -723,6 +881,13 @@ async def api_slots2_spin(request: Request):
     if total_win > 0:
         await add_balance(uid, total_win)
     await log_game(uid, total_bet, total_win)
+    # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+    try:
+        _tour = await get_active_daily_tournament()
+        if _tour and _tour["game"] == "slots2":
+            await add_daily_tournament_score(_tour["id"], uid, bet)
+    except Exception as _e:
+        print(f"tournament score error: {_e}")
     await add_battle_pass_xp(uid, total_bet // 10)
     await log_house_flow(wagered=total_bet, paid=total_win)
     await _process_game_rewards(uid, total_bet, total_win, "slots2", user.get("username"))
@@ -849,6 +1014,13 @@ async def api_mines_open(request: Request):
         mines_copy = list(game["mines"])
         mines_games.pop(uid, None)
         await log_game(uid, bet, 0)
+    # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+        try:
+            _tour = await get_active_daily_tournament()
+            if _tour and _tour["game"] == "mines":
+                await add_daily_tournament_score(_tour["id"], uid, bet)
+        except Exception as _e:
+        print(f"tournament score error: {_e}")
         await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=0)
         await _process_game_rewards(uid, bet, 0, "mines", user.get("username"))
@@ -873,6 +1045,13 @@ async def api_mines_open(request: Request):
         bet = game["bet"]
         await add_balance(uid, win)
         await log_game(uid, bet, win)
+        # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+        try:
+            _tour = await get_active_daily_tournament()
+            if _tour and _tour["game"] == "mines":
+                await add_daily_tournament_score(_tour["id"], uid, bet)
+        except Exception as _e:
+        print(f"tournament score error: {_e}")
         await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=win)
         await _process_game_rewards(uid, bet, win, "mines", user.get("username"))
@@ -925,6 +1104,13 @@ async def api_mines_cashout(request: Request):
     await update_quest_progress(uid, "game_mines", 1)
     await update_quest_progress(uid, "wins", 1)
     await log_game(uid, bet, prize)
+    # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+    try:
+        _tour = await get_active_daily_tournament()
+        if _tour and _tour["game"] == "mines":
+            await add_daily_tournament_score(_tour["id"], uid, bet)
+    except Exception as _e:
+        print(f"tournament score error: {_e}")
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=prize)
     await _process_game_rewards(uid, bet, prize, "mines", user.get("username"))
@@ -1055,6 +1241,13 @@ async def api_crash_status(request: Request):
         crash_at_val = game["crash_at"]
         crash_games.pop(uid, None)
         await log_game(uid, bet, 0)
+        # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+        try:
+            _tour = await get_active_daily_tournament()
+            if _tour and _tour["game"] == "crash":
+                await add_daily_tournament_score(_tour["id"], uid, bet)
+        except Exception as _e:
+        print(f"tournament score error: {_e}")
         await log_house_flow(wagered=bet, paid=0)
         await _process_game_rewards(uid, bet, 0, "crash", user.get("username"))
         await update_quest_progress(uid, "bets_count", 1)
@@ -1103,6 +1296,13 @@ async def api_crash_cashout(request: Request):
     crash_games.pop(uid, None)
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
+    # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+    try:
+        _tour = await get_active_daily_tournament()
+        if _tour and _tour["game"] == "crash":
+            await add_daily_tournament_score(_tour["id"], uid, bet)
+    except Exception as _e:
+        print(f"tournament score error: {_e}")
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=prize)
     await _process_game_rewards(uid, bet, prize, "crash", user.get("username"))
@@ -1170,6 +1370,13 @@ async def api_dice(request: Request):
     if win > 0:
         await add_balance(uid, win)
     await log_game(uid, bet, win)
+    # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+    try:
+        _tour = await get_active_daily_tournament()
+        if _tour and _tour["game"] == "dice":
+            await add_daily_tournament_score(_tour["id"], uid, bet)
+    except Exception as _e:
+        print(f"tournament score error: {_e}")
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     await _process_game_rewards(uid, bet, win, "dice", user.get("username"))
@@ -1240,6 +1447,13 @@ async def api_rr_spin(request: Request):
         bet = game["bet"]
         rr_games.pop(uid, None)
         await log_game(uid, bet, 0)
+        # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+        try:
+            _tour = await get_active_daily_tournament()
+            if _tour and _tour["game"] == "rr":
+                await add_daily_tournament_score(_tour["id"], uid, bet)
+        except Exception as _e:
+        print(f"tournament score error: {_e}")
         await log_house_flow(wagered=bet, paid=0)
         return {"shot": True, "bet": bet, "balance": await get_balance(uid)}
 
@@ -1253,6 +1467,13 @@ async def api_rr_spin(request: Request):
         rr_games.pop(uid, None)
         await add_balance(uid, prize)
         await log_game(uid, bet, prize)
+        # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+        try:
+            _tour = await get_active_daily_tournament()
+            if _tour and _tour["game"] == "rr":
+                await add_daily_tournament_score(_tour["id"], uid, bet)
+        except Exception as _e:
+        print(f"tournament score error: {_e}")
         await log_house_flow(wagered=bet, paid=prize)
         await _process_game_rewards(uid, bet, prize, "rr", user.get("username"))
         await unlock_achievement(uid, "first_bet")
@@ -1283,6 +1504,13 @@ async def api_rr_cashout(request: Request):
     rr_games.pop(uid, None)
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
+    # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+    try:
+        _tour = await get_active_daily_tournament()
+        if _tour and _tour["game"] == "rr":
+            await add_daily_tournament_score(_tour["id"], uid, bet)
+    except Exception as _e:
+        print(f"tournament score error: {_e}")
     await log_house_flow(wagered=bet, paid=prize)
     await _process_game_rewards(uid, bet, prize, "rr", user.get("username"))
     await unlock_achievement(uid, "first_bet")
@@ -1353,6 +1581,13 @@ async def api_plinko(request: Request):
         await add_balance(uid, win)
 
     await log_game(uid, bet, win)
+    # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+    try:
+        _tour = await get_active_daily_tournament()
+        if _tour and _tour["game"] == "plinko":
+            await add_daily_tournament_score(_tour["id"], uid, bet)
+    except Exception as _e:
+        print(f"tournament score error: {_e}")
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     await _process_game_rewards(uid, bet, win, "plinko", user.get("username"))
@@ -1419,6 +1654,13 @@ async def api_coin_flip(request: Request):
         await add_balance(uid, win)
 
     await log_game(uid, bet, win)
+    # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
+    try:
+        _tour = await get_active_daily_tournament()
+        if _tour and _tour["game"] == "coin":
+            await add_daily_tournament_score(_tour["id"], uid, bet)
+    except Exception as _e:
+        print(f"tournament score error: {_e}")
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     await _process_game_rewards(uid, bet, win, "coin", user.get("username"))
@@ -2542,7 +2784,7 @@ async def api_bp_buy_premium(request: Request):
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
 
-    from aiogram.types import LabeledPrice
+    from aiogram.types import LabeledPrice, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
     link = await bot.create_invoice_link(
         title="Premium Battle Pass",
@@ -2859,6 +3101,104 @@ async def api_tournament_active(request: Request):
         "my_rank": my_rank, "my_score": my_score,
     }
 
+# ═══════════ ЕЖЕДНЕВНЫЙ ТУРНИР ═══════════
+
+@app.post("/api/tournament/daily/status")
+async def api_daily_tournament_status(request: Request):
+    """Возвращает статус текущего/последнего ежедневного турнира."""
+    data = await request.json()
+    user = validate_init_data(data.get("initData", ""))
+    uid = user["id"]
+
+    # 1. Активный турнир
+    tour = await get_active_daily_tournament()
+
+    # 2. Если нет активного — берём pending или последний завершённый
+    if not tour:
+        tour = await get_latest_daily_tournament()
+
+    if not tour:
+        return {
+            "active": False,
+            "tournament": None,
+            "message": "Турнир ещё не создан. Следующий — в 20:00 МСК.",
+        }
+
+    # 3. Лидерборд
+    leaderboard = await get_daily_tournament_leaderboard(tour["id"], 20)
+
+    # 4. Место игрока
+    my_score = await get_user_daily_tournament_score(tour["id"], uid)
+    my_rank = None
+    for i, (u_id, _, _) in enumerate(leaderboard, 1):
+        if u_id == uid:
+            my_rank = i
+            break
+
+    # 5. Участники
+    participants = await get_daily_tournament_participants_count(tour["id"])
+
+    # 6. Таймер до конца / до старта
+    now = datetime.datetime.utcnow()
+    seconds_left = 0
+    seconds_to_start = 0
+
+    if tour["status"] == "active" and tour["ends_at"]:
+        try:
+            ends_at = datetime.datetime.fromisoformat(tour["ends_at"])
+            seconds_left = max(0, int((ends_at - now).total_seconds()))
+        except (ValueError, TypeError):
+            pass
+
+    if tour["status"] == "pending" and tour["started_at"]:
+        try:
+            starts_at = datetime.datetime.fromisoformat(tour["started_at"])
+            seconds_to_start = max(0, int((starts_at - now).total_seconds()))
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        "active": tour["status"] == "active",
+        "tournament": {
+            "id": tour["id"],
+            "game": tour["game"],
+            "prize_pool": tour["prize_pool"],
+            "status": tour["status"],
+            "started_at": tour["started_at"],
+            "ends_at": tour["ends_at"],
+            "participants": participants,
+            "seconds_left": seconds_left,
+            "seconds_to_start": seconds_to_start,
+        },
+        "leaderboard": [
+            {"rank": i, "user_id": u_id, "username": uname or f"user_{u_id}", "score": sc}
+            for i, (u_id, uname, sc) in enumerate(leaderboard, 1)
+        ],
+        "my_rank": my_rank,
+        "my_score": my_score,
+    }
+
+
+@app.post("/api/tournament/daily/history")
+async def api_daily_tournament_history(request: Request):
+    """Возвращает последние 10 завершённых турниров."""
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+
+    history = await get_daily_tournament_history(10)
+    return {"history": history}
+
+
+@app.post("/api/tournament/daily/next-game")
+async def api_daily_tournament_next_game(request: Request):
+    """Возвращает игру следующего турнира."""
+    data = await request.json()
+    validate_init_data(data.get("initData", ""))
+
+    return {
+        "game": _current_tournament_game(),
+        "schedule": DAILY_TOURNAMENT_GAMES,
+    }
 
 # ═══════════ ЗАЛ СЛАВЫ ═══════════
 
