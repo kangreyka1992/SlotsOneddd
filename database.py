@@ -344,6 +344,12 @@ async def init_db():
                 discount INTEGER NOT NULL DEFAULT 50
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                user_id INTEGER PRIMARY KEY,
+                last_seen TIMESTAMP
+            )
+        """)
         await db.commit()
 
 
@@ -1856,3 +1862,120 @@ async def get_daily_case_deal():
             )
             await db.commit()
             return {"case_id": chosen, "discount": discount}
+
+
+# ═══════════ ПУБЛИЧНАЯ СТАТИСТИКА ═══════════
+
+async def get_public_stats():
+    """Возвращает публичную статистику для лендинга /stats."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Общее количество юзеров
+        async with db.execute("SELECT COUNT(*) FROM users") as cur:
+            total_users = (await cur.fetchone())[0] or 0
+
+        # Онлайн (юзеры, заходившие за последние 5 минут)
+        # В таблице user_visits хранится только дата (без времени),
+        # поэтому берём активных за сегодня
+        today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+        async with db.execute(
+            "SELECT COUNT(DISTINCT user_id) FROM user_visits WHERE visit_date = ?",
+            (today,),
+        ) as cur:
+            online_today = (await cur.fetchone())[0] or 0
+
+        # Всего сыграно игр
+        async with db.execute(
+            "SELECT COALESCE(SUM(games_played), 0) FROM users"
+        ) as cur:
+            total_games = (await cur.fetchone())[0] or 0
+
+        # Всего поставлено монет
+        async with db.execute(
+            "SELECT COALESCE(SUM(total_wagered), 0) FROM users"
+        ) as cur:
+            total_wagered = (await cur.fetchone())[0] or 0
+
+        # Всего выиграно монет
+        async with db.execute(
+            "SELECT COALESCE(SUM(total_won), 0) FROM users"
+        ) as cur:
+            total_won = (await cur.fetchone())[0] or 0
+
+        # Общий джекпот
+        async with db.execute("SELECT amount FROM jackpot WHERE id = 1") as cur:
+            row = await cur.fetchone()
+            jackpot = row[0] if row else 0
+
+        # Оборот за 7 дней (по house_flow)
+        seven_days_ago = (
+            datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        ).isoformat()
+        async with db.execute(
+            "SELECT DATE(created_at), "
+            "COALESCE(SUM(wagered), 0), COALESCE(SUM(paid), 0) "
+            "FROM house_flow WHERE created_at >= ? "
+            "GROUP BY DATE(created_at) ORDER BY DATE(created_at)",
+            (seven_days_ago,),
+        ) as cur:
+            turnover_rows = await cur.fetchall()
+
+        turnover_by_day = [
+            {"date": r[0], "wagered": r[1] or 0, "paid": r[2] or 0}
+            for r in turnover_rows
+        ]
+
+        # Live-лента (последние 20 крупных выигрышей > 1000)
+        async with db.execute(
+            "SELECT username, game, win, created_at FROM live_feed "
+            "WHERE win >= 1000 ORDER BY id DESC LIMIT 20"
+        ) as cur:
+            feed_rows = await cur.fetchall()
+
+        live_feed_data = [
+            {
+                "username": r[0] or "Игрок",
+                "game": r[1],
+                "win": r[2],
+                "created_at": r[3],
+            }
+            for r in feed_rows
+        ]
+
+        return {
+            "total_users": total_users,
+            "online_today": online_today,
+            "total_games": total_games,
+            "total_wagered": total_wagered,
+            "total_won": total_won,
+            "jackpot": jackpot,
+            "turnover_by_day": turnover_by_day,
+            "live_feed": live_feed_data,
+        }
+
+
+async def get_online_count(minutes: int = 5) -> int:
+    """
+    Реальный онлайн за последние N минут.
+    Требует таблицу user_sessions (создаётся в migrate).
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        since = (
+            datetime.datetime.utcnow() - datetime.timedelta(minutes=minutes)
+        ).isoformat()
+        async with db.execute(
+            "SELECT COUNT(*) FROM user_sessions WHERE last_seen >= ?",
+            (since,),
+        ) as cur:
+            return (await cur.fetchone())[0] or 0
+
+
+async def touch_session(user_id: int):
+    """Обновляет сессию юзера (для подсчёта онлайна)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        now = datetime.datetime.utcnow().isoformat()
+        await db.execute(
+            "INSERT INTO user_sessions (user_id, last_seen) VALUES (?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET last_seen = ?",
+            (user_id, now, now),
+        )
+        await db.commit()
