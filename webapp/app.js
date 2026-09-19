@@ -5267,6 +5267,16 @@ async function bootstrap() {
 
     try {
         console.log('📡 loadProfile...');
+    // Обработка start_param
+    const startParam = tg.initDataUnsafe?.start_param || '';
+    console.log('start_param:', startParam);
+    
+    if (startParam === 'pvp') {
+        setTimeout(() => showScreen('pvp'), 300);
+    } else if (startParam.startsWith('pvp_')) {
+        const tableId = parseInt(startParam.split('_')[1]);
+        if (tableId) setTimeout(() => openPvpTable(tableId), 800);
+    }
         await loadProfile();
         console.log('✅ loadProfile OK');
     } catch (e) {
