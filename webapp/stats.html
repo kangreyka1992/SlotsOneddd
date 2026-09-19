@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 SlotsGaming — Статистика проекта</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: radial-gradient(ellipse at top, #151b26 0%, #0a0e14 60%);
+  color: #e8eaed;
+  min-height: 100vh;
+  padding: 20px;
+}
+.container { max-width: 1200px; margin: 0 auto; }
+.header {
+  text-align: center;
+  margin-bottom: 40px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.header h1 {
+  font-size: 32px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #ff9b26, #ffc107);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+}
+.header p { color: #8a92a3; font-size: 14px; }
+.header .live-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  background: rgba(61, 214, 140, 0.15);
+  border: 1px solid rgba(61, 214, 140, 0.4);
+  border-radius: 20px;
+  font-size: 12px; font-weight: 700;
+  color: #3dd68c;
+  margin-top: 12px;
+}
+.header .live-badge::before {
+  content: '';
+  width: 8px; height: 8px;
+  background: #3dd68c;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.jackpot-hero {
+  background: linear-gradient(135deg, #4a1c1c, #8b1c1c, #4a1c1c);
+  border: 2px solid #ffc107;
+  border-radius: 16px;
+  padding: 30px;
+  text-align: center;
+  margin-bottom: 30px;
+  box-shadow: 0 0 40px rgba(255, 193, 7, 0.3);
+  animation: jackpotPulse 2s infinite;
+}
+@keyframes jackpotPulse {
+  0%, 100% { box-shadow: 0 0 40px rgba(255, 193, 7, 0.3); }
+  50% { box-shadow: 0 0 60px rgba(255, 193, 7, 0.6); }
+}
+.jackpot-hero .label {
+  font-size: 12px; font-weight: 900;
+  color: #ffc107;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.jackpot-hero .value {
+  font-size: 48px; font-weight: 900;
+  color: #fff;
+  font-family: 'Orbitron', monospace;
+  text-shadow: 0 0 30px #ffc107;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 30px;
+}
+.stat-card {
+  background: #1a1d24;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+.stat-card .icon { font-size: 28px; margin-bottom: 8px; }
+.stat-card .value {
+  font-size: 24px; font-weight: 900;
+  color: #ff9b26;
+  font-family: 'Orbitron', monospace;
+  margin-bottom: 4px;
+}
+.stat-card .label {
+  font-size: 12px; color: #8a92a3;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+
+.section-title {
+  font-size: 18px; font-weight: 800;
+  margin-bottom: 16px;
+  color: #fff;
+}
+
+.chart-container {
+  background: #1a1d24;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 30px;
+  height: 320px;
+}
+
+.feed-list {
+  background: #1a1d24;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+.feed-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #232732;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.feed-item .name { color: #ff9b26; font-weight: 700; }
+.feed-item .game { color: #8a92a3; font-size: 12px; }
+.feed-item .win {
+  color: #3dd68c; font-weight: 900;
+  font-family: 'Orbitron', monospace;
+  margin-left: auto;
+}
+.feed-item .time { color: #5a6373; font-size: 11px; }
+
+.footer {
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  color: #5a6373;
+  font-size: 12px;
+}
+
+.empty-feed { text-align: center; padding: 40px; color: #5a6373; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>🎰 SlotsGaming</h1>
+    <p>Публичная статистика проекта</p>
+    <div class="live-badge">
+      <span>🟢 Онлайн: <b id="onlineNow">0</b></span>
+    </div>
+  </div>
+
+  <div class="jackpot-hero">
+    <div class="label">💰 Общий джекпот</div>
+    <div class="value" id="jackpotValue">0</div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="icon">👥</div>
+      <div class="value" id="totalUsers">0</div>
+      <div class="label">Всего игроков</div>
+    </div>
+    <div class="stat-card">
+      <div class="icon">🎮</div>
+      <div class="value" id="totalGames">0</div>
+      <div class="label">Сыграно игр</div>
+    </div>
+    <div class="stat-card">
+      <div class="icon">🪙</div>
+      <div class="value" id="totalWagered">0</div>
+      <div class="label">Поставлено монет</div>
+    </div>
+    <div class="stat-card">
+      <div class="icon">🏆</div>
+      <div class="value" id="totalWon">0</div>
+      <div class="label">Выиграно монет</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">📈 Оборот за 7 дней</h2>
+  <div class="chart-container">
+    <canvas id="turnoverChart"></canvas>
+  </div>
+
+  <h2 class="section-title">🔥 Live-лента крупных выигрышей</h2>
+  <div class="feed-list" id="liveFeed">
+    <div class="empty-feed">Загрузка...</div>
+  </div>
+
+  <div class="footer">
+    Данные обновляются в реальном времени · SlotsGaming © 2026
+  </div>
+</div>
+
+<script>
+let chart = null;
+
+function fmt(n) {
+  return (n || 0).toLocaleString('ru-RU').replace(/,/g, '.');
+}
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const dt = new Date(iso + 'Z');
+  const now = new Date();
+  const diff = Math.floor((now - dt) / 1000);
+  if (diff < 60) return diff + ' сек назад';
+  if (diff < 3600) return Math.floor(diff / 60) + ' мин назад';
+  if (diff < 86400) return Math.floor(diff / 3600) + ' ч назад';
+  return Math.floor(diff / 86400) + ' дн назад';
+}
+
+async function loadStats() {
+  try {
+    const res = await fetch('/api/public/stats');
+    const d = await res.json();
+
+    document.getElementById('jackpotValue').textContent = fmt(d.jackpot) + ' 🪙';
+    document.getElementById('totalUsers').textContent = fmt(d.total_users);
+    document.getElementById('totalGames').textContent = fmt(d.total_games);
+    document.getElementById('totalWagered').textContent = fmt(d.total_wagered);
+    document.getElementById('totalWon').textContent = fmt(d.total_won);
+    document.getElementById('onlineNow').textContent = d.online_now || 0;
+
+    // График
+    const days = d.turnover_by_day || [];
+    const labels = days.map(x => x.date.slice(5));
+    const wageredData = days.map(x => x.wagered);
+    const paidData = days.map(x => x.paid);
+
+    if (chart) {
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = wageredData;
+      chart.data.datasets[1].data = paidData;
+      chart.update();
+    } else {
+      const ctx = document.getElementById('turnoverChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Поставлено',
+              data: wageredData,
+              borderColor: '#ff9b26',
+              backgroundColor: 'rgba(255, 155, 38, 0.15)',
+              tension: 0.4,
+              fill: true,
+            },
+            {
+              label: 'Выплачено',
+              data: paidData,
+              borderColor: '#3dd68c',
+              backgroundColor: 'rgba(61, 214, 140, 0.15)',
+              tension: 0.4,
+              fill: true,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#e8eaed', font: { size: 13 } } },
+          },
+          scales: {
+            x: { ticks: { color: '#8a92a3' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { ticks: { color: '#8a92a3' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          },
+        },
+      });
+    }
+
+    // Live-лента
+    const feedEl = document.getElementById('liveFeed');
+    if (!d.live_feed || !d.live_feed.length) {
+      feedEl.innerHTML = '<div class="empty-feed">Пока нет крупных выигрышей</div>';
+    } else {
+      const gameIcons = {
+        'Кейсы': '📦', 'Слоты 5×3': '🎰', 'Mines': '⛏',
+        'Crash': '📈', 'Кости': '🎲', 'Penalti': '⚽',
+        'Монетка': '🪙', 'Plinko': '🎯', 'Рулетка': '🔫',
+      };
+      feedEl.innerHTML = d.live_feed.map(f => `
+        <div class="feed-item">
+          <span style="font-size:20px;">${gameIcons[f.game] || '🎉'}</span>
+          <span class="name">@${f.username}</span>
+          <span class="game">${f.game}</span>
+          <span class="time">${timeAgo(f.created_at)}</span>
+          <span class="win">+${fmt(f.win)} 🪙</span>
+        </div>
+      `).join('');
+    }
+  } catch (e) {
+    console.error('Stats load error:', e);
+  }
+}
+
+loadStats();
+setInterval(loadStats, 30000);
+</script>
+</body>
+</html>
