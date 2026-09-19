@@ -5314,3 +5314,11 @@ document.addEventListener('keydown', (e) => {
         return false;
     }
 }, true);
+  // PvP авто-обновление
+  setInterval(() => {
+    const active = document.querySelector('.screen.active');
+    if (active && active.id === 'screen-pvp') {
+      loadPvpTables();
+      loadPvpMyTable();
+    }
+  }, 5000);
