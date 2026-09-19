@@ -181,7 +181,7 @@ async def cmd_pvp(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="⚔️  ОТКРЫТЬ PVP-АРЕНУ  ⚔️",
-            web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"),
+            web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp?startapp=pvp"),
         )],
     ])
 
