@@ -3878,6 +3878,37 @@ async function loadAdminStats() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
+async function exportReport(type) {
+    haptic();
+    toast('⏳ Формируем отчёт...', '');
+    try {
+        const res = await fetch(`/api/admin/export/${type}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData, days: 7 }),
+        });
+
+        if (!res.ok) {
+            throw new Error('Ошибка экспорта');
+        }
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${type}_${new Date().toISOString().slice(0,10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        toast('✅ Отчёт скачан', 'success');
+        SFX.cashout();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
 async function loadAdminWd() {
     try {
         const d = await api('/api/admin/withdrawals');
