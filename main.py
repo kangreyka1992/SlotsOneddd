@@ -6,6 +6,8 @@ import math
 import random
 import time
 import datetime
+import io
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 from urllib.parse import parse_qsl, quote
@@ -3336,6 +3338,163 @@ async def api_notifications_update(request: Request):
 
     await update_notification_settings(uid, **updates)
     return {"ok": True, "settings": await get_notification_settings(uid)}
+
+# ═══════════ ЭКСПОРТ В EXCEL ═══════════
+
+@app.post("/api/admin/export/users")
+async def api_admin_export_users(request: Request):
+    """Экспорт всех юзеров + балансы в Excel."""
+    data = await request.json()
+    admin_only(data.get("initData", ""))
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    async with aiosqlite.connect("casino.db") as db:
+        async with db.execute(
+            "SELECT user_id, username, balance, total_wagered, total_won, "
+            "games_played, daily_streak, created_at "
+            "FROM users ORDER BY balance DESC"
+        ) as cur:
+            rows = await cur.fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Users"
+
+    headers = ["ID", "Username", "Баланс", "Поставлено", "Выиграно",
+               "Игр", "Серия дней", "Создан"]
+    ws.append(headers)
+
+    header_fill = PatternFill("solid", fgColor="FF9B26")
+    header_font = Font(bold=True, color="000000")
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+
+    for r in rows:
+        ws.append(list(r))
+
+    ws.column_dimensions['A'].width = 15
+    ws.column_dimensions['B'].width = 25
+    for col in ['C', 'D', 'E']:
+        ws.column_dimensions[col].width = 15
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"users_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.post("/api/admin/export/transactions")
+async def api_admin_export_transactions(request: Request):
+    """Экспорт всех игр за период в Excel."""
+    data = await request.json()
+    admin_only(data.get("initData", ""))
+
+    days = int(data.get("days", 7))
+    since = (
+        datetime.datetime.utcnow() - datetime.timedelta(days=days)
+    ).isoformat()
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    async with aiosqlite.connect("casino.db") as db:
+        async with db.execute(
+            "SELECT id, user_id, game, win, created_at FROM live_feed "
+            "WHERE created_at >= ? ORDER BY id DESC",
+            (since,),
+        ) as cur:
+            rows = await cur.fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Live wins {days}d"
+
+    headers = ["ID", "User ID", "Игра", "Выигрыш", "Дата"]
+    ws.append(headers)
+
+    header_fill = PatternFill("solid", fgColor="FF9B26")
+    header_font = Font(bold=True, color="000000")
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+
+    for r in rows:
+        ws.append(list(r))
+
+    for col, w in [('A', 10), ('B', 15), ('C', 20), ('D', 15), ('E', 22)]:
+        ws.column_dimensions[col].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"transactions_{days}d_{datetime.datetime.utcnow().strftime('%Y%m%d')}.xlsx"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.post("/api/admin/export/rtp")
+async def api_admin_export_rtp(request: Request):
+    """Экспорт RTP по играм в Excel."""
+    data = await request.json()
+    admin_only(data.get("initData", ""))
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    async with aiosqlite.connect("casino.db") as db:
+        async with db.execute(
+            "SELECT game, COUNT(*) as cnt, "
+            "COALESCE(SUM(win), 0) as total_won "
+            "FROM live_feed GROUP BY game ORDER BY cnt DESC"
+        ) as cur:
+            rows = await cur.fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "RTP by game"
+
+    headers = ["Игра", "Записей в ленте", "Сумма выигрышей"]
+    ws.append(headers)
+
+    header_fill = PatternFill("solid", fgColor="FF9B26")
+    header_font = Font(bold=True, color="000000")
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+
+    for r in rows:
+        ws.append(list(r))
+
+    ws.column_dimensions['A'].width = 25
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 20
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"rtp_{datetime.datetime.utcnow().strftime('%Y%m%d')}.xlsx"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 # ═══════════ ЗАПУСК ═══════════
