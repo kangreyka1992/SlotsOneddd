@@ -5071,3 +5071,326 @@ body.theme-light .theme-toggle-switch::after {
     0%, 100% { transform: translateY(0); opacity: 0.6; }
     50%      { transform: translateY(4px); opacity: 1; }
 }
+/* ═══════════ PVP ARENA ═══════════ */
+
+.pvp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 16px;
+}
+
+/* Список открытых столов */
+.pvp-tables-list {
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.pvp-table-card {
+  display: grid; grid-template-columns: 48px 1fr auto;
+  align-items: center; gap: 12px;
+  padding: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: transform 0.15s, border-color 0.15s;
+}
+.pvp-table-card:active {
+  transform: scale(0.98);
+  border-color: var(--accent);
+}
+.pvp-table-icon {
+  font-size: 28px;
+  width: 48px; height: 48px;
+  display: grid; place-items: center;
+  background: var(--bg-elevated);
+  border-radius: 10px;
+}
+.pvp-table-info-body { min-width: 0; }
+.pvp-table-game { font-size: 14px; font-weight: 800; }
+.pvp-table-meta {
+  font-size: 11px; color: var(--text-muted); margin-top: 3px;
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.pvp-table-meta b { color: var(--accent); }
+.pvp-table-players {
+  font-size: 12px; font-weight: 800; color: var(--accent);
+  font-family: var(--font-num);
+}
+.pvp-lock { font-size: 14px; }
+
+/* Пустой список */
+.pvp-empty {
+  padding: 30px 20px; text-align: center;
+  color: var(--text-dim); font-size: 13px;
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px dashed var(--border);
+}
+
+/* Топ PvP */
+.pvp-top-list { display: flex; flex-direction: column; gap: 6px; }
+.pvp-top-item {
+  display: grid; grid-template-columns: 40px 1fr auto;
+  gap: 10px; align-items: center;
+  padding: 10px 14px; background: var(--bg-card); border-radius: 8px;
+  font-size: 13px;
+}
+.pvp-top-item.me { border: 1px solid var(--green); background: rgba(61, 214, 140, 0.08); }
+.pvp-top-place { text-align: center; font-size: 16px; }
+.pvp-top-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pvp-top-wr { font-family: var(--font-num); font-weight: 800; color: var(--accent); }
+
+/* Моя статистика */
+.pvp-stats-card {
+  padding: 20px;
+  background: linear-gradient(135deg, var(--bg-card), var(--bg-elevated));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  text-align: center;
+}
+.pvp-stat-val {
+  font-size: 22px; font-weight: 900;
+  font-family: var(--font-num); color: var(--accent);
+}
+.pvp-stat-lbl {
+  font-size: 10px; color: var(--text-muted); margin-top: 3px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+/* Мой активный стол */
+.pvp-my-table {
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(255, 155, 38, 0.15), rgba(124, 92, 255, 0.08));
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  box-shadow: 0 0 20px var(--accent-glow);
+  cursor: pointer;
+}
+.pvp-my-table-title {
+  font-size: 14px; font-weight: 800; color: var(--accent);
+  margin-bottom: 6px;
+}
+.pvp-my-table-meta { font-size: 12px; color: var(--text-muted); }
+.pvp-my-table-meta b { color: var(--text-main); }
+
+/* Стол внутри */
+.pvp-table-info {
+  padding: 14px 16px; margin-bottom: 16px;
+  background: var(--bg-card); border-radius: var(--radius);
+  font-size: 13px; line-height: 1.7;
+}
+.pvp-table-info b { color: var(--accent); font-family: var(--font-num); }
+
+.pvp-players {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 16px;
+}
+.pvp-player {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; background: var(--bg-card);
+  border-radius: 8px; border-left: 3px solid var(--text-dim);
+  font-size: 13px;
+}
+.pvp-player.me { border-left-color: var(--green); background: rgba(61, 214, 140, 0.06); }
+.pvp-player.eliminated { opacity: 0.4; }
+.pvp-player.eliminated::after {
+  content: '❌'; margin-left: auto; font-size: 16px;
+}
+.pvp-player.winner {
+  border-left-color: var(--accent);
+  background: linear-gradient(90deg, rgba(255, 193, 7, 0.15), transparent);
+  animation: pvpWinnerPulse 1.5s infinite;
+}
+@keyframes pvpWinnerPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.2); }
+  50%      { box-shadow: 0 0 25px rgba(255, 193, 7, 0.5); }
+}
+.pvp-player-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--bg-elevated); font-size: 18px;
+}
+.pvp-player-name { font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pvp-player-score {
+  font-family: var(--font-num); font-weight: 900;
+  color: var(--accent); font-size: 14px;
+}
+
+/* Игровая зона */
+.pvp-play-zone {
+  padding: 24px 16px; text-align: center;
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px dashed var(--border);
+}
+.pvp-play-btn {
+  width: 100%; padding: 18px;
+  background: linear-gradient(135deg, var(--accent), #e07a00);
+  color: #000; font-size: 16px; font-weight: 900;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-glow-gold);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: transform 0.15s;
+}
+.pvp-play-btn:active:not(:disabled) { transform: scale(0.97); }
+.pvp-play-btn:disabled {
+  opacity: 0.5; cursor: not-allowed;
+  background: var(--bg-elevated); color: var(--text-dim); box-shadow: none;
+}
+.pvp-round-status {
+  font-size: 13px; color: var(--text-muted);
+  margin-top: 12px; min-height: 20px;
+}
+
+/* Результаты раунда */
+.pvp-round-results {
+  margin-top: 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.pvp-round-results.hidden { display: none; }
+.pvp-round-item {
+  display: grid; grid-template-columns: 32px 1fr auto;
+  gap: 10px; align-items: center;
+  padding: 10px 14px; background: var(--bg-card);
+  border-radius: 8px; font-size: 13px;
+}
+.pvp-round-item.winner { border: 1px solid var(--accent); background: rgba(255, 193, 7, 0.08); }
+.pvp-round-place { font-size: 16px; text-align: center; }
+.pvp-round-name { font-weight: 600; }
+.pvp-round-score {
+  font-family: var(--font-num); font-weight: 800;
+  color: var(--accent);
+}
+
+/* Чат */
+.pvp-chat {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 10px;
+}
+.pvp-chat-item {
+  font-size: 12px; line-height: 1.4;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  word-wrap: break-word;
+}
+.pvp-chat-item.me { background: rgba(255, 155, 38, 0.15); }
+.pvp-chat-author {
+  color: var(--accent); font-weight: 800; margin-right: 6px;
+}
+.pvp-chat-empty {
+  text-align: center; color: var(--text-dim);
+  font-size: 12px; padding: 20px;
+}
+.pvp-chat-input {
+  display: flex; gap: 8px;
+}
+.pvp-chat-input input {
+  flex: 1; padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-main);
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+}
+.pvp-chat-input input:focus { border-color: var(--accent); }
+.pvp-chat-input button {
+  padding: 12px 18px;
+  background: var(--accent);
+  color: #000;
+  font-weight: 900;
+  border-radius: var(--radius);
+  font-size: 16px;
+  transition: transform 0.15s;
+}
+.pvp-chat-input button:active { transform: scale(0.95); }
+
+/* Модалка создания */
+.pvp-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.92);
+  z-index: 4000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(8px);
+}
+.pvp-modal.hidden { display: none; }
+.pvp-modal-content {
+  width: 100%; max-width: 440px;
+  max-height: 90vh; overflow-y: auto;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  border: 1px solid var(--border);
+}
+.pvp-modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px;
+}
+.pvp-modal-title { font-size: 18px; font-weight: 900; color: var(--accent); }
+.pvp-form-label {
+  font-size: 12px; font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 14px 0 8px;
+}
+.pvp-games-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+}
+.pvp-games-grid .pvp-game-btn {
+  padding: 14px 10px;
+  background: var(--bg-elevated);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  font-size: 13px; font-weight: 700;
+  color: var(--text-main);
+  transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.pvp-games-grid .pvp-game-btn.active {
+  border-color: var(--accent);
+  background: rgba(255, 155, 38, 0.1);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+.pvp-bets-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.pvp-bets-grid .pvp-bet-btn {
+  padding: 12px 8px;
+  background: var(--bg-elevated);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  font-size: 13px; font-weight: 800;
+  font-family: var(--font-num);
+  color: var(--text-main);
+  transition: all 0.15s;
+}
+.pvp-bets-grid .pvp-bet-btn.active {
+  border-color: var(--accent);
+  background: rgba(255, 155, 38, 0.1);
+}
+.pvp-formats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.pvp-formats-grid .pvp-format-btn {
+  padding: 12px 6px;
+  background: var(--bg-elevated);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  font-size: 11px; font-weight: 700;
+  color: var(--text-main);
+  transition: all 0.15s;
+  line-height: 1.2;
+}
+.pvp-formats-grid .pvp-format-btn.active {
+  border-color: var(--accent);
+  background: rgba(255, 155, 38, 0.1);
+}
