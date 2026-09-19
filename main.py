@@ -39,7 +39,6 @@ from database import (
     XP_PER_LEVEL,
     MAX_LEVEL,
     get_stats, get_last_withdrawals, update_withdrawal,
-    get_notif_settings, set_notif_setting,
     get_user_by_username, get_all_user_ids,
     create_promo, delete_promo, list_promos,
     log_admin_action, get_admin_logs,
