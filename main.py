@@ -78,16 +78,7 @@ ADMIN_IDS = [7643224285]
 WITHDRAW_RATES = {
     'stars': {'rate': 150, 'min': 1000, 'unit': '⭐'},
 }
-WHEEL_PRIZES = [
-    {"emoji": "🪙", "text": "500",   "rarity": "common",    "color": "#8b95a5"},
-    {"emoji": "💎", "text": "1K",    "rarity": "uncommon",  "color": "#00d68f"},
-    {"emoji": "🎁", "text": "КЕЙС",  "rarity": "rare",      "color": "#4a9eff"},
-    {"emoji": "⭐", "text": "5K",    "rarity": "epic",      "color": "#7c5cff"},
-    {"emoji": "👑", "text": "25K",   "rarity": "legendary", "color": "#ffc107"},
-    {"emoji": "💰", "text": "100K",  "rarity": "mythic",    "color": "#ff4757"},
-    {"emoji": "🎰", "text": "ДЖЕК",  "rarity": "legendary", "color": "#a855f7"},
-    {"emoji": "🏆", "text": "10K",   "rarity": "epic",      "color": "#ff9b26"},
-]
+
 
 # ═══════════ ПОДКРУТКА ШАНСОВ ═══════════
 
@@ -111,6 +102,7 @@ async def _apply_payout(uid: int, win_amount: int) -> int:
     if payout_mult == 1.0 or win_amount <= 0:
         return win_amount
     return max(0, int(win_amount * payout_mult))
+
 
 async def _is_force_lose(uid: int) -> bool:
     """Если винрейт < 1% — игрок всегда проигрывает."""
@@ -228,18 +220,11 @@ async def _process_game_rewards(uid: int, bet: int, win: int, game: str,
 
 
 async def periodic_cleanup():
-    """Фоновый таск — чистит зависшие игры и очередь дуэлей."""
+    """Фоновый таск — чистит зависшие игры."""
     while True:
         await asyncio.sleep(60)
-        try:
-            cleanup_penalti()
-        except Exception as e:
-            print(f"cleanup_penalti error: {e}")
-        try:
-            cleanup_duel()
-        except Exception as e:
-            print(f"cleanup_duel error: {e}")
-
+        # Всё, что нужно чистить — уже не в памяти
+        # (penalti и duel удалены)
 
 
 @asynccontextmanager
@@ -290,6 +275,7 @@ async def root():
 async def health():
     return {"status": "ok"}
 
+
 async def send_bonus_reminders():
     """Напоминает о сгорающих бонусах (ежедневный, кэшбэк, колесо)."""
     now = datetime.datetime.utcnow()
@@ -297,12 +283,10 @@ async def send_bonus_reminders():
 
     for uid in users:
         try:
-            # Проверяем ежедневный бонус
             last, streak = await get_daily_info(uid)
             if last:
                 last_dt = datetime.datetime.fromisoformat(last)
                 hours_passed = (now - last_dt).total_seconds() / 3600
-                # Если бонус доступен через 2 часа, напоминаем
                 if 22 <= hours_passed < 24:
                     await bot.send_message(
                         uid,
@@ -345,7 +329,6 @@ async def send_tournament_alerts():
     if not tour:
         return
 
-    # Проверяем, осталось ли меньше 24 часов
     ends_at = datetime.datetime.fromisoformat(tour["ends_at"])
     now = datetime.datetime.utcnow()
     hours_left = (ends_at - now).total_seconds() / 3600
@@ -366,8 +349,6 @@ async def send_tournament_alerts():
                 print(f"tournament reminder error for {uid}: {e}")
 
 
-
-    
 # ═══════════ CRYPTO DIRECT ═══════════
 
 @app.post("/api/crypto/create")
@@ -556,7 +537,8 @@ async def api_profile(request: Request):
         "discount": discount,
     }
 
-# ═══════════ УВЕДОМЛЕНИЯ ═══════════
+
+# ═══════════ ЛЕНТА / ДОСТИЖЕНИЯ / ТОП ═══════════
 
 @app.post("/api/feed/live")
 async def api_feed_live(request: Request):
@@ -596,83 +578,6 @@ async def api_top(request: Request):
             for u in top
         ]
     }
-
-
-# ═══════════ СЛОТЫ 3×3 ═══════════
-
-@app.post("/api/slots/spin")
-async def api_slots(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    bet = int(data.get("bet", 0))
-
-    if bet <= 0 or bet > 10000000000:
-        raise HTTPException(400, "invalid_bet")
-
-    balance = await get_balance(uid)
-    if balance < bet:
-        raise HTTPException(400, "not_enough_coins")
-
-    await add_balance(uid, -bet)
-
-    symbols = ["🍒", "🍋", "🍊", "💎", "🤑", "7️⃣"]
-    result = [random.choice(symbols) for _ in range(3)]
-
-    base_win = 0
-    jackpot = False
-    if result[0] == result[1] == result[2]:
-        if result[0] == "🤑":
-            base_win, jackpot = bet * 10, True
-        elif result[0] == "💎":
-            base_win = bet * 5
-        elif result[0] == "7️⃣":
-            base_win = bet * 4
-        else:
-            base_win = bet * 3
-    elif result[0] == result[1] or result[1] == result[2] or result[0] == result[2]:
-        base_win = bet * 2
-
-    base_win_bool = base_win > 0
-    if await _is_force_lose(uid):
-        final_win_bool = False
-    else:
-        final_win_bool = await _apply_winrate(uid, base_win_bool)
-
-    if final_win_bool and not base_win_bool:
-        win = int(bet * random.choice([1.5, 2.0, 2.5, 3.0]))
-        jackpot = False
-    elif not final_win_bool and base_win_bool:
-        win = 0
-        jackpot = False
-    else:
-        win = base_win
-
-    await log_game(uid, bet, win)
-    await add_battle_pass_xp(uid, bet // 10)
-    await log_house_flow(wagered=bet, paid=win)
-    await _process_game_rewards(uid, bet, win, "slots", user.get("username"))
-    nb = await get_balance(uid)
-
-    await update_quest_progress(uid, "bets_count", 1)
-    await update_quest_progress(uid, "wagered", bet)
-    await update_quest_progress(uid, "game_slots", 1)
-    if win > 0:
-        await update_quest_progress(uid, "wins", 1)
-
-    await unlock_achievement(uid, "first_bet")
-    if win > 0:
-        await unlock_achievement(uid, "first_win")
-    if jackpot and win > 0:
-        await unlock_achievement(uid, "jackpot")
-    if win >= 100000:
-        await unlock_achievement(uid, "big_win")
-    if bet >= 100000:
-        await unlock_achievement(uid, "high_roller")
-    if nb >= 1000000:
-        await unlock_achievement(uid, "millionaire")
-
-    return {"result": result, "win": win, "jackpot": jackpot, "balance": nb}
 
 
 # ═══════════ СЛОТЫ 5×3 ═══════════
@@ -776,8 +681,7 @@ async def api_slots2_spin(request: Request):
     await add_balance(uid, -total_bet)
 
     field, total_win, line_wins = _slot_spin(bet, lines_count)
-    
-    # ФИКС: при винрейте < 1% — обнуляем выигрыш
+
     if await _is_force_lose(uid):
         total_win = 0
         line_wins = []
@@ -789,7 +693,6 @@ async def api_slots2_spin(request: Request):
     elif not final_win_bool and base_win_bool:
         total_win = 0
         line_wins = []
-    # ФИКС: раскомментировано — подкрутка выплат
     total_win = await _apply_payout(uid, total_win)
 
     if total_win > 0:
@@ -827,7 +730,7 @@ async def api_slots2_spin(request: Request):
     }
 
 
-# ═══════════ MINES 2.0 (7×7) ═══════════
+# ═══════════ MINES 7×7 ═══════════
 
 mines_games: dict[int, dict] = {}
 MINES_FIELD = 7
@@ -848,7 +751,6 @@ async def api_mines_start(request: Request):
     bet = int(data.get("bet", 0))
     mines_count = int(data.get("mines", 5))
 
-    # ФИКС: если игра уже идёт — возвращаем ставку
     existing = mines_games.pop(uid, None)
     if existing:
         await add_balance(uid, existing["bet"])
@@ -913,7 +815,6 @@ async def api_mines_open(request: Request):
             bias = (winrate - 50) / 50.0
             if random.random() < bias:
                 hit_mine = False
-    # ФИКС: при винрейте < 1% — первая открытая клетка ВСЕГДА мина
     if await _is_force_lose(uid) and len(game["opened"]) == 0:
         hit_mine = True
 
@@ -983,15 +884,15 @@ async def api_mines_cashout(request: Request):
     data = await request.json()
     user = validate_init_data(data.get("initData", ""))
     uid = user["id"]
-    # ФИКС: pop вместо get — защита от race condition
     game = mines_games.pop(uid, None)
     if not game or not game["opened"]:
         if game:
-            mines_games[uid] = game  # возврат, если ничего не открыто
+            mines_games[uid] = game
         raise HTTPException(400, "nothing_to_cashout")
 
     step_mult = MINES_MULT[game["mines_count"]]
     prize = int(game["bet"] * (1 + step_mult * len(game["opened"])))
+    prize = await _apply_payout(uid, prize)
     bet = game["bet"]
     await add_balance(uid, prize)
     await update_quest_progress(uid, "bets_count", 1)
@@ -1030,6 +931,7 @@ CRASH_MULT = 0.18
 
 def crash_mult_from_elapsed(elapsed: float) -> float:
     return round(1.0 + (elapsed ** CRASH_EXP) * CRASH_MULT, 2)
+
 
 @app.post("/api/crash/start")
 async def api_crash_start(request: Request):
@@ -1084,9 +986,6 @@ async def api_crash_start(request: Request):
         "started_at": crash_games[uid]["started"],
     }
 
-
-   
-   
 
 @app.post("/api/crash/status")
 async def api_crash_status(request: Request):
@@ -1242,6 +1141,7 @@ async def api_dice(request: Request):
                 mult = 5.0
                 win = int(bet * mult)
 
+    win = await _apply_payout(uid, win)
     if win > 0:
         await add_balance(uid, win)
     await log_game(uid, bet, win)
@@ -1263,6 +1163,8 @@ async def api_dice(request: Request):
         await unlock_achievement(uid, "big_win")
 
     return {"roll": roll, "win": win, "mult": mult, "balance": nb}
+
+
 # ═══════════ РУССКАЯ РУЛЕТКА ═══════════
 
 rr_games: dict[int, dict] = {}
@@ -1276,7 +1178,6 @@ async def api_rr_start(request: Request):
     uid = user["id"]
     bet = int(data.get("bet", 0))
 
-    # ФИКС: возврат старой ставки
     existing = rr_games.pop(uid, None)
     if existing:
         await add_balance(uid, existing["bet"])
@@ -1304,7 +1205,6 @@ async def api_rr_spin(request: Request):
 
     step = game["step"]
 
-    # ФИКС: при винрейте < 1% — всегда выстрел
     if await _is_force_lose(uid):
         shot = True
     else:
@@ -1340,6 +1240,7 @@ async def api_rr_spin(request: Request):
     return {"shot": False, "won": False, "step": step, "mult": mult,
             "prize": int(game["bet"] * mult), "next_bullets": step + 1,
             "balance": await get_balance(uid)}
+
 
 @app.post("/api/rr/cashout")
 async def api_rr_cashout(request: Request):
@@ -1394,9 +1295,7 @@ async def api_plinko(request: Request):
     mults = PLINKO_MULTS[risk]
     n = len(mults) - 1
 
-    # ФИКС: при винрейте < 1% — всегда противоположная сторона
     if await _is_force_lose(uid):
-        # Ищем слот с нулевым множителем
         zero_slots = [i for i, m in enumerate(mults) if m == 0]
         slot = zero_slots[0] if zero_slots else 0
         mult = 0.0
@@ -1450,232 +1349,6 @@ async def api_plinko(request: Request):
     return {"slot": slot, "mult": mult, "win": win, "balance": nb}
 
 
-# ═══════════ PENALTI ═══════════
-
-penalti_games: dict = {}
-PENALTI_TIMEOUT = 300
-PENALTI_MULTS = [1.6, 2.2, 3.0, 4.5, 7.0]
-
-PENALTI_KEEPER_WEIGHTS = [
-    1, 2, 1,
-    2, 4, 2,
-    1, 2, 1,
-]
-
-PENALTI_SAVE_CHANCE = [0.20, 0.32, 0.45, 0.55, 0.65]
-
-
-def _free_zones(used_zones: set) -> list:
-    return [z for z in range(9) if z not in used_zones]
-
-
-def _keeper_pick_zone(step: int, used_zones: set) -> int:
-    weights = list(PENALTI_KEEPER_WEIGHTS)
-    total = sum(weights)
-    r = random.random() * total
-    cum = 0
-    picked = 4
-    for i, w in enumerate(weights):
-        cum += w
-        if r <= cum:
-            picked = i
-            break
-    if picked in used_zones:
-        free = _free_zones(used_zones)
-        if free:
-            picked = random.choice(free)
-    return picked
-
-
-def _keeper_dive_target(keeper_zone: int, player_zone: int,
-                        is_save: bool, used_zones: set) -> int:
-    if is_save:
-        return player_zone
-    candidates = [z for z in range(9)
-                  if z != player_zone and z not in used_zones]
-    if not candidates:
-        candidates = [z for z in range(9) if z != player_zone]
-    if candidates:
-        return random.choice(candidates)
-    return (player_zone + 1) % 9
-
-
-def cleanup_penalti():
-    now = time.time()
-    for uid in list(penalti_games.keys()):
-        game = penalti_games.get(uid)
-        if not game:
-            continue
-        if now - game.get("started", now) > PENALTI_TIMEOUT:
-            del penalti_games[uid]
-
-
-@app.post("/api/penalti/start")
-async def api_penalti_start(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    bet = int(data.get("bet", 0))
-
-    cleanup_penalti()
-
-    existing = penalti_games.pop(uid, None)
-    if existing:
-        if existing.get("step", 0) == 0:
-            await add_balance(uid, existing["bet"])
-
-    if bet <= 0 or bet > 10000000000:
-        raise HTTPException(400, "invalid_bet")
-
-    balance = await get_balance(uid)
-    if balance < bet:
-        raise HTTPException(400, "not_enough_coins")
-
-    await add_balance(uid, -bet)
-    penalti_games[uid] = {
-        "bet": bet,
-        "step": 0,
-        "history": [],
-        "started": time.time(),
-    }
-    return {
-        "balance": await get_balance(uid),
-        "bet": bet,
-        "step": 0,
-        "goal": 0,
-        "history": [],
-    }
-
-
-@app.post("/api/penalti/kick")
-async def api_penalti_kick(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    zone = int(data.get("zone", -1))
-
-    if zone < 0 or zone > 8:
-        raise HTTPException(400, "invalid_zone")
-
-    game = penalti_games.get(uid)
-    if not game:
-        raise HTTPException(400, "no_game")
-
-    if zone in game["history"]:
-        raise HTTPException(400, "zone_already_used")
-
-    step = game["step"]
-    if step >= 5:
-        raise HTTPException(400, "already_max")
-
-    used_zones = set(game["history"])
-    keeper_zone = _keeper_pick_zone(step, used_zones)
-
-    base_chance = PENALTI_SAVE_CHANCE[step]
-    is_save = random.random() < base_chance
-
-    dive_zone = _keeper_dive_target(keeper_zone, zone, is_save, used_zones)
-
-    if is_save:
-        bet = game["bet"]
-        penalti_games.pop(uid, None)
-        await log_game(uid, bet, 0)
-        await log_house_flow(wagered=bet, paid=0)
-        return {
-            "goal": False,
-            "save": True,
-            "zone": zone,
-            "keeper_zone": keeper_zone,
-            "keeper_dive_zone": dive_zone,
-            "step": step,
-            "bet": bet,
-            "history": game["history"],
-            "balance": await get_balance(uid),
-        }
-
-    game["history"].append(zone)
-    step += 1
-    game["step"] = step
-    mult = PENALTI_MULTS[step - 1]
-    prize = int(game["bet"] * mult)
-
-    if step >= 5:
-        bet = game["bet"]
-        penalti_games.pop(uid, None)
-        await add_balance(uid, prize)
-        await update_quest_progress(uid, "bets_count", 1)
-        await update_quest_progress(uid, "wagered", bet)
-        await update_quest_progress(uid, "wins", 1)
-        await log_game(uid, bet, prize)
-        await log_house_flow(wagered=bet, paid=prize)
-        await _process_game_rewards(uid, bet, prize, "penalti", user.get("username"))
-        await unlock_achievement(uid, "first_bet")
-        await unlock_achievement(uid, "first_win")
-        if prize >= 100000:
-            await unlock_achievement(uid, "big_win")
-        return {
-            "goal": True,
-            "save": False,
-            "zone": zone,
-            "keeper_zone": keeper_zone,
-            "keeper_dive_zone": dive_zone,
-            "step": step,
-            "maxed": True,
-            "mult": mult,
-            "prize": prize,
-            "history": game["history"],
-            "balance": await get_balance(uid),
-        }
-
-    return {
-        "goal": True,
-        "save": False,
-        "zone": zone,
-        "keeper_zone": keeper_zone,
-        "keeper_dive_zone": dive_zone,
-        "step": step,
-        "maxed": False,
-        "mult": mult,
-        "prize": prize,
-        "history": game["history"],
-        "balance": await get_balance(uid),
-    }
-
-
-@app.post("/api/penalti/cashout")
-async def api_penalti_cashout(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    game = penalti_games.get(uid)
-    if not game or game["step"] <= 0:
-        raise HTTPException(400, "nothing_to_cashout")
-
-    mult = PENALTI_MULTS[game["step"] - 1]
-    prize = int(game["bet"] * mult)
-    bet = game["bet"]
-    penalti_games.pop(uid, None)
-    await add_balance(uid, prize)
-    await log_game(uid, bet, prize)
-    await add_battle_pass_xp(uid, bet // 10)
-    await log_house_flow(wagered=bet, paid=prize)
-    await _process_game_rewards(uid, bet, prize, "penalti", user.get("username"))
-    await unlock_achievement(uid, "first_bet")
-    return {"prize": prize, "mult": mult, "balance": await get_balance(uid)}
-
-
-@app.post("/api/penalti/reset")
-async def api_penalti_reset(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    game = penalti_games.pop(uid, None)
-    if game:
-        if game.get("step", 0) == 0:
-            await add_balance(uid, game["bet"])
-    return {"balance": await get_balance(uid)}
-
-
 # ═══════════ МОНЕТКА ═══════════
 
 @app.post("/api/coin/flip")
@@ -1697,7 +1370,6 @@ async def api_coin_flip(request: Request):
 
     await add_balance(uid, -bet)
 
-    # ФИКС: при винрейте < 1% — всегда противоположная сторона
     if await _is_force_lose(uid):
         result = "tails" if side == "heads" else "heads"
     else:
@@ -1738,132 +1410,6 @@ async def api_coin_flip(request: Request):
         await unlock_achievement(uid, "first_win")
 
     return {"result": result, "win": win, "mult": mult, "balance": nb}
-
-
-# ═══════════ PVP ДУЭЛЬ ═══════════
-
-duel_queue: list[dict] = []
-duel_active: dict[str, dict] = {}
-DUEL_QUEUE_TIMEOUT = 120
-DUEL_ACTIVE_TIMEOUT = 300
-
-_duel_lock = asyncio.Lock()
-
-
-def cleanup_duel():
-    now = time.time()
-    for i in range(len(duel_queue) - 1, -1, -1):
-        q = duel_queue[i]
-        if now - q.get("joined", now) > DUEL_QUEUE_TIMEOUT:
-            duel_queue.pop(i)
-    for did in list(duel_active.keys()):
-        g = duel_active.get(did)
-        if not g:
-            continue
-        if now - g.get("created", now) > DUEL_ACTIVE_TIMEOUT:
-            del duel_active[did]
-
-
-@app.post("/api/duel/join")
-async def api_duel_join(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    bet = int(data.get("bet", 0))
-
-    async with _duel_lock:
-        cleanup_duel()
-
-        if bet <= 0 or bet > 10000000000:
-            raise HTTPException(400, "invalid_bet")
-
-        for i in range(len(duel_queue) - 1, -1, -1):
-            if duel_queue[i]["uid"] == uid:
-                duel_queue.pop(i)
-
-        for did, g in list(duel_active.items()):
-            if uid in (g["p1"], g["p2"]):
-                if uid in g.get("claimed", set()):
-                    del duel_active[did]
-                else:
-                    raise HTTPException(400, "already_in_duel")
-
-        balance = await get_balance(uid)
-        if balance < bet:
-            raise HTTPException(400, "not_enough_coins")
-
-        opponent = None
-        for i, q in enumerate(duel_queue):
-            if q["bet"] == bet and q["uid"] != uid:
-                opponent = duel_queue.pop(i)
-                break
-
-        if not opponent:
-            duel_queue.append({"uid": uid, "bet": bet, "joined": time.time()})
-            return {"status": "waiting", "queue_size": len(duel_queue)}
-
-        await add_balance(uid, -bet)
-        await add_balance(opponent["uid"], -bet)
-
-        # ФИКС: если игрок с винрейтом < 1% — он всегда проигрывает
-        if await _is_force_lose(uid):
-            winner = opponent["uid"]
-        elif await _is_force_lose(opponent["uid"]):
-            winner = uid
-        else:
-            winner = random.choice([uid, opponent["uid"]])
-
-        prize = int(bet * 2 * 0.98)
-
-        duel_id = f"duel_{int(time.time())}_{random.randint(1000,9999)}"
-        duel_active[duel_id] = {
-            "p1": uid, "p2": opponent["uid"], "bet": bet,
-            "winner": winner, "prize": prize,
-            "created": time.time(), "claimed": set(),
-        }
-
-        await add_balance(winner, prize)
-        await log_game(uid, bet, prize if winner == uid else 0)
-        await log_game(opponent["uid"], bet, prize if winner == opponent["uid"] else 0)
-        await log_house_flow(wagered=bet * 2, paid=prize)
-        await _process_game_rewards(uid, bet, prize if winner == uid else 0, "duel", user.get("username"))
-        await _process_game_rewards(opponent["uid"], bet, prize if winner == opponent["uid"] else 0, "duel")
-        await unlock_achievement(uid, "first_bet")
-        await unlock_achievement(opponent["uid"], "first_bet")
-        if winner == uid:
-            await unlock_achievement(uid, "first_win")
-        else:
-            await unlock_achievement(opponent["uid"], "first_win")
-
-        for player_uid, is_winner in [(uid, winner == uid), (opponent["uid"], winner == opponent["uid"])]:
-            try:
-                if is_winner:
-                    await bot.send_message(player_uid,
-                        f"🏆 <b>Победа в дуэли!</b>\n\nСтавка: <b>{bet}</b> 🪙\nВыигрыш: <b>+{prize}</b> 🪙",
-                        parse_mode="HTML")
-                else:
-                    await bot.send_message(player_uid,
-                        f"😢 <b>Поражение в дуэли</b>\n\nСтавка: <b>{bet}</b> 🪙 сгорела",
-                        parse_mode="HTML")
-            except Exception:
-                pass
-
-        return {
-            "status": "matched", "duel_id": duel_id, "winner": winner,
-            "you_win": winner == uid, "prize": prize,
-            "opponent_id": opponent["uid"], "balance": await get_balance(uid),
-        }
-
-@app.post("/api/duel/cancel")
-async def api_duel_cancel(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-    cleanup_duel()
-    for i in range(len(duel_queue) - 1, -1, -1):
-        if duel_queue[i]["uid"] == uid:
-            duel_queue.pop(i)
-    return {"status": "ok"}
 
 
 # ═══════════ CASE SYSTEM ═══════════
@@ -2156,7 +1702,6 @@ def _roll_case(case_id: str):
 
 
 async def _roll_case_with_winrate(uid: int, case_id: str):
-    # ФИКС: при винрейте < 1% — всегда common
     if await _is_force_lose(uid):
         items_pool = _get_case_items(case_id)
         items = items_pool.get("common") or items_pool["common"]
@@ -2169,10 +1714,8 @@ async def _roll_case_with_winrate(uid: int, case_id: str):
         if random.random() * 100 < (winrate - 50):
             item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
     elif winrate < 50 and rarity_id in ("legendary", "mythic"):
-        # Штраф усилен: перебрасываем ВСЕГДА, а не только с шансом
         if random.random() * 100 < (50 - winrate) * 1.5:
             item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
-            # И ещё раз, чтобы точно не дать топ
             if rarity_id in ("legendary", "mythic"):
                 item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = _roll_case(case_id)
 
@@ -2181,7 +1724,6 @@ async def _roll_case_with_winrate(uid: int, case_id: str):
 
 def _build_track(case_id: str, price_coins: int, win_item: dict):
     TRACK_LEN = 60
-    # ФИКС: рандомная позиция вместо 55
     WIN_POS = random.randint(50, 58)
     items_pool = _get_case_items(case_id)
     track = []
@@ -2223,21 +1765,21 @@ CASES = [
     ("pearl",         "Жемчужный",        "🦪", 500, "Глубины океана"),
     ("dragon_egg",    "Яйцо Дракона",     "🥚", 750, "Что внутри?"),
     ("phoenix_fire",  "Пламя Феникса",    "🔥", 900, "Возрождение"),
-    ("ice_crystal",   "Ледяной Кристалл", "❄️",1000, "Вечный холод"),
-    ("storm",         "Штормовой",        "🌩️",1200, "Гроза морей"),
-    ("volcano",       "Вулканический",    "🌋",1500, "Раскалённая лава"),
-    ("abyss",         "Бездна",           "🕳️",1800, "Тёмная сторона"),
-    ("galaxy",        "Галактический",    "🌌",2500, "Звёздная пыль"),
-    ("nebula",        "Туманность",       "🌠",3000, "Космический туман"),
-    ("supernova",     "Сверхновая",       "💥",3500, "Взрыв звезды"),
-    ("black_hole",    "Чёрная Дыра",      "⚫",4000, "Гравитация вне закона"),
-    ("quantum",       "Квантовый",        "🔬",4500, "Микро и макро"),
-    ("infinity",      "Бесконечность",    "♾️",5000, "Предела нет"),
-    ("chronos",       "Хронос",           "⏳",5500, "Власть над временем"),
-    ("poseidon",      "Посейдон",         "🔱",6000, "Гнев морей"),
-    ("zeus",          "Зевс",             "⚡",7000, "Повелитель молний"),
-    ("olympus",       "Олимп",            "🏔️",8000, "Обитель богов"),
-    ("titan",         "Титан",            "🗿",10000, "Древняя сила"),
+    ("ice_crystal",   "Ледяной Кристалл", "❄️", 1000, "Вечный холод"),
+    ("storm",         "Штормовой",        "🌩️", 1200, "Гроза морей"),
+    ("volcano",       "Вулканический",    "🌋", 1500, "Раскалённая лава"),
+    ("abyss",         "Бездна",           "🕳️", 1800, "Тёмная сторона"),
+    ("galaxy",        "Галактический",    "🌌", 2500, "Звёздная пыль"),
+    ("nebula",        "Туманность",       "🌠", 3000, "Космический туман"),
+    ("supernova",     "Сверхновая",       "💥", 3500, "Взрыв звезды"),
+    ("black_hole",    "Чёрная Дыра",      "⚫", 4000, "Гравитация вне закона"),
+    ("quantum",       "Квантовый",        "🔬", 4500, "Микро и макро"),
+    ("infinity",      "Бесконечность",    "♾️", 5000, "Предела нет"),
+    ("chronos",       "Хронос",           "⏳", 5500, "Власть над временем"),
+    ("poseidon",      "Посейдон",         "🔱", 6000, "Гнев морей"),
+    ("zeus",          "Зевс",             "⚡", 7000, "Повелитель молний"),
+    ("olympus",       "Олимп",            "🏔️", 8000, "Обитель богов"),
+    ("titan",         "Титан",            "🗿", 10000, "Древняя сила"),
 ]
 
 
@@ -2256,20 +1798,20 @@ async def api_cases_list(request: Request):
         ]
     }
 
+
 @app.post("/api/cases/daily-deal")
 async def api_daily_deal(request: Request):
     data = await request.json()
     validate_init_data(data.get("initData", ""))
     deal = await get_daily_case_deal()
-    
-    # Находим кейс в CASES
+
     case = next((c for c in CASES if c[0] == deal["case_id"]), None)
     if not case:
         raise HTTPException(404, "Кейс не найден")
-    
+
     original = case[3] * RATE
     discounted = int(original * (100 - deal["discount"]) / 100)
-    
+
     return {
         "case_id": case[0],
         "name": case[1],
@@ -2278,7 +1820,8 @@ async def api_daily_deal(request: Request):
         "discounted_price": discounted,
         "discount": deal["discount"],
     }
-        
+
+
 @app.post("/api/cases/info")
 async def api_cases_info(request: Request):
     data = await request.json()
@@ -2336,7 +1879,6 @@ async def api_cases_spin(request: Request):
 
     await add_balance(uid, -price_coins)
 
-    # ФИКС: используем _roll_case_with_winrate
     item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = \
         await _roll_case_with_winrate(uid, case_id)
 
@@ -2402,7 +1944,6 @@ async def api_cases_spin_multi(request: Request):
 
     results = []
     for _ in range(count):
-        # ФИКС: подкрутка работает и в мульти-спине
         item_id, rarity_id, rarity_emoji, rarity_name, emoji, name, value_mult = \
             await _roll_case_with_winrate(uid, case_id)
         value = int(price_coins * value_mult)
@@ -2620,7 +2161,6 @@ async def api_upgrader_play(request: Request):
         win = False
     else:
         win = random.random() < chance
-    
 
     await mark_items_sold(item_pks, uid)
 
@@ -2791,7 +2331,6 @@ async def api_withdraw_stars(request: Request):
     if not allowed:
         raise HTTPException(400, f"Вывод доступен только после 3 дней активности. Заходили: {days} из 3.")
 
-    # ФИКС: фиксированный вывод — 1000 ⭐
     amount = 1000.0
 
     need = _calc_withdraw_need('stars', amount)
@@ -2810,121 +2349,6 @@ async def api_withdraw_stars(request: Request):
         "message": f"Заявка №{wid} создана: 1000 ⭐ за {need} 🪙",
         "balance": await get_balance(uid),
     }
-
-
-@app.post("/api/withdraw/sbp")
-async def api_withdraw_sbp(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-
-    allowed, days = await can_withdraw(uid)
-    if not allowed:
-        raise HTTPException(400, f"Вывод доступен только после 3 дней активности. Заходили: {days} из 3.")
-
-    amount = float(data.get("amount", 0))
-    _validate_withdraw_amount('sbp', amount)
-
-    card = str(data.get("card", "")).strip()
-    bank = str(data.get("bank", "")).strip()
-    full_name = str(data.get("full_name", "")).strip()
-
-    if not card or len(card) < 12:
-        raise HTTPException(400, "Укажите номер карты / телефон")
-    if not full_name:
-        raise HTTPException(400, "Укажите ФИО получателя")
-
-    need = _calc_withdraw_need('sbp', amount)
-    balance = await get_balance(uid)
-    if balance < need:
-        raise HTTPException(400, f"Нужно {need} 🪙")
-
-    await add_balance(uid, -need)
-
-    details = f"card={card}; bank={bank}; name={full_name}"
-    wid = await create_withdrawal(
-        uid, user.get("username") or str(uid),
-        'sbp', amount, need, details
-    )
-
-    await _notify_admin_withdraw(
-        wid, 'СБП', amount, '₽', need, uid,
-        extra=f"Карта: <code>{card}</code>\nФИО: <b>{full_name}</b>\nБанк: <b>{bank}</b>"
-    )
-
-    return {"status": "pending", "id": wid,
-            "message": f"Заявка №{wid} создана (СБП)",
-            "balance": await get_balance(uid)}
-
-
-@app.post("/api/withdraw/usdc")
-async def api_withdraw_usdc(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-
-    allowed, days = await can_withdraw(uid)
-    if not allowed:
-        raise HTTPException(400, f"Вывод доступен только после 3 дней активности.")
-
-    amount = float(data.get("amount", 0))
-    _validate_withdraw_amount('usdc', amount)
-
-    wallet = str(data.get("wallet", "")).strip()
-    if not wallet.startswith("0x") or len(wallet) != 42:
-        raise HTTPException(400, "Неверный адрес USDC (Polygon)")
-
-    need = _calc_withdraw_need('usdc', amount)
-    balance = await get_balance(uid)
-    if balance < need:
-        raise HTTPException(400, f"Нужно {need} 🪙")
-
-    await add_balance(uid, -need)
-
-    details = f"wallet={wallet}; network=Polygon"
-    wid = await create_withdrawal(uid, user.get("username") or str(uid), 'usdc', amount, need, details)
-
-    await _notify_admin_withdraw(wid, 'USDC (Polygon)', amount, 'USDC', need, uid,
-        extra=f"Кошелёк: <code>{wallet}</code>")
-
-    return {"status": "pending", "id": wid,
-            "message": f"Заявка №{wid} создана (USDC)",
-            "balance": await get_balance(uid)}
-
-
-@app.post("/api/withdraw/ton")
-async def api_withdraw_ton(request: Request):
-    data = await request.json()
-    user = validate_init_data(data.get("initData", ""))
-    uid = user["id"]
-
-    allowed, days = await can_withdraw(uid)
-    if not allowed:
-        raise HTTPException(400, f"Вывод доступен только после 3 дней активности.")
-
-    amount = float(data.get("amount", 0))
-    _validate_withdraw_amount('ton', amount)
-
-    wallet = str(data.get("wallet", "")).strip()
-    if len(wallet) < 20:
-        raise HTTPException(400, "Неверный TON-кошелёк")
-
-    need = _calc_withdraw_need('ton', amount)
-    balance = await get_balance(uid)
-    if balance < need:
-        raise HTTPException(400, f"Нужно {need} 🪙")
-
-    await add_balance(uid, -need)
-
-    details = f"wallet={wallet}; network=TON"
-    wid = await create_withdrawal(uid, user.get("username") or str(uid), 'ton', amount, need, details)
-
-    await _notify_admin_withdraw(wid, 'TON', amount, 'TON', need, uid,
-        extra=f"Кошелёк: <code>{wallet}</code>")
-
-    return {"status": "pending", "id": wid,
-            "message": f"Заявка №{wid} создана (TON)",
-            "balance": await get_balance(uid)}
 
 
 @app.post("/api/withdraw/status")
@@ -3865,6 +3289,7 @@ async def api_admin_broadcast(request: Request):
     await log_admin_action(admin["id"], "broadcast", None, f"sent={sent} failed={failed}")
     return {"ok": True, "sent": sent, "failed": failed}
 
+
 @app.post("/api/notifications/settings")
 async def api_notifications_settings(request: Request):
     data = await request.json()
@@ -3888,11 +3313,11 @@ async def api_notifications_update(request: Request):
     await update_notification_settings(uid, **updates)
     return {"ok": True, "settings": await get_notification_settings(uid)}
 
+
 # ═══════════ ЗАПУСК ═══════════
 
 if __name__ == "__main__":
     import os
     port = int(os.getenv("PORT", 8000))
     print(f"🚀 Запуск на порту {port}", flush=True)
-    # ФИКС: workers=1 — иначе in-memory игры сломаются
     uvicorn.run(app, host="0.0.0.0", port=port, workers=1)
