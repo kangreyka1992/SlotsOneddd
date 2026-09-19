@@ -3187,6 +3187,21 @@ async def api_pvp_create(request: Request):
             (bet, table_id),
         )
         await db.commit()
+    # Уведомляем создателя
+    try:
+        bot_username = "SlotsGameFast_bot"
+        invite_link = f"https://t.me/{bot_username}?start=pvp_{table_id}"
+        text = (
+            f"🎮 <b>Стол #{table_id} создан!</b>\n\n"
+            f"🎯 Игра: <b>{game}</b>\n"
+            f"💰 Ставка: <b>{bet}</b> 🪙\n"
+            f"👥 Формат: <b>{PVP_FORMATS[format_]['label']}</b>\n"
+            f"🔒 {'Пароль: <code>' + password + '</code>' if password else 'Публичный'}\n\n"
+            f"Пригласи друзей:\n<code>{invite_link}</code>"
+        )
+        await bot.send_message(uid, text, parse_mode="HTML")
+    except Exception as e:
+        print(f"⚠️ pvp create notify error: {e}", flush=True)
 
     return {
         "ok": True,
@@ -3212,6 +3227,24 @@ async def api_pvp_join(request: Request):
 
     if not result["ok"]:
         raise HTTPException(400, result["error"])
+    # Уведомляем всех участников
+    try:
+        table = await pvp_get_table(table_id)
+        participants = await pvp_get_participants(table_id)
+        for p in participants:
+            if p["user_id"] == uid:
+                continue  # не уведомляем того, кто только что зашёл
+            try:
+                await bot.send_message(
+                    p["user_id"],
+                    f"👤 <b>@{user.get('username') or 'Игрок'} присоединился</b>\n\n"
+                    f"👥 Игроков: <b>{len(participants)}/{table['max_players']}</b>",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"⚠️ pvp join notify error: {e}", flush=True)
 
     return {
         "ok": True,
@@ -3415,6 +3448,20 @@ async def api_pvp_check_winner(request: Request):
                     (table_id,),
                 )
                 await db.commit()
+                # Уведомляем проигравших
+        for p in participants:
+            if p["user_id"] == winner_id:
+                continue
+            try:
+                await bot.send_message(
+                    p["user_id"],
+                    f"😢 <b>Ты проиграл в PvP</b>\n\n"
+                    f"🎮 Игра: <b>{table['game']}</b>\n"
+                    f"💰 Ставка: <b>{table['bet']}</b> 🪙 сгорела",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
             return {"finished": True, "cancelled": True}
 
         # Завершаем стол
