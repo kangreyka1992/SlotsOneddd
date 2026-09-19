@@ -3,66 +3,31 @@ import datetime
 import os
 import random
 import time as _time
-import datetime
 
 DB_PATH = os.getenv("DB_PATH", "casino.db")
 
-async def get_daily_case_deal():
-    """Возвращает сегодняшний кейс со скидкой или создаёт новый."""
-    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT case_id, discount FROM daily_case_deal WHERE date = ?",
-            (today,)
-        ) as cur:
-            row = await cur.fetchone()
-            if row:
-                return {"case_id": row[0], "discount": row[1]}
-            
-            # Выбираем случайный кейс из списка (топовые)
-            cases = ["gold", "lucky", "diamond_small", "emerald", "sapphire", "ruby"]
-            chosen = random.choice(cases)
-            discount = random.choice([30, 40, 50])
-            
-            await db.execute(
-                "INSERT INTO daily_case_deal (date, case_id, discount) VALUES (?, ?, ?)",
-                (today, chosen, discount)
-            )
-            await db.commit()
-            return {"case_id": chosen, "discount": discount}
 
 # ═══════════ АВТОМИГРАЦИЯ ═══════════
 
 async def _auto_migrate():
-    """Проверяет схему БД и добавляет недостающие колонки.
-    Запускается при init_db() — до старта сервера."""
     print(f"🔍 Auto-migrate: DB_PATH = {DB_PATH}", flush=True)
     print(f"🔍 Auto-migrate: abs = {os.path.abspath(DB_PATH)}", flush=True)
     print(f"🔍 Auto-migrate: exists = {os.path.exists(DB_PATH)}", flush=True)
 
     async with aiosqlite.connect(DB_PATH) as db:
-        # profiles
         try:
             async with db.execute("PRAGMA table_info(profiles)") as cur:
                 cols = [c[1] for c in await cur.fetchall()]
-            print(f"📋 profiles columns: {cols}", flush=True)
-
             if cols and "owned" not in cols:
                 await db.execute("ALTER TABLE profiles ADD COLUMN owned TEXT DEFAULT '[]'")
                 await db.commit()
                 print("🔧 Migration: added profiles.owned", flush=True)
-                async with db.execute("PRAGMA table_info(profiles)") as cur:
-                    cols = [c[1] for c in await cur.fetchall()]
-                print(f"✅ profiles columns now: {cols}", flush=True)
         except Exception as e:
             print(f"⚠️ profiles migration error: {e}", flush=True)
 
-        # withdrawals
         try:
             async with db.execute("PRAGMA table_info(withdrawals)") as cur:
                 cols = [c[1] for c in await cur.fetchall()]
-            print(f"📋 withdrawals columns: {cols}", flush=True)
-
             for col, definition in [
                 ("method",  "TEXT NOT NULL DEFAULT 'stars'"),
                 ("amount",  "REAL NOT NULL DEFAULT 0"),
@@ -72,13 +37,11 @@ async def _auto_migrate():
                     await db.execute(f"ALTER TABLE withdrawals ADD COLUMN {col} {definition}")
                     await db.commit()
                     print(f"🔧 Migration: added withdrawals.{col}", flush=True)
-
             await db.execute("UPDATE withdrawals SET amount = stars WHERE amount = 0")
             await db.commit()
         except Exception as e:
             print(f"⚠️ withdrawals migration error: {e}", flush=True)
 
-        # Показываем пользователей для проверки
         try:
             async with db.execute("SELECT COUNT(*), SUM(balance) FROM users") as cur:
                 cnt, total = await cur.fetchone()
@@ -280,7 +243,6 @@ async def init_db():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS jackpot (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -290,7 +252,6 @@ async def init_db():
             )
         """)
         await db.execute("INSERT OR IGNORE INTO jackpot (id, amount) VALUES (1, 10000000)")
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS hourly_bonus (
                 user_id INTEGER PRIMARY KEY,
@@ -298,7 +259,6 @@ async def init_db():
                 streak INTEGER DEFAULT 0
             )
         """)
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS cashback (
                 user_id INTEGER PRIMARY KEY,
@@ -306,7 +266,6 @@ async def init_db():
                 claimed_at TIMESTAMP
             )
         """)
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS referral_earnings (
                 user_id INTEGER PRIMARY KEY,
@@ -315,7 +274,6 @@ async def init_db():
                 from_deposits INTEGER DEFAULT 0
             )
         """)
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS profiles (
                 user_id INTEGER PRIMARY KEY,
@@ -326,7 +284,6 @@ async def init_db():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS tournaments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -337,7 +294,6 @@ async def init_db():
                 status TEXT DEFAULT 'active'
             )
         """)
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS tournament_scores (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -347,7 +303,6 @@ async def init_db():
                 UNIQUE(tournament_id, user_id)
             )
         """)
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS user_levels (
                 user_id INTEGER PRIMARY KEY,
@@ -355,7 +310,6 @@ async def init_db():
                 level INTEGER DEFAULT 1
             )
         """)
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS hall_of_fame (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -366,31 +320,11 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
         await db.execute("""
             CREATE TABLE IF NOT EXISTS wheel_spins (
                 user_id INTEGER PRIMARY KEY,
                 spins_available INTEGER DEFAULT 0,
                 last_daily TIMESTAMP
-            )
-        """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS notif_settings (
-                user_id INTEGER PRIMARY KEY,
-                daily INTEGER DEFAULT 1,
-                hourly INTEGER DEFAULT 1,
-                battlepass INTEGER DEFAULT 1,
-                promo INTEGER DEFAULT 1,
-                last_daily_notif TIMESTAMP,
-                last_hourly_notif TIMESTAMP,
-                last_bp_notif TIMESTAMP
-            )
-        """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS daily_case_deal (
-                date TEXT PRIMARY KEY,
-                case_id TEXT NOT NULL,
-                discount INTEGER NOT NULL DEFAULT 50
             )
         """)
         await db.execute("""
@@ -401,6 +335,13 @@ async def init_db():
                 tournament_alerts INTEGER DEFAULT 1,
                 daily_deal_alerts INTEGER DEFAULT 1,
                 last_notified TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS daily_case_deal (
+                date TEXT PRIMARY KEY,
+                case_id TEXT NOT NULL,
+                discount INTEGER NOT NULL DEFAULT 50
             )
         """)
         await db.commit()
@@ -1350,7 +1291,8 @@ async def claim_battle_pass_reward(user_id: int, level: int, premium: bool) -> t
         if premium and not has_premium:
             return False, 0, None, "Premium Pass не куплен"
 
-        claimed_set = set((claimed_premium if premium else claimed_free).split(",")) if (claimed_premium if premium else claimed_free) else set()
+        claimed_str = claimed_premium if premium else claimed_free
+        claimed_set = set(claimed_str.split(",")) if claimed_str else set()
         key = str(level)
 
         if key in claimed_set:
@@ -1362,7 +1304,6 @@ async def claim_battle_pass_reward(user_id: int, level: int, premium: bool) -> t
 
         _, free_coins, premium_coins, bonus_type = reward_row
         coins = premium_coins if premium else free_coins
-        # ФИКС: бонусный кейс выдаётся ВСЕМ — и free, и premium
         bonus = bonus_type
 
         claimed_set.add(key)
@@ -1481,7 +1422,6 @@ async def win_jackpot(user_id: int) -> int:
         async with db.execute("SELECT amount FROM jackpot WHERE id = 1") as cur:
             row = await cur.fetchone()
             amount = row[0] if row else 0
-        # ФИКС: сбрасываем на тот же уровень, что и в init_db (10 000 000)
         await db.execute(
             "UPDATE jackpot SET amount = 10000000, last_winner = ?, "
             "last_won_at = CURRENT_TIMESTAMP WHERE id = 1",
@@ -1731,7 +1671,6 @@ async def get_hall_of_fame(limit: int = 30):
 # ═══════════ КОЛЕСО ФОРТУНЫ ═══════════
 
 async def get_wheel_info(user_id: int):
-    """Возвращает инфо о колесе. Даёт ровно 1 прокрут раз в 24 часа."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             "INSERT OR IGNORE INTO wheel_spins (user_id, spins_available) "
@@ -1763,7 +1702,7 @@ async def get_wheel_info(user_id: int):
                 should_grant = True
 
         if should_grant:
-            spins = 1  # строго 1 прокрут, а не накопление
+            spins = 1
             await db.execute(
                 "UPDATE wheel_spins SET spins_available = ?, last_daily = ? WHERE user_id = ?",
                 (spins, now.isoformat(), user_id),
@@ -1842,6 +1781,10 @@ async def add_user_xp(user_id: int, xp: int):
                 (new_xp, new_level, user_id),
             )
         await db.commit()
+
+
+# ═══════════ УВЕДОМЛЕНИЯ ═══════════
+
 async def get_notification_settings(user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -1882,17 +1825,17 @@ async def update_notification_settings(user_id: int, **kwargs):
 
 
 async def get_users_for_broadcast(alert_type: str):
-    """Возвращает список user_id, у которых включён нужный тип уведомлений."""
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             f"SELECT user_id FROM notification_settings WHERE {alert_type} = 1"
         ) as cur:
             rows = await cur.fetchall()
             return [r[0] for r in rows]
+
+
 # ═══════════ СКИДКА ДНЯ ═══════════
 
 async def get_daily_case_deal():
-    """Возвращает сегодняшний кейс со скидкой или создаёт новый."""
     today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -1903,7 +1846,6 @@ async def get_daily_case_deal():
             if row:
                 return {"case_id": row[0], "discount": row[1]}
 
-            # Выбираем случайный кейс
             cases = ["gold", "lucky", "diamond_small", "emerald", "sapphire", "ruby"]
             chosen = random.choice(cases)
             discount = random.choice([30, 40, 50])
@@ -1914,115 +1856,3 @@ async def get_daily_case_deal():
             )
             await db.commit()
             return {"case_id": chosen, "discount": discount}
-# ═══════════ НАСТРОЙКИ УВЕДОМЛЕНИЙ ═══════════
-
-async def get_notif_settings(user_id: int) -> dict:
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT OR IGNORE INTO notif_settings (user_id) VALUES (?)",
-            (user_id,)
-        )
-        await db.commit()
-        async with db.execute(
-            "SELECT daily, hourly, battlepass, promo FROM notif_settings WHERE user_id = ?",
-            (user_id,)
-        ) as cur:
-            row = await cur.fetchone()
-            if not row:
-                return {"daily": True, "hourly": True, "battlepass": True, "promo": True}
-            return {
-                "daily": bool(row[0]),
-                "hourly": bool(row[1]),
-                "battlepass": bool(row[2]),
-                "promo": bool(row[3]),
-            }
-
-
-async def set_notif_setting(user_id: int, key: str, enabled: bool):
-    if key not in ("daily", "hourly", "battlepass", "promo"):
-        return False
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT OR IGNORE INTO notif_settings (user_id) VALUES (?)",
-            (user_id,)
-        )
-        await db.execute(
-            f"UPDATE notif_settings SET {key} = ? WHERE user_id = ?",
-            (1 if enabled else 0, user_id)
-        )
-        await db.commit()
-        return True
-
-
-async def get_users_for_daily_notif() -> list:
-    """Юзеры, у которых включён daily, и они не забирали бонус сегодня."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("""
-            SELECT u.user_id
-            FROM users u
-            LEFT JOIN notif_settings n ON n.user_id = u.user_id
-            WHERE COALESCE(n.daily, 1) = 1
-              AND (
-                u.daily_last IS NULL
-                OR datetime(u.daily_last) < datetime('now', '-23 hours')
-              )
-              AND datetime(u.created_at) < datetime('now', '-1 day')
-              AND (
-                n.last_daily_notif IS NULL
-                OR datetime(n.last_daily_notif) < datetime('now', '-22 hours')
-              )
-        """) as cur:
-            return [r[0] for r in await cur.fetchall()]
-
-
-async def get_users_for_hourly_notif() -> list:
-    """Юзеры с включённым hourly, не забравшие бонус за последний час."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("""
-            SELECT u.user_id
-            FROM users u
-            LEFT JOIN notif_settings n ON n.user_id = u.user_id
-            LEFT JOIN hourly_bonus h ON h.user_id = u.user_id
-            WHERE COALESCE(n.hourly, 1) = 1
-              AND (
-                h.last_claim IS NULL
-                OR datetime(h.last_claim) < datetime('now', '-55 minutes')
-              )
-              AND (
-                n.last_hourly_notif IS NULL
-                OR datetime(n.last_hourly_notif) < datetime('now', '-50 minutes')
-              )
-        """) as cur:
-            return [r[0] for r in await cur.fetchall()]
-
-
-async def get_users_for_promo_notif() -> list:
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("""
-            SELECT u.user_id
-            FROM users u
-            LEFT JOIN notif_settings n ON n.user_id = u.user_id
-            WHERE COALESCE(n.promo, 1) = 1
-        """) as cur:
-            return [r[0] for r in await cur.fetchall()]
-
-
-async def mark_notif_sent(user_id: int, kind: str):
-    """kind: 'daily' | 'hourly' | 'bp'"""
-    col = {
-        "daily": "last_daily_notif",
-        "hourly": "last_hourly_notif",
-        "bp": "last_bp_notif",
-    }.get(kind)
-    if not col:
-        return
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT OR IGNORE INTO notif_settings (user_id) VALUES (?)",
-            (user_id,)
-        )
-        await db.execute(
-            f"UPDATE notif_settings SET {col} = CURRENT_TIMESTAMP WHERE user_id = ?",
-            (user_id,)
-        )
-        await db.commit()
