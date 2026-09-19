@@ -540,7 +540,7 @@ async def api_profile(request: Request):
         "balance": balance,
         "premium": bp["premium"],
         "rate": RATE,
-        "withdraw_rate": WITHDRAW_RATE,
+        "withdraw_rate": WITHDRAW_RATES['stars']['rate'],
         "min_withdraw": MIN_WITHDRAW,
         "username": user.get("username") or user.get("first_name") or "игрок",
         "user_id": uid,
