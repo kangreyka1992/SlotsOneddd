@@ -27,6 +27,8 @@ from database import (
     get_live_feed,
     get_public_stats,
     get_online_count,
+    get_online_count,
+    touch_session,
     touch_session,
     get_daily_quests,
     update_quest_progress,
