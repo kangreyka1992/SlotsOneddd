@@ -206,9 +206,9 @@
         <span class="qa-pill-label">Кэшбэк</span>
         <span class="qa-pill-badge hidden" id="qaCashbackBadge">0</span>
       </button>
-        <button class="qa-pill" onclick="showScreen('pvp')">
-          <span class="qa-pill-icon">⚔️</span>
-          <span class="qa-pill-label">PvP</span>
+      <button class="qa-pill" onclick="showScreen('pvp')">
+        <span class="qa-pill-icon">⚔️</span>
+        <span class="qa-pill-label">PvP</span>
       </button>
     </div>
 
@@ -665,42 +665,12 @@
     <div class="pvp-chat" id="pvpChat"></div>
     <div class="pvp-chat-input">
       <input type="text" id="pvpChatInput" placeholder="Сообщение..." maxlength="200"
-             onkeydown="if(event.key==='Enter')pvpChatSend()">
+             enterkeyhint="send"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();pvpChatSend();}">
       <button onclick="pvpChatSend()">➤</button>
     </div>
   </section>
 
-  <!-- ═══ PVP CREATE MODAL ═══ -->
-  <div class="pvp-modal hidden" id="pvpCreateModal">
-    <div class="pvp-modal-content">
-      <div class="pvp-modal-header">
-        <div class="pvp-modal-title">➕ Создать стол</div>
-        <button class="ci-close" onclick="closePvpCreate()">✕</button>
-      </div>
-
-      <!-- Игра -->
-      <div class="pvp-form-label">🎮 Игра:</div>
-      <div class="pvp-games-grid" id="pvpGamesGrid"></div>
-
-      <!-- Ставка -->
-      <div class="pvp-form-label">💰 Ставка:</div>
-      <div class="pvp-bets-grid" id="pvpBetsGrid"></div>
-
-      <!-- Формат -->
-      <div class="pvp-form-label">👥 Формат:</div>
-      <div class="pvp-formats-grid" id="pvpFormatsGrid"></div>
-
-      <!-- Пароль -->
-      <div class="pvp-form-label">🔒 Пароль (опционально):</div>
-      <input class="input" id="pvpPassword" placeholder="Оставь пусто для публичного" maxlength="20">
-
-      <!-- Кнопка создать -->
-      <button class="btn-primary" onclick="pvpCreateConfirm()" style="margin-top:16px; width:100%;">
-        ⚔️ СОЗДАТЬ СТОЛ
-      </button>
-    </div>
-  </div>
-  
   <!-- ═══ QUESTS ═══ -->
   <section class="screen" id="screen-quests">
     <h3 class="section-title">📋 Ежедневные задания</h3>
@@ -1092,12 +1062,44 @@
       <div class="result-details" id="resultDetails"></div>
       <div class="result-actions">
         <button class="btn-primary" onclick="playAgain()">🔄 Ещё раз</button>
-        <button class="btn-secondary" onclick="showScreen('home')">🏠 Домой</button>
+        <button class="btn-secondary" onclick="gameLocked=false;showScreen('home')">🏠 Домой</button>
       </div>
     </div>
   </section>
 
 </main>
+<!-- ↑ ↑ ↑ .screens ЗАКРЫТ ↑ ↑ ↑ -->
+
+<!-- ═══ PVP CREATE MODAL (вынесена из .screens!) ═══ -->
+<div class="pvp-modal hidden" id="pvpCreateModal" onclick="if(event.target===this)closePvpCreate()">
+    <div class="pvp-modal-content">
+      <div class="pvp-modal-header">
+        <div class="pvp-modal-title">➕ Создать стол</div>
+        <button class="ci-close" onclick="closePvpCreate()">✕</button>
+      </div>
+
+      <!-- Игра -->
+      <div class="pvp-form-label">🎮 Игра:</div>
+      <div class="pvp-games-grid" id="pvpGamesGrid"></div>
+
+      <!-- Ставка -->
+      <div class="pvp-form-label">💰 Ставка:</div>
+      <div class="pvp-bets-grid" id="pvpBetsGrid"></div>
+
+      <!-- Формат -->
+      <div class="pvp-form-label">👥 Формат:</div>
+      <div class="pvp-formats-grid" id="pvpFormatsGrid"></div>
+
+      <!-- Пароль -->
+      <div class="pvp-form-label">🔒 Пароль (опционально):</div>
+      <input class="input" id="pvpPassword" placeholder="Оставь пусто для публичного" maxlength="20">
+
+      <!-- Кнопка создать -->
+      <button class="btn-primary" onclick="pvpCreateConfirm()" style="margin-top:16px; width:100%;">
+        ⚔️ СОЗДАТЬ СТОЛ
+      </button>
+    </div>
+</div>
 
 <!-- ═══ PULL-TO-REFRESH ═══ -->
 <div class="ptr-indicator" id="ptrIndicator">
@@ -1126,6 +1128,7 @@
 
 <div class="toast" id="toast"></div>
 </div>
+<!-- ↑ #app ЗАКРЫТ ↑ -->
 
 <!-- ═══ CASE INFO OVERLAY ═══ -->
 <div id="caseInfo" class="case-info-overlay hidden">
