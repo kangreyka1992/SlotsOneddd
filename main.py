@@ -78,10 +78,7 @@ BETS = [10, 50, 100, 500, 1000, 10000, 20000, 30000, 50000, 100000]
 ADMIN_IDS = [7643224285]
 
 WITHDRAW_RATES = {
-    'stars': {'rate': 1250,  'min': 1000,  'unit': '⭐'},
-    'sbp':   {'rate': 1000, 'min': 500, 'unit': '₽'},
-    'usdc':  {'rate': 100,  'min': 5,   'unit': 'USDC'},
-    'ton':   {'rate': 5000, 'min': 1,   'unit': 'TON'},
+    'stars': {'rate': 150, 'min': 1000, 'unit': '⭐'},
 }
 WHEEL_PRIZES = [
     {"emoji": "🪙", "text": "500",   "rarity": "common",    "color": "#8b95a5"},
@@ -2775,11 +2772,9 @@ async def api_withdraw_methods(request: Request):
     return {
         "methods": [
             {"id": "stars", "name": "Telegram Stars", "icon": "⭐",
-             "rate": WITHDRAW_RATES['stars']['rate'], "min": WITHDRAW_RATES['stars']['min'], "unit": "⭐"},
-            {"id": "usdc",  "name": "USDC · Polygon",  "icon": "💎",
-             "rate": WITHDRAW_RATES['usdc']['rate'],  "min": WITHDRAW_RATES['usdc']['min'],  "unit": "USDC"},
-            {"id": "ton",   "name": "TON",             "icon": "🪙",
-             "rate": WITHDRAW_RATES['ton']['rate'],   "min": WITHDRAW_RATES['ton']['min'],   "unit": "TON"},
+             "rate": WITHDRAW_RATES['stars']['rate'],
+             "min": WITHDRAW_RATES['stars']['min'],
+             "unit": "⭐"},
         ]
     }
 
