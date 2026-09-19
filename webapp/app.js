@@ -151,7 +151,6 @@ window.showScreen = function(name) {
             clearInterval(adminStatsTimer);
             adminStatsTimer = null;
         }
-
         if (name === 'top') loadTop();
         if (name === 'ach') loadAch();
         if (name === 'withdraw') loadWithdrawStatus();
@@ -170,6 +169,8 @@ window.showScreen = function(name) {
         if (name === 'cashback') loadCashback();
         if (name === 'customize') loadCustomize();
         if (name === 'hall') loadHall();
+        if (name === 'pvp') loadPvpArena();
+        if (name === 'pvp-table') refreshPvpTable();
     }, 200);
 };
 
@@ -4530,6 +4531,483 @@ async function buyCustomize(kind, itemId, price) {
     } catch (e) {
         toast(e.message, 'error');
     }
+}
+
+/* ═══════════ PVP ARENA ═══════════ */
+
+let pvpConfig = null;
+let pvpCurrentTableId = null;
+let pvpPollingInterval = null;
+let pvpChatInterval = null;
+let pvpCreateState = {
+  game: 'slots2',
+  bet: 100,
+  format: '1v1',
+};
+
+/* Загрузка конфига PvP */
+async function loadPvpConfig() {
+  if (pvpConfig) return pvpConfig;
+
+  try {
+    const d = await api('/api/pvp/config');
+    pvpConfig = d;
+    return d;
+  } catch (e) {
+    console.error('pvp config error:', e);
+    return null;
+  }
+}
+
+/* Загрузка списка столов */
+async function loadPvpTables() {
+  const el = document.getElementById('pvpTablesList');
+  if (el) el.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
+
+  try {
+    const d = await api('/api/pvp/list');
+
+    if (!d.tables || !d.tables.length) {
+      el.innerHTML = '<div class="pvp-empty">Нет открытых столов.<br>Создай свой! ➕</div>';
+      return;
+    }
+
+    const gameIcons = { slots2: '🎰', crash: '📈', mines: '⛏', dice: '🎲' };
+    const gameNames = { slots2: 'Слоты 5×3', crash: 'Crash', mines: 'Mines', dice: 'Кости' };
+    const formatLabels = { '1v1': '1×1', tour4: 'Турнир 4', tour8: 'Турнир 8' };
+
+    el.innerHTML = d.tables.map(t => `
+      <div class="pvp-table-card" onclick="openPvpTable(${t.id})">
+        <div class="pvp-table-icon">${gameIcons[t.game] || '🎮'}</div>
+        <div class="pvp-table-info-body">
+          <div class="pvp-table-game">${gameNames[t.game] || t.game}</div>
+          <div class="pvp-table-meta">
+            <span>💰 <b>${fmt(t.bet)}</b> 🪙</span>
+            <span>👥 <b>${formatLabels[t.format] || t.format}</b></span>
+            ${t.is_private ? '<span class="pvp-lock">🔒</span>' : ''}
+          </div>
+        </div>
+        <div class="pvp-table-players">${t.players}/${t.max_players}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    el.innerHTML = '<div class="pvp-empty">Ошибка загрузки</div>';
+  }
+}
+
+/* Загрузка топ PvP */
+async function loadPvpLeaderboard() {
+  try {
+    const d = await api('/api/pvp/leaderboard');
+    const el = document.getElementById('pvpLeaderboard');
+    if (!el) return;
+
+    if (!d.leaderboard || !d.leaderboard.length) {
+      el.innerHTML = '<div class="pvp-empty">Пока никого нет. Стань первым!</div>';
+      return;
+    }
+
+    el.innerHTML = d.leaderboard.map(p => `
+      <div class="pvp-top-item ${p.user_id === profile.user_id ? 'me' : ''}">
+        <div class="pvp-top-place">${p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : p.rank}</div>
+        <div class="pvp-top-name">@${p.username}</div>
+        <div class="pvp-top-wr">${p.winrate}%</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('pvp leaderboard error:', e);
+  }
+}
+
+/* Загрузка моей статистики PvP */
+async function loadPvpStats() {
+  try {
+    const d = await api('/api/pvp/stats');
+    const el = document.getElementById('pvpMyStats');
+    if (!el) return;
+
+    el.innerHTML = `
+      <div>
+        <div class="pvp-stat-val">${d.wins}</div>
+        <div class="pvp-stat-lbl">Побед</div>
+      </div>
+      <div>
+        <div class="pvp-stat-val">${d.losses}</div>
+        <div class="pvp-stat-lbl">Поражений</div>
+      </div>
+      <div>
+        <div class="pvp-stat-val">${d.winrate}%</div>
+        <div class="pvp-stat-lbl">Винрейт</div>
+      </div>
+    `;
+  } catch (e) {
+    console.error('pvp stats error:', e);
+  }
+}
+
+/* Загрузка моего активного стола */
+async function loadPvpMyTable() {
+  try {
+    const d = await api('/api/pvp/my-table');
+    const el = document.getElementById('pvpMyTable');
+    if (!el) return;
+
+    if (!d.active) {
+      el.innerHTML = '';
+      return;
+    }
+
+    const t = d.table;
+    const gameNames = { slots2: 'Слоты 5×3', crash: 'Crash', mines: 'Mines', dice: 'Кости' };
+
+    el.innerHTML = `
+      <div class="pvp-my-table" onclick="openPvpTable(${t.id})">
+        <div class="pvp-my-table-title">⚔️ Твой стол #${t.id}</div>
+        <div class="pvp-my-table-meta">
+          🎮 <b>${gameNames[t.game] || t.game}</b> ·
+          💰 <b>${fmt(t.bet)}</b> 🪙 ·
+          👥 <b>${t.max_players}</b> ·
+          Статус: <b>${t.status === 'waiting' ? 'Ждём игроков' : 'Идёт игра'}</b>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    console.error('pvp my table error:', e);
+  }
+}
+
+/* === Открытие стола === */
+async function openPvpTable(tableId) {
+  haptic('medium');
+  pvpCurrentTableId = tableId;
+  showScreen('pvp-table');
+
+  document.getElementById('pvpTableTitle').textContent = `Стол #${tableId}`;
+
+  await refreshPvpTable();
+
+  // Поллинг каждые 3 секунды
+  if (pvpPollingInterval) clearInterval(pvpPollingInterval);
+  pvpPollingInterval = setInterval(refreshPvpTable, 3000);
+
+  // Чат — каждые 4 секунды
+  if (pvpChatInterval) clearInterval(pvpChatInterval);
+  loadPvpChat();
+  pvpChatInterval = setInterval(loadPvpChat, 4000);
+}
+
+/* Обновление стола */
+async function refreshPvpTable() {
+  if (!pvpCurrentTableId) return;
+
+  try {
+    const d = await api('/api/pvp/status', { table_id: pvpCurrentTableId });
+    const t = d.table;
+
+    document.getElementById('pvpTableBank').textContent = fmt(t.prize_pool);
+
+    const gameNames = { slots2: '🎰 Слоты 5×3', crash: '📈 Crash', mines: '⛏ Mines', dice: '🎲 Кости' };
+    const formatLabels = { '1v1': '1×1', tour4: 'Турнир 4', tour8: 'Турнир 8' };
+
+    document.getElementById('pvpTableInfo').innerHTML = `
+      🎮 Игра: <b>${gameNames[t.game] || t.game}</b><br>
+      💰 Ставка: <b>${fmt(t.bet)}</b> 🪙<br>
+      👥 Формат: <b>${formatLabels[t.format] || t.format}</b><br>
+      📊 Статус: <b>${t.status === 'waiting' ? 'Ждём игроков' : t.status === 'active' ? 'Игра' : 'Завершён'}</b>
+    `;
+
+    // Участники
+    document.getElementById('pvpPlayers').innerHTML = d.participants.map(p => `
+      <div class="pvp-player ${p.user_id === profile.user_id ? 'me' : ''} ${p.eliminated ? 'eliminated' : ''}">
+        <div class="pvp-player-avatar">👤</div>
+        <div class="pvp-player-name">@${p.username}</div>
+        <div class="pvp-player-score">${p.score}</div>
+      </div>
+    `).join('');
+
+    // Управление кнопкой
+    const playBtn = document.getElementById('pvpPlayBtn');
+    const statusEl = document.getElementById('pvpRoundStatus');
+
+    if (t.status === 'waiting') {
+      playBtn.disabled = true;
+      playBtn.textContent = '⏳ ЖДЁМ ИГРОКОВ';
+      statusEl.textContent = `Игроков: ${d.participants.length}/${t.max_players}`;
+    } else if (t.status === 'active') {
+      // Проверяем, сыграл ли уже
+      const me = d.participants.find(p => p.user_id === profile.user_id);
+      if (me && me.eliminated) {
+        playBtn.disabled = true;
+        playBtn.textContent = '💀 ВЫ ВЫБЫЛИ';
+        statusEl.textContent = 'Ожидайте окончания турнира';
+      } else {
+        // Проверяем, играл ли уже в этом раунде
+        // (можно упростить — просто разрешаем играть)
+        playBtn.disabled = false;
+        playBtn.textContent = '🎮 ИГРАТЬ РАУНД';
+        statusEl.textContent = 'Нажми, чтобы сыграть';
+      }
+    } else if (t.status === 'finished') {
+      playBtn.disabled = true;
+      playBtn.textContent = '🏁 ИГРА ОКОНЧЕНА';
+      statusEl.textContent = t.winner_id ? `Победитель: user_${t.winner_id}` : 'Завершено';
+    }
+
+    // Проверяем, не завершился ли турнир
+    if (t.status === 'active') {
+      await checkPvpWinner();
+    }
+
+  } catch (e) {
+    console.error('pvp refresh error:', e);
+  }
+}
+
+/* Проверка завершения турнира */
+async function checkPvpWinner() {
+  try {
+    const d = await api('/api/pvp/check-winner', { table_id: pvpCurrentTableId });
+    if (d.finished) {
+      // Обновляем, показываем результат
+      if (pvpPollingInterval) {
+        clearInterval(pvpPollingInterval);
+        pvpPollingInterval = null;
+      }
+    }
+  } catch (e) {}
+}
+
+/* === Создание стола === */
+async function showPvpCreate() {
+  haptic();
+  const cfg = await loadPvpConfig();
+  if (!cfg) return;
+
+  // Игры
+  document.getElementById('pvpGamesGrid').innerHTML = cfg.games.map(g => `
+    <button class="pvp-game-btn ${pvpCreateState.game === g.id ? 'active' : ''}"
+            data-game="${g.id}" onclick="setPvpCreateGame('${g.id}')">
+      <span>${g.icon}</span><span>${g.name}</span>
+    </button>
+  `).join('');
+
+  // Ставки
+  document.getElementById('pvpBetsGrid').innerHTML = cfg.bets.map(b => `
+    <button class="pvp-bet-btn ${pvpCreateState.bet === b ? 'active' : ''}"
+            data-bet="${b}" onclick="setPvpCreateBet(${b})">
+      ${fmt(b)}
+    </button>
+  `).join('');
+
+  // Форматы
+  document.getElementById('pvpFormatsGrid').innerHTML = cfg.formats.map(f => `
+    <button class="pvp-format-btn ${pvpCreateState.format === f.id ? 'active' : ''}"
+            data-format="${f.id}" onclick="setPvpCreateFormat('${f.id}')">
+      ${f.label}
+    </button>
+  `).join('');
+
+  document.getElementById('pvpCreateModal').classList.remove('hidden');
+}
+
+function closePvpCreate() {
+  document.getElementById('pvpCreateModal').classList.add('hidden');
+}
+
+function setPvpCreateGame(g) {
+  pvpCreateState.game = g;
+  haptic();
+  document.querySelectorAll('.pvp-game-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.game === g);
+  });
+}
+
+function setPvpCreateBet(b) {
+  pvpCreateState.bet = b;
+  haptic();
+  document.querySelectorAll('.pvp-bet-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.bet) === b);
+  });
+}
+
+function setPvpCreateFormat(f) {
+  pvpCreateState.format = f;
+  haptic();
+  document.querySelectorAll('.pvp-format-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.format === f);
+  });
+}
+
+async function pvpCreateConfirm() {
+  haptic('medium');
+  const password = document.getElementById('pvpPassword').value.trim() || null;
+
+  try {
+    const d = await api('/api/pvp/create', {
+      game: pvpCreateState.game,
+      bet: pvpCreateState.bet,
+      format: pvpCreateState.format,
+      password: password,
+    });
+
+    toast('✅ Стол создан!', 'success');
+    SFX.cashout();
+    closePvpCreate();
+    await loadProfile();
+    await loadPvpTables();
+    await loadPvpMyTable();
+
+    // Открываем стол
+    setTimeout(() => openPvpTable(d.table_id), 300);
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+/* === Игровой раунд === */
+async function pvpPlay() {
+  if (!pvpCurrentTableId) return;
+  haptic('medium');
+
+  const btn = document.getElementById('pvpPlayBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ ИГРАЕМ...';
+
+  try {
+    // Определяем номер раунда — упрощённо всегда 1
+    // (в реальности надо смотреть в БД, но для MVP хватит)
+    const roundNum = 1;
+
+    const d = await api('/api/pvp/play', {
+      table_id: pvpCurrentTableId,
+      round: roundNum,
+      game: pvpConfig?.games?.find(g => g.id === 'slots2')?.id || 'slots2',
+    });
+
+    SFX.win();
+    toast(`🎮 Раунд! Твой результат: ${d.score}`, 'success');
+
+    // Показываем результаты
+    await loadPvpRoundResults(roundNum);
+
+    // Проверяем завершение
+    await checkPvpWinner();
+
+    // Обновляем стол
+    setTimeout(refreshPvpTable, 500);
+  } catch (e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '🎮 ИГРАТЬ РАУНД';
+  }
+}
+
+async function loadPvpRoundResults(roundNum) {
+  try {
+    const d = await api('/api/pvp/round-results', {
+      table_id: pvpCurrentTableId,
+      round: roundNum,
+    });
+
+    const el = document.getElementById('pvpRoundResults');
+    if (!d.results || !d.results.length) {
+      el.classList.add('hidden');
+      return;
+    }
+
+    el.classList.remove('hidden');
+    el.innerHTML = d.results.map((r, i) => `
+      <div class="pvp-round-item ${i === 0 ? 'winner' : ''}">
+        <div class="pvp-round-place">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div>
+        <div class="pvp-round-name">@${r.username}</div>
+        <div class="pvp-round-score">${r.score}</div>
+      </div>
+    `).join('');
+  } catch (e) {}
+}
+
+/* === Чат === */
+async function loadPvpChat() {
+  if (!pvpCurrentTableId) return;
+
+  try {
+    const d = await api('/api/pvp/chat/get', { table_id: pvpCurrentTableId });
+    const el = document.getElementById('pvpChat');
+    if (!el) return;
+
+    if (!d.messages || !d.messages.length) {
+      el.innerHTML = '<div class="pvp-chat-empty">Пока тихо. Напиши первым!</div>';
+      return;
+    }
+
+    el.innerHTML = d.messages.map(m => `
+      <div class="pvp-chat-item ${m.user_id === profile.user_id ? 'me' : ''}">
+        <span class="pvp-chat-author">@${m.username}:</span>${m.text}
+      </div>
+    `).join('');
+
+    // Автоскролл вниз
+    el.scrollTop = el.scrollHeight;
+  } catch (e) {}
+}
+
+async function pvpChatSend() {
+  const input = document.getElementById('pvpChatInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  haptic();
+  input.value = '';
+
+  try {
+    await api('/api/pvp/chat/send', {
+      table_id: pvpCurrentTableId,
+      text: text,
+    });
+    await loadPvpChat();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+/* === Выход из стола === */
+async function pvpLeave() {
+  if (!pvpCurrentTableId) return;
+  if (!confirm('Покинуть стол?')) return;
+
+  haptic('medium');
+  try {
+    await api('/api/pvp/leave', { table_id: pvpCurrentTableId });
+    toast('✅ Вы покинули стол', 'success');
+    closePvpTable();
+    await loadProfile();
+    await loadPvpTables();
+    await loadPvpMyTable();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function closePvpTable() {
+  if (pvpPollingInterval) {
+    clearInterval(pvpPollingInterval);
+    pvpPollingInterval = null;
+  }
+  if (pvpChatInterval) {
+    clearInterval(pvpChatInterval);
+    pvpChatInterval = null;
+  }
+  pvpCurrentTableId = null;
+  showScreen('pvp');
+}
+
+/* === Загрузка всего экрана PvP === */
+async function loadPvpArena() {
+  await loadPvpConfig();
+  await loadPvpTables();
+  await loadPvpLeaderboard();
+  await loadPvpStats();
+  await loadPvpMyTable();
 }
 
 /* ═══════════ TOURNAMENT / HALL / QUESTS ═══════════ */
