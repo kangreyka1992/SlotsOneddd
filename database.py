@@ -350,6 +350,12 @@ async def init_db():
                 last_seen TIMESTAMP
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_states (
+                user_id INTEGER PRIMARY KEY,
+                state TEXT
+            )
+        """)
         await db.commit()
 
 
@@ -1979,3 +1985,29 @@ async def touch_session(user_id: int):
             (user_id, now, now),
         )
         await db.commit()
+
+
+# ═══════════ СОСТОЯНИЯ ЮЗЕРА (для поддержки) ═══════════
+
+async def set_user_state(user_id: int, state: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        if state is None:
+            await db.execute(
+                "DELETE FROM user_states WHERE user_id = ?", (user_id,)
+            )
+        else:
+            await db.execute(
+                "INSERT INTO user_states (user_id, state) VALUES (?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET state = ?",
+                (user_id, state, state),
+            )
+        await db.commit()
+
+
+async def get_user_state(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT state FROM user_states WHERE user_id = ?", (user_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else None
