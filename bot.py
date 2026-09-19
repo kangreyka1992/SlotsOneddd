@@ -25,7 +25,7 @@ from database import (
 logging.basicConfig(level=logging.INFO)
 
 BOT_TOKEN = "8602932446:AAG_aVvoLz6CjhwfTP8sL9JKAoRK0tcGk_Q"
-WEBAPP_URL = "https://bot-1789335277-8932-slotbots.bothost.tech"
+WEBAPP_URL = "https://bot-1789335277-8932-slotbots.bothost.t'usdcech"
 
 RATE = 100
 STAR_PACKS = {s: s * RATE for s in [10, 15, 25, 30, 50, 100, 250, 500]}
