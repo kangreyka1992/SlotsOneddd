@@ -58,9 +58,7 @@ let upgraderFastMode = false;
 
 /* WITHDRAW */
 const WITHDRAW_METHODS = {
-    stars: { rate: 1250,  min: 1000, unit: '⭐', name: 'Stars' },   // 1000 ⭐ = 150 000 🪙
-    usdc:  { rate: 100,  min: 5,    unit: 'USDC', name: 'USDC' },
-    ton:   { rate: 5000, min: 1,    unit: 'TON', name: 'TON' },
+    stars: { rate: 150, min: 1000, unit: '⭐', name: 'Stars' },
 };
 let currentWithdrawMethod = 'stars';
 
@@ -2824,62 +2822,33 @@ async function loadWithdrawStatus() {
     }
 }
 
-function switchWithdrawTab(method) {
-    haptic();
-    currentWithdrawMethod = method;
 
-    document.querySelectorAll('#withdrawTabs .topup-tab').forEach(t => {
-        t.classList.toggle('active', t.dataset.method === method);
-    });
-
-    document.querySelectorAll('#screen-withdraw .topup-method').forEach(m => {
-        m.classList.toggle('active', m.id === `wd-method-${method}`);
-    });
-
-    withdrawRecalc(method);
-}
-
-function withdrawQuick(method, amount) {
-    haptic();
-    const inputId = method === 'stars' ? 'wdStarsAmount'
-                  : method === 'usdc'  ? 'wdUsdcAmount'
-                  : 'wdTonAmount';
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    input.value = amount;
-    withdrawRecalc(method);
-}
 
 function withdrawRecalc(method) {
-    const cfg = WITHDRAW_METHODS[method];
-    if (!cfg) return;
+    const cfg = WITHDRAW_METHODS.stars;
+    const amount = 1000;
+    const need = Math.ceil(amount * cfg.rate);
+    const balance = profile.balance || 0;
 
-    // ФИКС: для Stars — фиксированная сумма
-    if (method === 'stars') {
-        const amount = 1000;
-        const need = Math.ceil(amount * cfg.rate);
-        const balance = profile.balance || 0;
+    const needEl = document.getElementById('wdStarsNeed');
+    if (needEl) needEl.textContent = fmt(need);
 
-        const needEl = document.getElementById('wdStarsNeed');
-        if (needEl) needEl.textContent = fmt(need);
+    const infoEl = document.getElementById('wdStarsInfo');
+    const goBtn = document.getElementById('wdStarsGoBtn');
 
-        const infoEl = document.getElementById('wdStarsInfo');
-        const goBtn = document.getElementById('wdStarsGoBtn');
-
-        if (infoEl) {
-            const ok = need <= balance;
-            const color = ok ? '#4ade80' : '#ef4444';
-            infoEl.innerHTML = `
-                Нужно: <b>${fmt(need)}</b> 🪙<br>
-                У тебя: <b>${fmt(balance)}</b> 🪙<br>
-                <span style="color:${color}">
-                    ${ok ? '✅ Готово к выводу' : `❌ Не хватает ${fmt(need - balance)} 🪙`}
-                </span>
-            `;
-        }
-        if (goBtn) goBtn.disabled = !(need <= balance) || !withdrawAllowed;
-        return;
+    if (infoEl) {
+        const ok = need <= balance;
+        const color = ok ? '#4ade80' : '#ef4444';
+        infoEl.innerHTML = `
+            Нужно: <b>${fmt(need)}</b> 🪙<br>
+            У тебя: <b>${fmt(balance)}</b> 🪙<br>
+            <span style="color:${color}">
+                ${ok ? '✅ Готово к выводу' : `❌ Не хватает ${fmt(need - balance)} 🪙`}
+            </span>
+        `;
     }
+    if (goBtn) goBtn.disabled = !(need <= balance) || !withdrawAllowed;
+}
 
     // Для остальных — как было
     const inputId = method === 'usdc' ? 'wdUsdcAmount' : 'wdTonAmount';
@@ -2915,43 +2884,24 @@ async function withdrawGo(method) {
         return;
     }
 
+    const cfg = WITHDRAW_METHODS.stars;
+    const need = Math.ceil(1000 * cfg.rate);
+
+    if (need > (profile.balance || 0)) {
+        toast(`Нужно ${fmt(need)} 🪙`, 'error');
+        return;
+    }
+
+    if (!confirm(`Вывести 1000 ⭐ за ${fmt(need)} 🪙?`)) return;
+
     haptic('medium');
-    const cfg = WITHDRAW_METHODS[method];
-
-    let payload;
-
-    // ФИКС: для Stars — фиксированные 1000, ничего не вводим
-    if (method === 'stars') {
-        payload = {};   // сумма задаётся на сервере
-    } else if (method === 'usdc') {
-        const amount = Number(document.getElementById('wdUsdcAmount').value) || 0;
-        const wallet = document.getElementById('wdUsdcWallet').value.trim();
-        if (!wallet) { toast('Введите адрес кошелька', 'error'); return; }
-        payload = { amount, wallet };
-    } else if (method === 'ton') {
-        const amount = Number(document.getElementById('wdTonAmount').value) || 0;
-        const wallet = document.getElementById('wdTonWallet').value.trim();
-        if (!wallet) { toast('Введите TON-кошелёк', 'error'); return; }
-        payload = { amount, wallet };
-    }
-
-    // Проверка баланса для Stars
-    if (method === 'stars') {
-        const need = Math.ceil(1000 * cfg.rate);
-        if (need > (profile.balance || 0)) {
-            toast(`Нужно ${fmt(need)} 🪙`, 'error');
-            return;
-        }
-        if (!confirm(`Вывести 1000 ⭐ за ${fmt(need)} 🪙?`)) return;
-    }
-
     try {
-        const d = await api(`/api/withdraw/${method}`, payload);
+        const d = await api('/api/withdraw/stars', {});
         updateBalance(d.balance);
         toast(`✅ ${d.message}`, 'success');
         SFX.cashout();
         loadProfile();
-        withdrawRecalc(method);
+        withdrawRecalc('stars');
     } catch (e) {
         toast(e.message, 'error');
     }
