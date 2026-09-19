@@ -239,6 +239,15 @@ async def _process_game_rewards(uid: int, bet: int, win: int, game: str,
         print(f"xp error: {e}")
 
 
+async def _add_tournament_score_if_active(uid: int, game: str, amount: int):
+    """Начисляет очки в ежедневный турнир, если сейчас идёт турнир по этой игре."""
+    try:
+        tour = await get_active_daily_tournament()
+        if tour and tour["game"] == game and amount > 0:
+            await add_daily_tournament_score(tour["id"], uid, amount)
+    except Exception as e:
+        print(f"tournament score error: {e}", flush=True)
+
 async def periodic_cleanup():
     """Фоновый таск — чистит зависшие игры."""
     while True:
@@ -882,12 +891,7 @@ async def api_slots2_spin(request: Request):
         await add_balance(uid, total_win)
     await log_game(uid, total_bet, total_win)
     # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-    try:
-        _tour = await get_active_daily_tournament()
-        if _tour and _tour["game"] == "slots2":
-            await add_daily_tournament_score(_tour["id"], uid, bet)
-    except Exception as _e:
-        print(f"tournament score error: {_e}")
+    await _add_tournament_score_if_active(uid, "slots2", total_bet)
     await add_battle_pass_xp(uid, total_bet // 10)
     await log_house_flow(wagered=total_bet, paid=total_win)
     await _process_game_rewards(uid, total_bet, total_win, "slots2", user.get("username"))
@@ -1015,12 +1019,7 @@ async def api_mines_open(request: Request):
         mines_games.pop(uid, None)
         await log_game(uid, bet, 0)
     # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-        try:
-            _tour = await get_active_daily_tournament()
-            if _tour and _tour["game"] == "mines":
-                await add_daily_tournament_score(_tour["id"], uid, bet)
-        except Exception as _e:
-        print(f"tournament score error: {_e}")
+        await _add_tournament_score_if_active(uid, "mines", bet)
         await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=0)
         await _process_game_rewards(uid, bet, 0, "mines", user.get("username"))
@@ -1046,12 +1045,7 @@ async def api_mines_open(request: Request):
         await add_balance(uid, win)
         await log_game(uid, bet, win)
         # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-        try:
-            _tour = await get_active_daily_tournament()
-            if _tour and _tour["game"] == "mines":
-                await add_daily_tournament_score(_tour["id"], uid, bet)
-        except Exception as _e:
-        print(f"tournament score error: {_e}")
+        await _add_tournament_score_if_active(uid, "mines", bet)
         await add_battle_pass_xp(uid, bet // 10)
         await log_house_flow(wagered=bet, paid=win)
         await _process_game_rewards(uid, bet, win, "mines", user.get("username"))
@@ -1105,12 +1099,7 @@ async def api_mines_cashout(request: Request):
     await update_quest_progress(uid, "wins", 1)
     await log_game(uid, bet, prize)
     # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-    try:
-        _tour = await get_active_daily_tournament()
-        if _tour and _tour["game"] == "mines":
-            await add_daily_tournament_score(_tour["id"], uid, bet)
-    except Exception as _e:
-        print(f"tournament score error: {_e}")
+    await _add_tournament_score_if_active(uid, "mines", bet)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=prize)
     await _process_game_rewards(uid, bet, prize, "mines", user.get("username"))
@@ -1242,12 +1231,7 @@ async def api_crash_status(request: Request):
         crash_games.pop(uid, None)
         await log_game(uid, bet, 0)
         # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-        try:
-            _tour = await get_active_daily_tournament()
-            if _tour and _tour["game"] == "crash":
-                await add_daily_tournament_score(_tour["id"], uid, bet)
-        except Exception as _e:
-        print(f"tournament score error: {_e}")
+        await _add_tournament_score_if_active(uid, "mines", bet)
         await log_house_flow(wagered=bet, paid=0)
         await _process_game_rewards(uid, bet, 0, "crash", user.get("username"))
         await update_quest_progress(uid, "bets_count", 1)
@@ -1297,12 +1281,7 @@ async def api_crash_cashout(request: Request):
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
     # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-    try:
-        _tour = await get_active_daily_tournament()
-        if _tour and _tour["game"] == "crash":
-            await add_daily_tournament_score(_tour["id"], uid, bet)
-    except Exception as _e:
-        print(f"tournament score error: {_e}")
+    await _add_tournament_score_if_active(uid, "crash", bet)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=prize)
     await _process_game_rewards(uid, bet, prize, "crash", user.get("username"))
@@ -1371,12 +1350,7 @@ async def api_dice(request: Request):
         await add_balance(uid, win)
     await log_game(uid, bet, win)
     # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-    try:
-        _tour = await get_active_daily_tournament()
-        if _tour and _tour["game"] == "dice":
-            await add_daily_tournament_score(_tour["id"], uid, bet)
-    except Exception as _e:
-        print(f"tournament score error: {_e}")
+    await _add_tournament_score_if_active(uid, "crash", bet)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     await _process_game_rewards(uid, bet, win, "dice", user.get("username"))
@@ -1448,12 +1422,7 @@ async def api_rr_spin(request: Request):
         rr_games.pop(uid, None)
         await log_game(uid, bet, 0)
         # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-        try:
-            _tour = await get_active_daily_tournament()
-            if _tour and _tour["game"] == "rr":
-                await add_daily_tournament_score(_tour["id"], uid, bet)
-        except Exception as _e:
-        print(f"tournament score error: {_e}")
+        await _add_tournament_score_if_active(uid, "rr", bet)
         await log_house_flow(wagered=bet, paid=0)
         return {"shot": True, "bet": bet, "balance": await get_balance(uid)}
 
@@ -1468,12 +1437,7 @@ async def api_rr_spin(request: Request):
         await add_balance(uid, prize)
         await log_game(uid, bet, prize)
         # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-        try:
-            _tour = await get_active_daily_tournament()
-            if _tour and _tour["game"] == "rr":
-                await add_daily_tournament_score(_tour["id"], uid, bet)
-        except Exception as _e:
-        print(f"tournament score error: {_e}")
+        await _add_tournament_score_if_active(uid, "rr", bet)
         await log_house_flow(wagered=bet, paid=prize)
         await _process_game_rewards(uid, bet, prize, "rr", user.get("username"))
         await unlock_achievement(uid, "first_bet")
@@ -1505,12 +1469,7 @@ async def api_rr_cashout(request: Request):
     await add_balance(uid, prize)
     await log_game(uid, bet, prize)
     # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-    try:
-        _tour = await get_active_daily_tournament()
-        if _tour and _tour["game"] == "rr":
-            await add_daily_tournament_score(_tour["id"], uid, bet)
-    except Exception as _e:
-        print(f"tournament score error: {_e}")
+    await _add_tournament_score_if_active(uid, "rr", bet)
     await log_house_flow(wagered=bet, paid=prize)
     await _process_game_rewards(uid, bet, prize, "rr", user.get("username"))
     await unlock_achievement(uid, "first_bet")
@@ -1582,12 +1541,7 @@ async def api_plinko(request: Request):
 
     await log_game(uid, bet, win)
     # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-    try:
-        _tour = await get_active_daily_tournament()
-        if _tour and _tour["game"] == "plinko":
-            await add_daily_tournament_score(_tour["id"], uid, bet)
-    except Exception as _e:
-        print(f"tournament score error: {_e}")
+    await _add_tournament_score_if_active(uid, "plinko", bet)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     await _process_game_rewards(uid, bet, win, "plinko", user.get("username"))
@@ -1654,13 +1608,7 @@ async def api_coin_flip(request: Request):
         await add_balance(uid, win)
 
     await log_game(uid, bet, win)
-    # Начисляем очки в ежедневный турнир, если сейчас идёт турнир по этой игре
-    try:
-        _tour = await get_active_daily_tournament()
-        if _tour and _tour["game"] == "coin":
-            await add_daily_tournament_score(_tour["id"], uid, bet)
-    except Exception as _e:
-        print(f"tournament score error: {_e}")
+    await _add_tournament_score_if_active(uid, "coin", bet)
     await add_battle_pass_xp(uid, bet // 10)
     await log_house_flow(wagered=bet, paid=win)
     await _process_game_rewards(uid, bet, win, "coin", user.get("username"))
