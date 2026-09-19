@@ -378,6 +378,71 @@ async def init_db():
                 UNIQUE(tournament_id, user_id)
             )
         """)
+        # ═══════════ PVP ТАБЛИЦЫ ═══════════
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pvp_tables (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                creator_id INTEGER NOT NULL,
+                game TEXT NOT NULL,
+                bet INTEGER NOT NULL,
+                format TEXT NOT NULL DEFAULT '1v1',
+                max_players INTEGER NOT NULL DEFAULT 2,
+                password TEXT,
+                status TEXT DEFAULT 'waiting',
+                prize_pool INTEGER DEFAULT 0,
+                commission INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                started_at TIMESTAMP,
+                finished_at TIMESTAMP,
+                winner_id INTEGER
+            )
+        """)
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pvp_participants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                table_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                eliminated INTEGER DEFAULT 0,
+                final_rank INTEGER,
+                score INTEGER DEFAULT 0,
+                UNIQUE(table_id, user_id)
+            )
+        """)
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pvp_rounds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                table_id INTEGER NOT NULL,
+                round_num INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                score INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pvp_chat (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                table_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pvp_stats (
+                user_id INTEGER PRIMARY KEY,
+                wins INTEGER DEFAULT 0,
+                losses INTEGER DEFAULT 0,
+                total_prize INTEGER DEFAULT 0,
+                total_bet INTEGER DEFAULT 0
+            )
+        """)
         await db.commit()
 
 
@@ -2315,3 +2380,529 @@ async def reset_stale_tournaments():
             await close_daily_tournament(tid)
         except Exception as e:
             print(f"⚠️ reset stale tournament {tid} error: {e}", flush=True)
+
+# ═══════════ PVP РЕЖИМ ═══════════
+
+PVP_GAMES = ("slots2", "crash", "mines", "dice")
+PVP_FORMATS = {
+    "1v1":   {"max_players": 2, "min_players": 2, "label": "1×1 Дуэль"},
+    "tour4": {"max_players": 4, "min_players": 4, "label": "Турнир на 4"},
+    "tour8": {"max_players": 8, "min_players": 8, "label": "Турнир на 8"},
+}
+PVP_COMMISSION_PERCENT = 0.02  # 2% с банка
+PVP_TABLE_TIMEOUT = 300       # 5 минут — если не собрались, отмена
+
+
+async def pvp_create_table(
+    creator_id: int,
+    game: str,
+    bet: int,
+    format: str = "1v1",
+    password: str = None,
+) -> int:
+    """Создать PvP-стол. Возвращает table_id."""
+    fmt = PVP_FORMATS.get(format)
+    if not fmt:
+        raise ValueError("Неизвестный формат")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "INSERT INTO pvp_tables (creator_id, game, bet, format, max_players, password, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'waiting')",
+            (creator_id, game, bet, format, fmt["max_players"], password),
+        )
+        table_id = cursor.lastrowid
+
+        # Создатель автоматически присоединяется
+        await db.execute(
+            "INSERT INTO pvp_participants (table_id, user_id) VALUES (?, ?)",
+            (table_id, creator_id),
+        )
+        await db.commit()
+        return table_id
+
+
+async def pvp_get_table(table_id: int):
+    """Получить информацию о столе."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, creator_id, game, bet, format, max_players, password, "
+            "status, prize_pool, commission, created_at, started_at, finished_at, winner_id "
+            "FROM pvp_tables WHERE id = ?",
+            (table_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0], "creator_id": row[1], "game": row[2], "bet": row[3],
+                "format": row[4], "max_players": row[5], "password": row[6],
+                "status": row[7], "prize_pool": row[8], "commission": row[9],
+                "created_at": row[10], "started_at": row[11],
+                "finished_at": row[12], "winner_id": row[13],
+            }
+
+
+async def pvp_list_open_tables(limit: int = 30):
+    """Список открытых столов (status = waiting)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT t.id, t.creator_id, u.username, t.game, t.bet, t.format, "
+            "t.max_players, t.password, t.created_at, "
+            "(SELECT COUNT(*) FROM pvp_participants WHERE table_id = t.id) as players "
+            "FROM pvp_tables t "
+            "LEFT JOIN users u ON u.user_id = t.creator_id "
+            "WHERE t.status = 'waiting' "
+            "ORDER BY t.id DESC LIMIT ?",
+            (limit,),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [
+                {
+                    "id": r[0], "creator_id": r[1], "creator_username": r[2] or f"user_{r[1]}",
+                    "game": r[3], "bet": r[4], "format": r[5],
+                    "max_players": r[6], "is_private": bool(r[7]),
+                    "created_at": r[8], "players": r[9],
+                }
+                for r in rows
+            ]
+
+
+async def pvp_get_participants(table_id: int):
+    """Список участников стола."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT p.user_id, u.username, p.joined_at, p.eliminated, "
+            "p.final_rank, p.score "
+            "FROM pvp_participants p "
+            "LEFT JOIN users u ON u.user_id = p.user_id "
+            "WHERE p.table_id = ? "
+            "ORDER BY p.id ASC",
+            (table_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [
+                {
+                    "user_id": r[0], "username": r[1] or f"user_{r[0]}",
+                    "joined_at": r[2], "eliminated": bool(r[3]),
+                    "final_rank": r[4], "score": r[5],
+                }
+                for r in rows
+            ]
+
+
+async def pvp_join_table(table_id: int, user_id: int, password: str = None) -> dict:
+    """Присоединиться к столу. Возвращает {ok, error?, status?}."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Проверяем стол
+        async with db.execute(
+            "SELECT game, bet, format, max_players, password, status "
+            "FROM pvp_tables WHERE id = ?",
+            (table_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return {"ok": False, "error": "Стол не найден"}
+
+            game, bet, format, max_players, pwd, status = row
+
+        if status != "waiting":
+            return {"ok": False, "error": "Стол уже не принимает игроков"}
+
+        if pwd and pwd != password:
+            return {"ok": False, "error": "Неверный пароль"}
+
+        # Проверяем, не в столе ли уже
+        async with db.execute(
+            "SELECT 1 FROM pvp_participants WHERE table_id = ? AND user_id = ?",
+            (table_id, user_id),
+        ) as cur:
+            if await cur.fetchone():
+                return {"ok": False, "error": "Вы уже в этом столе"}
+
+        # Проверяем, не в другом ли столе
+        async with db.execute(
+            "SELECT t.id FROM pvp_tables t "
+            "JOIN pvp_participants p ON p.table_id = t.id "
+            "WHERE p.user_id = ? AND t.status IN ('waiting', 'active')",
+            (user_id,),
+        ) as cur:
+            existing = await cur.fetchone()
+            if existing:
+                return {"ok": False, "error": f"Вы уже в столе #{existing[0]}"}
+
+        # Проверяем баланс
+        async with db.execute(
+            "SELECT balance FROM users WHERE user_id = ?", (user_id,)
+        ) as cur:
+            bal_row = await cur.fetchone()
+            balance = bal_row[0] if bal_row else 0
+
+        if balance < bet:
+            return {"ok": False, "error": f"Нужно {bet} 🪙 (у тебя {balance})"}
+
+        # Проверяем количество игроков
+        async with db.execute(
+            "SELECT COUNT(*) FROM pvp_participants WHERE table_id = ?",
+            (table_id,),
+        ) as cur:
+            players = (await cur.fetchone())[0]
+
+        if players >= max_players:
+            return {"ok": False, "error": "Стол заполнен"}
+
+        # Списываем ставку
+        await db.execute(
+            "UPDATE users SET balance = balance - ? WHERE user_id = ?",
+            (bet, user_id),
+        )
+
+        # Добавляем участника
+        await db.execute(
+            "INSERT INTO pvp_participants (table_id, user_id) VALUES (?, ?)",
+            (table_id, user_id),
+        )
+
+        # Обновляем prize_pool
+        await db.execute(
+            "UPDATE pvp_tables SET prize_pool = prize_pool + ? WHERE id = ?",
+            (bet, table_id),
+        )
+
+        await db.commit()
+
+    # Проверяем, собрались ли все
+    new_players = players + 1
+    if new_players >= max_players:
+        # Стартуем автоматически
+        await pvp_start_table(table_id)
+        return {"ok": True, "status": "started"}
+    else:
+        return {"ok": True, "status": "waiting"}
+
+
+async def pvp_leave_table(table_id: int, user_id: int) -> dict:
+    """Покинуть стол (только если status = waiting)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT bet, status FROM pvp_tables WHERE id = ?", (table_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return {"ok": False, "error": "Стол не найден"}
+
+            bet, status = row
+
+        if status != "waiting":
+            return {"ok": False, "error": "Нельзя покинуть начавшийся стол"}
+
+        # Возвращаем ставку
+        await db.execute(
+            "UPDATE users SET balance = balance + ? WHERE user_id = ?",
+            (bet, user_id),
+        )
+
+        # Удаляем из участников
+        await db.execute(
+            "DELETE FROM pvp_participants WHERE table_id = ? AND user_id = ?",
+            (table_id, user_id),
+        )
+
+        # Уменьшаем prize_pool
+        await db.execute(
+            "UPDATE pvp_tables SET prize_pool = MAX(0, prize_pool - ?) WHERE id = ?",
+            (bet, table_id),
+        )
+
+        # Если это был создатель — удаляем стол
+        async with db.execute(
+            "SELECT creator_id FROM pvp_tables WHERE id = ?", (table_id,)
+        ) as cur:
+            creator_row = await cur.fetchone()
+
+        if creator_row and creator_row[0] == user_id:
+            # Возвращаем всем участникам ставки
+            async with db.execute(
+                "SELECT user_id FROM pvp_participants WHERE table_id = ?",
+                (table_id,),
+            ) as cur:
+                others = await cur.fetchall()
+
+            for o in others:
+                await db.execute(
+                    "UPDATE users SET balance = balance + ? WHERE user_id = ?",
+                    (bet, o[0]),
+                )
+
+            await db.execute("DELETE FROM pvp_participants WHERE table_id = ?", (table_id,))
+            await db.execute("DELETE FROM pvp_tables WHERE id = ?", (table_id,))
+
+        await db.commit()
+        return {"ok": True}
+
+
+async def pvp_start_table(table_id: int) -> bool:
+    """Стартует стол (status → active, started_at = now)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE pvp_tables SET status = 'active', started_at = CURRENT_TIMESTAMP "
+            "WHERE id = ? AND status = 'waiting'",
+            (table_id,),
+        )
+        await db.commit()
+        return True
+
+
+async def pvp_submit_round_score(table_id: int, user_id: int, round_num: int, score: int):
+    """Сохранить результат раунда игрока."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO pvp_rounds (table_id, round_num, user_id, score) "
+            "VALUES (?, ?, ?, ?)",
+            (table_id, round_num, user_id, score),
+        )
+        # Обновляем общий счёт
+        await db.execute(
+            "UPDATE pvp_participants SET score = score + ? "
+            "WHERE table_id = ? AND user_id = ?",
+            (score, table_id, user_id),
+        )
+        await db.commit()
+
+
+async def pvp_get_round_scores(table_id: int, round_num: int):
+    """Результаты конкретного раунда."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT r.user_id, u.username, r.score "
+            "FROM pvp_rounds r "
+            "LEFT JOIN users u ON u.user_id = r.user_id "
+            "WHERE r.table_id = ? AND r.round_num = ? "
+            "ORDER BY r.score DESC",
+            (table_id, round_num),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [
+                {"user_id": r[0], "username": r[1] or f"user_{r[0]}", "score": r[2]}
+                for r in rows
+            ]
+
+
+async def pvp_eliminate_player(table_id: int, user_id: int, rank: int):
+    """Пометить игрока выбывшим с его финальным местом."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE pvp_participants SET eliminated = 1, final_rank = ? "
+            "WHERE table_id = ? AND user_id = ?",
+            (rank, table_id, user_id),
+        )
+        await db.commit()
+
+
+async def pvp_finish_table(table_id: int, winner_id: int) -> dict:
+    """Завершить стол, выплатить призы."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Получаем prize_pool
+        async with db.execute(
+            "SELECT prize_pool FROM pvp_tables WHERE id = ?", (table_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return {"ok": False, "error": "Стол не найден"}
+            prize_pool = row[0] or 0
+
+        commission = int(prize_pool * PVP_COMMISSION_PERCENT)
+        prize = prize_pool - commission
+
+        # Выплачиваем победителю
+        await db.execute(
+            "UPDATE users SET balance = balance + ? WHERE user_id = ?",
+            (prize, winner_id),
+        )
+
+        # Обновляем стол
+        await db.execute(
+            "UPDATE pvp_tables SET status = 'finished', finished_at = CURRENT_TIMESTAMP, "
+            "winner_id = ?, commission = ? WHERE id = ?",
+            (winner_id, commission, table_id),
+        )
+
+        # Обновляем статистику всех участников
+        async with db.execute(
+            "SELECT user_id FROM pvp_participants WHERE table_id = ?",
+            (table_id,),
+        ) as cur:
+            participants = [r[0] for r in await cur.fetchall()]
+
+        bet_row = None
+        async with db.execute(
+            "SELECT bet FROM pvp_tables WHERE id = ?", (table_id,)
+        ) as cur:
+            bet_row = await cur.fetchone()
+        bet = bet_row[0] if bet_row else 0
+
+        for uid in participants:
+            if uid == winner_id:
+                await db.execute(
+                    "INSERT INTO pvp_stats (user_id, wins, total_prize, total_bet) "
+                    "VALUES (?, 1, ?, ?) "
+                    "ON CONFLICT(user_id) DO UPDATE SET "
+                    "wins = wins + 1, total_prize = total_prize + ?, total_bet = total_bet + ?",
+                    (uid, prize, bet, prize, bet),
+                )
+            else:
+                await db.execute(
+                    "INSERT INTO pvp_stats (user_id, losses, total_bet) "
+                    "VALUES (?, 1, ?) "
+                    "ON CONFLICT(user_id) DO UPDATE SET "
+                    "losses = losses + 1, total_bet = total_bet + ?",
+                    (uid, bet, bet),
+                )
+
+        await db.commit()
+
+        return {
+            "ok": True,
+            "prize": prize,
+            "commission": commission,
+            "prize_pool": prize_pool,
+        }
+
+
+async def pvp_get_active_table_for_user(user_id: int):
+    """Возвращает активный или ожидающий стол, в котором юзер сейчас."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT t.id, t.creator_id, t.game, t.bet, t.format, t.max_players, "
+            "t.status, t.prize_pool, t.started_at "
+            "FROM pvp_tables t "
+            "JOIN pvp_participants p ON p.table_id = t.id "
+            "WHERE p.user_id = ? AND t.status IN ('waiting', 'active') "
+            "ORDER BY t.id DESC LIMIT 1",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0], "creator_id": row[1], "game": row[2], "bet": row[3],
+                "format": row[4], "max_players": row[5], "status": row[6],
+                "prize_pool": row[7], "started_at": row[8],
+            }
+
+
+async def pvp_get_stats(user_id: int):
+    """Статистика PvP игрока."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT wins, losses, total_prize, total_bet FROM pvp_stats WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            if not row:
+                return {"wins": 0, "losses": 0, "total_prize": 0, "total_bet": 0, "winrate": 0}
+
+            wins, losses, prize, bet = row
+            total = wins + losses
+            winrate = round(wins / total * 100, 1) if total > 0 else 0
+            return {
+                "wins": wins, "losses": losses,
+                "total_prize": prize or 0, "total_bet": bet or 0,
+                "winrate": winrate,
+            }
+
+
+async def pvp_leaderboard(limit: int = 20):
+    """Топ PvP игроков."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT s.user_id, u.username, s.wins, s.losses, s.total_prize "
+            "FROM pvp_stats s "
+            "LEFT JOIN users u ON u.user_id = s.user_id "
+            "WHERE s.wins > 0 OR s.losses > 0 "
+            "ORDER BY s.wins DESC, s.total_prize DESC LIMIT ?",
+            (limit,),
+        ) as cur:
+            rows = await cur.fetchall()
+            result = []
+            for i, r in enumerate(rows, 1):
+                total = (r[2] or 0) + (r[3] or 0)
+                winrate = round(r[2] / total * 100, 1) if total > 0 else 0
+                result.append({
+                    "rank": i, "user_id": r[0], "username": r[1] or f"user_{r[0]}",
+                    "wins": r[2], "losses": r[3], "total_prize": r[4] or 0,
+                    "winrate": winrate,
+                })
+            return result
+
+
+async def pvp_chat_send(table_id: int, user_id: int, username: str, text: str):
+    """Отправить сообщение в чат стола."""
+    if not text or len(text) > 200:
+        return False
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO pvp_chat (table_id, user_id, username, text) "
+            "VALUES (?, ?, ?, ?)",
+            (table_id, user_id, username, text),
+        )
+        # Чистим старые (оставляем только последние 100 на стол)
+        await db.execute(
+            "DELETE FROM pvp_chat WHERE table_id = ? AND id NOT IN "
+            "(SELECT id FROM pvp_chat WHERE table_id = ? ORDER BY id DESC LIMIT 100)",
+            (table_id, table_id),
+        )
+        await db.commit()
+        return True
+
+
+async def pvp_chat_get(table_id: int, limit: int = 50):
+    """Получить последние сообщения чата."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT user_id, username, text, created_at FROM pvp_chat "
+            "WHERE table_id = ? ORDER BY id DESC LIMIT ?",
+            (table_id, limit),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [
+                {"user_id": r[0], "username": r[1] or f"user_{r[0]}",
+                 "text": r[2], "created_at": r[3]}
+                for r in reversed(rows)
+            ]
+
+
+async def pvp_cleanup_stale_tables():
+    """Удаляет зависшие столы (waiting > 5 минут)."""
+    cutoff = (
+        datetime.datetime.utcnow() - datetime.timedelta(seconds=PVP_TABLE_TIMEOUT)
+    ).isoformat()
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, bet FROM pvp_tables WHERE status = 'waiting' AND created_at < ?",
+            (cutoff,),
+        ) as cur:
+            stale = await cur.fetchall()
+
+    for table_id, bet in stale:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # Возвращаем ставки всем
+            async with db.execute(
+                "SELECT user_id FROM pvp_participants WHERE table_id = ?",
+                (table_id,),
+            ) as cur:
+                players = await cur.fetchall()
+
+            for p in players:
+                await db.execute(
+                    "UPDATE users SET balance = balance + ? WHERE user_id = ?",
+                    (bet, p[0]),
+                )
+
+            await db.execute("DELETE FROM pvp_participants WHERE table_id = ?", (table_id,))
+            await db.execute("DELETE FROM pvp_tables WHERE id = ?", (table_id,))
+            await db.commit()
+
+        print(f"🧹 PvP стол #{table_id} удалён (таймаут)", flush=True)
